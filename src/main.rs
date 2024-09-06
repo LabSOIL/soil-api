@@ -2,7 +2,7 @@ use axum::{routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber;
 mod config;
-mod plots; // Import the plots module
+mod plots;
 
 #[tokio::main]
 async fn main() {
@@ -11,7 +11,7 @@ async fn main() {
 
     // Load configuration
     let cfg = config::Config::from_env();
-
+    println!("{:?}", cfg);
     // Create a PostgreSQL connection pool
     let pool = PgPoolOptions::new()
         .max_connections(25)
