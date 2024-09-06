@@ -4,11 +4,6 @@ use std::env;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub api_v1_prefix: String,
-    pub srid: i32,
-    pub convex_hull_buffer: f64,
-    pub image_max_size: u32,
-    pub instrument_plot_downsample_threshold: u32,
     pub db_host: String,
     pub db_port: u16,
     pub db_user: String,
@@ -26,23 +21,6 @@ impl Config {
         let db_prefix = env::var("DB_PREFIX").unwrap_or_else(|_| "postgresql+asyncpg".to_string());
 
         let config = Config {
-            api_v1_prefix: env::var("API_V1_PREFIX").unwrap_or_else(|_| "/v1".to_string()),
-            srid: env::var("SRID")
-                .unwrap_or_else(|_| "2056".to_string())
-                .parse()
-                .unwrap(),
-            convex_hull_buffer: env::var("CONVEX_HULL_BUFFER")
-                .unwrap_or_else(|_| "10.0".to_string())
-                .parse()
-                .unwrap(),
-            image_max_size: env::var("IMAGE_MAX_SIZE")
-                .unwrap_or_else(|_| "1000".to_string())
-                .parse()
-                .unwrap(),
-            instrument_plot_downsample_threshold: env::var("INSTRUMENT_PLOT_DOWNSAMPLE_THRESHOLD")
-                .unwrap_or_else(|_| "50".to_string())
-                .parse()
-                .unwrap(),
             db_host: env::var("DB_HOST").expect("DB_HOST must be set"),
             db_port: env::var("DB_PORT")
                 .unwrap_or_else(|_| "5432".to_string())
