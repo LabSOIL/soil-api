@@ -14,7 +14,7 @@ async fn main() {
 
     // Create a PostgreSQL connection pool
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(25)
         .connect(&cfg.db_url.as_ref().unwrap())
         .await
         .expect("Could not connect to the database");
