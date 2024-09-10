@@ -3,6 +3,7 @@ use axum::{routing::get, Router};
 use tracing_subscriber;
 mod config;
 mod models;
+mod schemas;
 mod views;
 use sea_orm::{Database, DatabaseConnection};
 
@@ -13,17 +14,17 @@ async fn main() {
 
     // Load configuration
     let cfg = config::Config::from_env();
-    println!("{:?}", cfg);
-    // Create a PostgreSQL connection pool
-    // let pool = PgPoolOptions::new()
-    //     .max_connections(25)
-    //     .connect(&cfg.db_url.as_ref().unwrap())
-    //     .await
-    //     .expect("Could not connect to the database");
 
     let db: DatabaseConnection = Database::connect(&*cfg.db_url.as_ref().unwrap())
         .await
         .expect("Could not connect to the database");
+
+    if db.ping().await.is_ok() {
+        println!("Connected to the database");
+    } else {
+        println!("Could not connect to the database");
+    }
+
     // Build the router with routes from the plots module
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))

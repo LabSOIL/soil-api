@@ -2,28 +2,26 @@
 // use crate::models::plot::Model as Plot;
 // use crate::schemas::plot::FilterOptions;
 use crate::models;
+use crate::schemas::plot::FilterOptions;
 use axum::{
-    // extract::{Query, State},
-    extract::State,
-    // http::{HeaderMap, HeaderValue, StatusCode},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::{Query, State},
     Json,
 };
 use models::plot::Entity as Plot;
 use sea_orm::DbConn;
 use sea_orm::EntityTrait;
-use serde::ser;
+use sea_orm::{entity::*, query::*};
 use serde_json;
-use sqlx::PgPool; // Add this import
-
+use serde_json::{json, Value};
 pub async fn get_plots(
-    // opts: Option<Query<FilterOptions>>,
+    opts: Option<Query<FilterOptions>>,
     State(db): State<DbConn>,
-    // Return the plots
-) -> impl IntoResponse {
-    // let plots: Vec<models::plot::Model> = Plot::find().into_json().all(&db).await.unwrap();
+) -> Json<Value> {
+    let Query(opts) = opts.unwrap_or_default();
+
+    let limit = opts.limit.unwrap_or(10);
+    let page = opts.page.unwrap_or(1);
+    let offset = (page - 1) * limit;
     let plots = Plot::find().into_json().all(&db).await.unwrap();
-    println!("{:?}", plots);
-    // Ok(Json(plots))
+    Json(json!(plots))
 }
