@@ -1,10 +1,11 @@
 use serde::Deserialize;
 
 // List
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Default)]
 pub struct FilterOptions {
-    pub offset: Option<u64>,
-    pub limit: Option<u64>,
+    pub filter: Option<String>, // JSON-encoded filter
+    pub range: Option<String>,  // range in the format "[0,24]"
+    pub sort: Option<String>,   // sort in the format '["id", "ASC"]'
 }
 
 // // Create

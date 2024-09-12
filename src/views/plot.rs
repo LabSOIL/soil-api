@@ -16,20 +16,15 @@ use models::area::Entity as AreaDB;
 use models::plot::Entity as PlotDB;
 use models::sea_orm_active_enums::Gradientchoices;
 use sea_orm::sqlx::Result;
+use sea_orm::Condition;
 use sea_orm::{query::*, DatabaseConnection};
 use sea_orm::{DbConn, EntityTrait};
 use sea_query::{Alias, Expr, Func};
-use serde_json::{json, Value};
-use tracing_subscriber::util::SubscriberInitExt;
-use wkt::types::Coord;
-// use axum::{Json, Router};
 use serde::Serialize;
+use serde_json::{json, Value};
+use std::collections::HashMap;
 use utoipa::{OpenApi, ToSchema};
-// use utoipa_axum::router::OpenApiRouter;
-// use utoipa_axum::routes;
-use std::sync::Arc;
 use uuid::Uuid;
-use wkt::Wkt;
 #[derive(OpenApi)]
 #[openapi(components(schemas(Plot)))]
 pub struct PlotApi;
@@ -144,18 +139,102 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/", routing::get(get_plots))
         .with_state(db)
 }
-
 #[utoipa::path(get, path = "", responses((status = OK, body = Plots)))]
 pub async fn get_plots(
-    opts: Option<Query<FilterOptions>>,
-    State(db): State<DbConn>,
+    Query(params): Query<FilterOptions>,
+    State(db): State<DatabaseConnection>,
 ) -> impl IntoResponse {
-    let Query(opts) = opts.unwrap_or_default();
-    println!("Requested all plots");
-    let limit: u64 = opts.limit.unwrap_or(10);
-    let offset: u64 = opts.offset.unwrap_or(0);
+    // Default values for range and sorting
+    let default_limit = 10;
+    let default_offset = 0;
+    let default_sort_column = "id";
+    let default_sort_order = "ASC";
+
+    // 1. Parse the filter, range, and sort parameters
+    let filters: HashMap<String, String> = if let Some(filter) = params.filter {
+        serde_json::from_str(&filter).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    let (offset, limit) = if let Some(range) = params.range {
+        let range_vec: Vec<u64> =
+            serde_json::from_str(&range).unwrap_or(vec![default_offset, default_limit]);
+        (
+            range_vec.get(0).copied().unwrap_or(default_offset),
+            range_vec.get(1).copied().unwrap_or(default_limit),
+        )
+    } else {
+        (default_offset, default_limit)
+    };
+
+    let (sort_column, sort_order) = if let Some(sort) = params.sort {
+        let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
+            default_sort_column.to_string(),
+            default_sort_order.to_string(),
+        ]);
+        (
+            sort_vec
+                .get(0)
+                .cloned()
+                .unwrap_or(default_sort_column.to_string()),
+            sort_vec
+                .get(1)
+                .cloned()
+                .unwrap_or(default_sort_order.to_string()),
+        )
+    } else {
+        (
+            default_sort_column.to_string(),
+            default_sort_order.to_string(),
+        )
+    };
+
+    // 2. Apply the filters to your query
+    let mut condition = Condition::all();
+    for (key, mut value) in filters {
+        println!("Key: {}, Value: {}", key, value);
+        value = value.trim().to_string();
+
+        // Check if the value is a valid UUID
+        if let Ok(uuid) = Uuid::parse_str(&value) {
+            // If the value is a valid UUID, filter it as a UUID
+            condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
+        } else {
+            // Otherwise, treat it as a regular string filter
+            condition = condition.add(Expr::col(Alias::new(&key)).eq(value));
+        }
+    }
+
+    // 3. Fetch the data from the database with filtering, sorting, and range (pagination)
+    let order_direction = if sort_order == "ASC" {
+        Order::Asc
+    } else {
+        Order::Desc
+    };
+    let order_column = match sort_column.as_str() {
+        "id" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Id,
+        "name" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Name,
+        "plot_iterator" => <models::plot::Entity as sea_orm::EntityTrait>::Column::PlotIterator,
+        "area_id" => <models::plot::Entity as sea_orm::EntityTrait>::Column::AreaId,
+        "gradient" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Gradient,
+        "vegetation_type" => <models::plot::Entity as sea_orm::EntityTrait>::Column::VegetationType,
+        "topography" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Topography,
+        "aspect" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Aspect,
+        "created_on" => <models::plot::Entity as sea_orm::EntityTrait>::Column::CreatedOn,
+        "weather" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Weather,
+        "lithology" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Lithology,
+        "iterator" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Iterator,
+        "last_updated" => <models::plot::Entity as sea_orm::EntityTrait>::Column::LastUpdated,
+        "image" => <models::plot::Entity as sea_orm::EntityTrait>::Column::Image,
+        _ => <models::plot::Entity as sea_orm::EntityTrait>::Column::Id,
+    };
 
     let objs = PlotDB::find()
+        .filter(condition)
+        .order_by(order_column, order_direction)
+        .offset(offset)
+        .limit(limit)
         .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
         .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
         .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
@@ -189,10 +268,19 @@ pub async fn get_plots(
         total_plots
     };
     content_range = format!("plots {}-{}/{}", offset, max_offset_limit, total_plots);
+    println!("Content-Range: {}", content_range);
 
     // // Return the Content-Range as a header
     let mut headers = HeaderMap::new();
     headers.insert("Content-Range", content_range.parse().unwrap());
+    println!("Headers: {:?}", headers);
     // // Return JSON response
     (headers, Json(json!(plots)))
 }
+
+// // `HeaderMap` gives an empty response with some headers
+// async fn headers() -> HeaderMap {
+//     let mut headers = HeaderMap::new();
+//     headers.insert(header::SERVER, "axum".parse().unwrap());
+//     headers
+// }
