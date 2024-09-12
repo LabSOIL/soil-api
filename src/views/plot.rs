@@ -1,31 +1,27 @@
-use crate::models::{self, area, plot};
+use crate::models::{self};
 use crate::schemas::plot::FilterOptions;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
-    http::{
-        header::{self, HeaderMap, HeaderName},
-        StatusCode, Uri,
-    },
+    http::header::HeaderMap,
     routing, Json, Router,
 };
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use geo_types::Point;
 use models::area::Entity as AreaDB;
 use models::plot::Entity as PlotDB;
 use models::sea_orm_active_enums::Gradientchoices;
 use sea_orm::sqlx::Result;
 use sea_orm::Condition;
-use sea_orm::RelationTrait;
 use sea_orm::{query::*, DatabaseConnection};
-use sea_orm::{DbConn, EntityTrait, FromQueryResult};
-use sea_query::{Alias, Expr, Func};
+use sea_orm::{EntityTrait, FromQueryResult};
+use sea_query::{Alias, Expr};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::HashMap;
 use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
+
 #[derive(OpenApi)]
 #[openapi(components(schemas(Plot)))]
 pub struct PlotApi;
@@ -59,10 +55,10 @@ pub struct Plot {
     iterator: i32,
     last_updated: NaiveDateTime,
     image: Option<String>,
-    // coord_x: Option<f64>,
-    // coord_y: Option<f64>,
-    // coord_z: Option<f64>,
     area: Area,
+    coord_x: Option<f64>,
+    coord_y: Option<f64>,
+    coord_z: Option<f64>,
 }
 
 #[derive(FromQueryResult, Serialize)]
@@ -81,8 +77,6 @@ pub struct PlotWithCoords {
     iterator: i32,
     last_updated: NaiveDateTime,
     image: Option<String>,
-    // geom: String,
-    // area: Area,
     coord_x: Option<f64>,
     coord_y: Option<f64>,
     coord_z: Option<f64>,
@@ -129,6 +123,9 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
             iterator: plot_db.iterator,
             last_updated: plot_db.last_updated,
             image: plot_db.image,
+            coord_x: plot_db.coord_x,
+            coord_y: plot_db.coord_y,
+            coord_z: plot_db.coord_z,
             area,
         }
     }
@@ -157,7 +154,7 @@ pub async fn get_plots(
     } else {
         HashMap::new()
     };
-    println!("Range: {:?}", params.range);
+
     let (offset, limit) = if let Some(range) = params.range {
         let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
         let start = range_vec.get(0).copied().unwrap_or(0);
@@ -238,15 +235,13 @@ pub async fn get_plots(
         .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
         .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
         .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-        .column_as(Expr::cust("ST_AsEWKT(plot.geom)"), "geom")
+        // .column_as(Expr::cust("ST_AsEWKT(plot.geom)"), "geom")
         .find_also_related(AreaDB)
         .into_model::<PlotWithCoords, Area>()
         // .into_json()
         .all(&db)
         .await
         .unwrap();
-
-    // Json(json!(objs))
 
     // Map the results from the database models to the Plot struct
     let plots: Vec<Plot> = objs
@@ -258,23 +253,8 @@ pub async fn get_plots(
     let max_offset_limit = (offset + limit).min(total_plots);
     let content_range = format!("plots {}-{}/{}", offset, max_offset_limit - 1, total_plots);
 
-    // println!(
-    //     "Offset: {}, Limit: {}, Max Offset Limit: {}",
-    //     offset, limit, max_offset_limit
-    // );
-    // println!("Content-Range: {}", content_range);
-
     // Return the Content-Range as a header
     let mut headers = HeaderMap::new();
     headers.insert("Content-Range", content_range.parse().unwrap());
-    println!("Headers: {:?}", headers);
-    // // Return JSON response
     (headers, Json(json!(plots)))
 }
-
-// // `HeaderMap` gives an empty response with some headers
-// async fn headers() -> HeaderMap {
-//     let mut headers = HeaderMap::new();
-//     headers.insert(header::SERVER, "axum".parse().unwrap());
-//     headers
-// }

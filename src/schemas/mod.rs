@@ -1,1 +1,3 @@
-pub mod plot;
+pub mod models;
+pub mod schemas;
+pub mod views;

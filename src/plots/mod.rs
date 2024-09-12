@@ -1,4 +1,4 @@
-// pub mod plot;
+pub mod db;
 pub mod schemas;
 pub mod services;
-// pub mod views;
+pub mod views;
