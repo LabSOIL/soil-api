@@ -3,8 +3,8 @@ use serde::Deserialize;
 // List
 #[derive(Deserialize, Debug, Default)]
 pub struct FilterOptions {
-    pub page: Option<usize>,
-    pub limit: Option<usize>,
+    pub offset: Option<u64>,
+    pub limit: Option<u64>,
 }
 
 // // Create
