@@ -1,6 +1,5 @@
-use crate::models::{self, area};
+use crate::models::{self, area, plot};
 use crate::schemas::plot::FilterOptions;
-
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
@@ -10,15 +9,17 @@ use axum::{
     },
     routing, Json, Router,
 };
-
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use geo_types::Point;
 use models::area::Entity as AreaDB;
 use models::plot::Entity as PlotDB;
 use models::sea_orm_active_enums::Gradientchoices;
 use sea_orm::sqlx::Result;
 use sea_orm::Condition;
+use sea_orm::RelationTrait;
 use sea_orm::{query::*, DatabaseConnection};
-use sea_orm::{DbConn, EntityTrait};
+use sea_orm::{DbConn, EntityTrait, FromQueryResult};
 use sea_query::{Alias, Expr, Func};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -52,11 +53,11 @@ pub struct Plot {
     vegetation_type: Option<String>,
     topography: Option<String>,
     aspect: Option<String>,
-    created_on: Option<String>,
+    created_on: Option<NaiveDate>,
     weather: Option<String>,
     lithology: Option<String>,
     iterator: i32,
-    last_updated: String,
+    last_updated: NaiveDateTime,
     image: Option<String>,
     // coord_x: Option<f64>,
     // coord_y: Option<f64>,
@@ -64,7 +65,29 @@ pub struct Plot {
     area: Area,
 }
 
-#[derive(ToSchema, Serialize)]
+#[derive(FromQueryResult, Serialize)]
+pub struct PlotWithCoords {
+    id: Uuid,
+    name: String,
+    plot_iterator: i32,
+    area_id: Uuid,
+    gradient: Gradientchoices,
+    vegetation_type: Option<String>,
+    topography: Option<String>,
+    aspect: Option<String>,
+    created_on: Option<NaiveDate>,
+    weather: Option<String>,
+    lithology: Option<String>,
+    iterator: i32,
+    last_updated: NaiveDateTime,
+    image: Option<String>,
+    // geom: String,
+    // area: Area,
+    coord_x: Option<f64>,
+    coord_y: Option<f64>,
+    coord_z: Option<f64>,
+}
+#[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct Area {
     id: Uuid,
     name: String,
@@ -80,28 +103,8 @@ impl From<models::area::Model> for Area {
         }
     }
 }
-impl
-    From<(
-        models::plot::Model,
-        Vec<models::area::Model>,
-        // Option<f64>,
-        // Option<f64>,
-        // Option<f64>,
-    )> for Plot
-{
-    fn from(
-        (
-            plot_db,
-            area_db_vec,
-            //  coord_x, coord_y, coord_z
-        ): (
-            models::plot::Model,
-            Vec<models::area::Model>,
-            // Option<f64>,
-            // Option<f64>,
-            // Option<f64>,
-        ),
-    ) -> Self {
+impl From<(PlotWithCoords, Option<Area>)> for Plot {
+    fn from((plot_db, area_db_vec): (PlotWithCoords, Option<Area>)) -> Self {
         let area = area_db_vec.into_iter().next().map_or(
             Area {
                 id: Uuid::nil(),
@@ -120,15 +123,12 @@ impl
             vegetation_type: plot_db.vegetation_type,
             topography: plot_db.topography,
             aspect: plot_db.aspect,
-            created_on: plot_db.created_on.map(|d| d.to_string()),
+            created_on: plot_db.created_on,
             weather: plot_db.weather,
             lithology: plot_db.lithology,
             iterator: plot_db.iterator,
-            last_updated: plot_db.last_updated.to_string(),
+            last_updated: plot_db.last_updated,
             image: plot_db.image,
-            // coord_x, // Manually setting coord_x
-            // coord_y, // Manually setting coord_y
-            // coord_z, // Manually setting coord_z
             area,
         }
     }
@@ -139,14 +139,15 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/", routing::get(get_plots))
         .with_state(db)
 }
+
 #[utoipa::path(get, path = "", responses((status = OK, body = Plots)))]
 pub async fn get_plots(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
 ) -> impl IntoResponse {
     // Default values for range and sorting
-    let default_limit = 10;
-    let default_offset = 0;
+    // let default_limit = 10;
+    // let default_offset = 0;
     let default_sort_column = "id";
     let default_sort_order = "ASC";
 
@@ -156,16 +157,15 @@ pub async fn get_plots(
     } else {
         HashMap::new()
     };
-
+    println!("Range: {:?}", params.range);
     let (offset, limit) = if let Some(range) = params.range {
-        let range_vec: Vec<u64> =
-            serde_json::from_str(&range).unwrap_or(vec![default_offset, default_limit]);
-        (
-            range_vec.get(0).copied().unwrap_or(default_offset),
-            range_vec.get(1).copied().unwrap_or(default_limit),
-        )
+        let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
+        let start = range_vec.get(0).copied().unwrap_or(0);
+        let end = range_vec.get(1).copied().unwrap_or(24);
+        let limit = (end - start + 1).min(25); // Calculate limit as `end - start + 1`, but cap at 25 if needed
+        (start, limit) // Offset is `start`, limit is the number of documents to fetch
     } else {
-        (default_offset, default_limit)
+        (0, 25) // Default to 25 documents starting at 0
     };
 
     let (sort_column, sort_order) = if let Some(sort) = params.sort {
@@ -239,38 +239,32 @@ pub async fn get_plots(
         .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
         .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
         .column_as(Expr::cust("ST_AsEWKT(plot.geom)"), "geom")
-        .find_with_related(AreaDB)
+        .find_also_related(AreaDB)
+        .into_model::<PlotWithCoords, Area>()
+        // .into_json()
         .all(&db)
         .await
-        .unwrap(); // Add error handling as needed
+        .unwrap();
+
+    // Json(json!(objs))
 
     // Map the results from the database models to the Plot struct
     let plots: Vec<Plot> = objs
         .into_iter()
-        .map(|(plot, areas)| {
-            // // Extract virtual columns
-            // let coord_x = plot.get("coord_x").and_then(|v| v.as_f64());
-            // let coord_y = plot.get("coord_y").and_then(|v| v.as_f64());
-            // let coord_z = plot.get("coord_z").and_then(|v| v.as_f64());
-
-            Plot::from((
-                plot, areas,
-                //  coord_x, coord_y, coord_z
-            ))
-        })
+        .map(|(plot, area)| Plot::from((plot, area)))
         .collect();
 
     let total_plots: u64 = PlotDB::find().count(&db).await.unwrap();
-    let content_range: String;
-    let max_offset_limit = if total_plots > offset + limit {
-        offset + limit
-    } else {
-        total_plots
-    };
-    content_range = format!("plots {}-{}/{}", offset, max_offset_limit, total_plots);
-    println!("Content-Range: {}", content_range);
+    let max_offset_limit = (offset + limit).min(total_plots);
+    let content_range = format!("plots {}-{}/{}", offset, max_offset_limit - 1, total_plots);
 
-    // // Return the Content-Range as a header
+    // println!(
+    //     "Offset: {}, Limit: {}, Max Offset Limit: {}",
+    //     offset, limit, max_offset_limit
+    // );
+    // println!("Content-Range: {}", content_range);
+
+    // Return the Content-Range as a header
     let mut headers = HeaderMap::new();
     headers.insert("Content-Range", content_range.parse().unwrap());
     println!("Headers: {:?}", headers);

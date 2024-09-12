@@ -9,6 +9,7 @@ use geozero::wkb::Wkb;
 use geozero::wkb::{Ewkb, FromWkb};
 use geozero::wkt::Wkt;
 use sea_orm::entity::prelude::*;
+use serde::Serialize;
 use std::convert::TryFrom;
 use utoipa::ToSchema;
 use uuid::Uuid;
