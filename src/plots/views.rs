@@ -37,7 +37,7 @@ pub fn router(db: DatabaseConnection) -> Router {
         .with_state(db)
 }
 
-#[utoipa::path(get, path = "/plots", responses((status = OK, body = PlotWithCoords)))]
+#[utoipa::path(get, path = "/api/plots", responses((status = OK, body = PlotWithCoords)))]
 pub async fn get_plots(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
@@ -86,7 +86,7 @@ pub async fn get_plots(
         )
     };
 
-    // 2. Apply the filters to your query
+    // Apply filters
     let mut condition = Condition::all();
     for (key, mut value) in filters {
         println!("Key: {}, Value: {}", key, value);
@@ -102,7 +102,7 @@ pub async fn get_plots(
         }
     }
 
-    // 3. Fetch the data from the database with filtering, sorting, and range (pagination)
+    // Query with filtering, sorting, and pagination
     let order_direction = if sort_order == "ASC" {
         Order::Asc
     } else {
@@ -134,10 +134,8 @@ pub async fn get_plots(
         .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
         .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
         .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-        // .column_as(Expr::cust("ST_AsEWKT(plot.geom)"), "geom")
         .find_also_related(AreaDB)
         .into_model::<PlotWithCoords, Area>()
-        // .into_json()
         .all(&db)
         .await
         .unwrap();

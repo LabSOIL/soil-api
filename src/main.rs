@@ -53,9 +53,8 @@ async fn main() {
 
     // Build the router with routes from the plots module
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
-        .route("/health", get(health))
-        .nest("/plots", plots::views::router(db))
+        .route("/healthz", get(health))
+        .nest("/v1/plots", plots::views::router(db))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));
