@@ -1,6 +1,6 @@
-use crate::areas::models::Entity as AreaDB;
-use crate::areas::schemas::Area;
 use crate::common::schemas::FilterOptions;
+use crate::projects::models::Entity as ProjectDB;
+use crate::projects::schemas::Project;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
@@ -22,7 +22,7 @@ pub fn router(db: DatabaseConnection) -> Router {
         .with_state(db)
 }
 
-#[utoipa::path(get, path = "/api/areas", responses((status = OK, body = PlotWithCoords)))]
+#[utoipa::path(get, path = "/api/projects", responses((status = OK, body = PlotWithCoords)))]
 pub async fn get_all(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
@@ -92,15 +92,16 @@ pub async fn get_all(
         Order::Desc
     };
     let order_column = match sort_column.as_str() {
-        "id" => <AreaDB as sea_orm::EntityTrait>::Column::Id,
-        "name" => <AreaDB as sea_orm::EntityTrait>::Column::Name,
-        "last_updated" => <AreaDB as sea_orm::EntityTrait>::Column::LastUpdated,
-        "description" => <AreaDB as sea_orm::EntityTrait>::Column::Description,
-        "project_id" => <AreaDB as sea_orm::EntityTrait>::Column::ProjectId,
-        _ => <AreaDB as sea_orm::EntityTrait>::Column::Id,
+        "id" => <ProjectDB as sea_orm::EntityTrait>::Column::Id,
+        "name" => <ProjectDB as sea_orm::EntityTrait>::Column::Name,
+        "description" => <ProjectDB as sea_orm::EntityTrait>::Column::Description,
+        "color" => <ProjectDB as sea_orm::EntityTrait>::Column::Color,
+        "iterator" => <ProjectDB as sea_orm::EntityTrait>::Column::Iterator,
+        "last_updated" => <ProjectDB as sea_orm::EntityTrait>::Column::LastUpdated,
+        _ => <ProjectDB as sea_orm::EntityTrait>::Column::Id,
     };
 
-    let objs = AreaDB::find()
+    let objs = ProjectDB::find()
         .filter(condition)
         .order_by(order_column, order_direction)
         .offset(offset)
@@ -109,19 +110,22 @@ pub async fn get_all(
         .await
         .unwrap();
 
-    let mut areas: Vec<Area> = Vec::new();
+    let projects: Vec<Project> = objs
+        .iter()
+        .map(|project| Project::from(project.clone()))
+        .collect::<Vec<Project>>();
 
-    // Loop through each area and fetch related data asynchronously
-    for area in objs {
-        areas.push(Area::from(area, db.clone()).await);
-    }
-
-    let total_areas: u64 = AreaDB::find().count(&db).await.unwrap();
-    let max_offset_limit = (offset + limit).min(total_areas);
-    let content_range = format!("areas {}-{}/{}", offset, max_offset_limit - 1, total_areas);
+    let total_count: u64 = ProjectDB::find().count(&db).await.unwrap();
+    let max_offset_limit = (offset + limit).min(total_count);
+    let content_range = format!(
+        "projects {}-{}/{}",
+        offset,
+        max_offset_limit - 1,
+        total_count
+    );
 
     // Return the Content-Range as a header
     let mut headers = HeaderMap::new();
     headers.insert("Content-Range", content_range.parse().unwrap());
-    (headers, Json(json!(areas)))
+    (headers, Json(json!(projects)))
 }

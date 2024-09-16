@@ -1,4 +1,5 @@
 mod areas;
+mod common;
 mod config;
 mod gnss;
 mod instrument_experiments;
@@ -9,8 +10,6 @@ mod sensors;
 mod soil;
 mod transects;
 
-use crate::plots::models::Gradientchoices;
-use crate::plots::schemas::{Area, FilterOptions, Plot, PlotWithCoords};
 use axum::{routing::get, Router};
 use sea_orm::{Database, DatabaseConnection};
 use tracing_subscriber;
@@ -19,37 +18,35 @@ use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use utoipa_swagger_ui::SwaggerUi;
 
-/// Get health of the API.
-#[utoipa::path(
-    get,
-    path = "/api/health",
-    responses(
-        (status = OK, description = "Success", body = str, content_type = "text/plain")
-    )
-)]
-async fn health() -> &'static str {
-    "ok"
-}
-
 #[tokio::main]
 async fn main() {
-    #[derive(OpenApi)]
-    #[openapi(
-        paths(crate::plots::views::get_all, health),
-        components(schemas(Plot, Area, Gradientchoices, FilterOptions, PlotWithCoords))
-    )]
-    struct ApiDoc;
-
     // Set up tracing/logging
     tracing_subscriber::fmt::init();
     println!("Starting server...");
 
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            plots::views::get_all,
+            areas::views::get_all,
+            projects::views::get_all,
+            common::views::healthz,
+        ),
+        components(schemas(
+            plots::schemas::Plot,
+            plots::schemas::PlotSimple,
+            areas::schemas::Area,
+            common::schemas::FilterOptions,
+            projects::schemas::Project,
+        ))
+    )]
+    struct ApiDoc;
+
     // Load configuration
     let cfg = config::Config::from_env();
-
     let db: DatabaseConnection = Database::connect(&*cfg.db_url.as_ref().unwrap())
         .await
-        .expect("Could not connect to the database");
+        .unwrap();
 
     if db.ping().await.is_ok() {
         println!("Connected to the database");
@@ -59,9 +56,10 @@ async fn main() {
 
     // Build the router with routes from the plots module
     let app = Router::new()
-        .route("/healthz", get(health))
+        .route("/healthz", get(common::views::healthz))
         .nest("/v1/plots", plots::views::router(db.clone()))
         .nest("/v1/areas", areas::views::router(db.clone()))
+        .nest("/v1/projects", projects::views::router(db.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));

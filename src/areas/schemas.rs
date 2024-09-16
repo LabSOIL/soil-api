@@ -1,10 +1,13 @@
 use crate::plots::models::Entity as PlotDB;
+use crate::plots::schemas::PlotSimple;
 use crate::projects::models::Entity as ProjectDB;
+use crate::projects::schemas::Project;
 use crate::sensors::models::Entity as SensorDB;
 use crate::soil::profiles::models::Entity as SoilProfileDB;
 use crate::transects::models::Entity as TransectDB;
 use crate::transects::nodes::models::Entity as TransectNodeDB;
-
+use crate::transects::nodes::schemas::TransectNode;
+use crate::transects::schemas::Transect;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use sea_orm::ColumnTrait;
@@ -12,29 +15,10 @@ use sea_orm::EntityTrait;
 use sea_orm::FromQueryResult;
 use sea_orm::{query::*, DatabaseConnection};
 use sea_query::Expr;
-use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
-#[derive(ToSchema, Deserialize, Default)]
-pub struct FilterOptions {
-    pub filter: Option<String>, // JSON-encoded filter
-    pub range: Option<String>,  // range in the format "[0,24]"
-    pub sort: Option<String>,   // sort in the format '["id", "ASC"]'
-}
-
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct Plot {
-    id: Uuid,
-    name: String,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
-    coord_srid: Option<i32>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
-}
 
 #[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct SoilProfile {
@@ -61,30 +45,6 @@ pub struct Sensor {
 }
 
 #[derive(ToSchema, Serialize)]
-pub struct TransectNode {
-    id: Uuid,
-    name: Option<String>,
-    order: i32,
-    plot: Plot,
-}
-#[derive(ToSchema, Serialize)]
-pub struct Transect {
-    id: Uuid,
-    name: Option<String>,
-    nodes: Vec<TransectNode>,
-}
-
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct Project {
-    color: String,
-    last_updated: NaiveDateTime,
-    iterator: i32,
-    description: Option<String>,
-    id: Uuid,
-    name: String,
-}
-
-#[derive(ToSchema, Serialize)]
 pub struct Area {
     id: Uuid,
     last_updated: NaiveDateTime,
@@ -93,7 +53,7 @@ pub struct Area {
     project_id: Uuid,
     project: Project,
     soil_profiles: Vec<SoilProfile>,
-    plots: Vec<Plot>,
+    plots: Vec<PlotSimple>,
     sensors: Vec<Sensor>,
     transects: Vec<Transect>,
     geom: Option<Value>,
@@ -117,7 +77,7 @@ pub struct Area {
 impl Area {
     pub async fn from(area: crate::areas::models::Model, db: DatabaseConnection) -> Self {
         // Query for plots with matching area_id
-        let plots: Vec<crate::areas::schemas::Plot> = PlotDB::find()
+        let plots: Vec<PlotSimple> = PlotDB::find()
             .filter(crate::plots::models::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
@@ -131,7 +91,7 @@ impl Area {
                 "latitude",
             )
             .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-            .into_model::<crate::areas::schemas::Plot>()
+            .into_model::<PlotSimple>()
             .all(&db)
             .await
             .unwrap();
@@ -172,7 +132,7 @@ impl Area {
             let mut transect_nodes: Vec<TransectNode> = Vec::new();
 
             for node in nodes {
-                let plot: Plot = PlotDB::find()
+                let plot: PlotSimple = PlotDB::find()
                     .filter(crate::plots::models::Column::Id.eq(node.plot_id))
                     .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
                     .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
@@ -186,7 +146,7 @@ impl Area {
                         "latitude",
                     )
                     .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-                    .into_model::<Plot>()
+                    .into_model::<PlotSimple>()
                     .one(&db)
                     .await
                     .unwrap()
