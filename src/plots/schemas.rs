@@ -31,14 +31,16 @@ pub struct Plot {
     iterator: i32,
     last_updated: NaiveDateTime,
     image: Option<String>,
-    area: Area,
     coord_x: Option<f64>,
     coord_y: Option<f64>,
     coord_z: Option<f64>,
+    area: Area,
 }
 
 #[derive(ToSchema, FromQueryResult, Serialize)]
 pub struct PlotWithCoords {
+    // Represents the model of the query for get all plots with the extra
+    // coordinate fields
     id: Uuid,
     name: String,
     plot_iterator: i32,

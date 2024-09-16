@@ -1,5 +1,3 @@
-use axum::{routing::get, Router};
-use tracing_subscriber;
 mod areas;
 mod config;
 mod models;
@@ -7,7 +5,9 @@ mod plots;
 
 use crate::plots::models::Gradientchoices;
 use crate::plots::schemas::{Area, FilterOptions, Plot, PlotWithCoords};
+use axum::{routing::get, Router};
 use sea_orm::{Database, DatabaseConnection};
+use tracing_subscriber;
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
@@ -29,7 +29,7 @@ async fn health() -> &'static str {
 async fn main() {
     #[derive(OpenApi)]
     #[openapi(
-        paths(crate::plots::views::get_plots, health),
+        paths(crate::plots::views::get_all, health),
         components(schemas(Plot, Area, Gradientchoices, FilterOptions, PlotWithCoords))
     )]
     struct ApiDoc;
@@ -54,7 +54,8 @@ async fn main() {
     // Build the router with routes from the plots module
     let app = Router::new()
         .route("/healthz", get(health))
-        .nest("/v1/plots", plots::views::router(db))
+        .nest("/v1/plots", plots::views::router(db.clone()))
+        .nest("/v1/areas", areas::views::router(db.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));
