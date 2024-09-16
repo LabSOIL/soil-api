@@ -4,20 +4,12 @@ use crate::models::plotsensorassignments::Entity as PlotSensorAssignments;
 use crate::models::transectnode::Entity as TransectNode;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use sea_orm::EntityTrait;
-// use geo_types::Point;
-// use geozero::wkb;
-// use geozero::wkb::Wkb;
-// use geozero::wkb::Ewkb;
-// use geozero::wkb::FromWkb;
-// use geozero::wkb::{Ewkb, FromWkb};
-// use geozero::wkt::Wkt;
 use sea_orm::entity::prelude::*;
-// use serde::Serialize;
-// use std::convert::TryFrom;
+use sea_orm::EntityTrait;
 use utoipa::ToSchema;
 use uuid::Uuid;
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, ToSchema)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "gradientchoices")]
 pub enum Gradientchoices {
     #[sea_orm(string_value = "flat")]
@@ -26,25 +18,6 @@ pub enum Gradientchoices {
     Slope,
 }
 
-// impl TryFrom<Option<Ewkb>> for Geom {
-//     type Error = geozero::error::Error;
-
-//     fn try_from(value: Option<Ewkb>) -> Result<Self, Self::Error> {
-//         match value {
-//             Some(ewkb) => Ok(Self(Some(Point::from_wkb(&ewkb)?))),
-//             None => Ok(Self(None)),
-//         }
-//     }
-// }
-
-// impl From<Geom> for Option<Ewkb> {
-//     fn from(value: Geom) -> Self {
-//         match value.0 {
-//             Some(point) => Some(Ewkb::from(&point)),
-//             None => None,
-//         }
-//     }
-// }
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, ToSchema)]
 #[sea_orm(table_name = "plot")]
 pub struct Model {

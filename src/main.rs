@@ -1,18 +1,18 @@
-use axum::{extract::State, routing::get, Router};
-// use sqlx::postgres::PgPoolOptions;
+use axum::{routing::get, Router};
 use tracing_subscriber;
 mod areas;
 mod config;
 mod models;
 mod plots;
 
+use crate::plots::models::Gradientchoices;
+use crate::plots::schemas::{Area, FilterOptions, Plot, PlotWithCoords};
 use sea_orm::{Database, DatabaseConnection};
 use utoipa::OpenApi;
-// use utoipa_axum::router::OpenApiRouter;
-// use utoipa_axum::routes;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use utoipa_swagger_ui::SwaggerUi;
+
 /// Get health of the API.
 #[utoipa::path(
     get,
@@ -29,8 +29,8 @@ async fn health() -> &'static str {
 async fn main() {
     #[derive(OpenApi)]
     #[openapi(
-        paths(plots::views::get_plots),
-        components(schemas(plots::schemas::Area, plots::schemas::Plot,))
+        paths(crate::plots::views::get_plots, health),
+        components(schemas(Plot, Area, Gradientchoices, FilterOptions, PlotWithCoords))
     )]
     struct ApiDoc;
 

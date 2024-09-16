@@ -16,12 +16,7 @@ use sea_query::{Alias, Expr};
 use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
-use utoipa::OpenApi;
 use uuid::Uuid;
-
-#[derive(OpenApi)]
-#[openapi(components(schemas(Plot)))]
-pub struct PlotApi;
 
 impl Serialize for Gradientchoices {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -42,14 +37,12 @@ pub fn router(db: DatabaseConnection) -> Router {
         .with_state(db)
 }
 
-#[utoipa::path(get, path = "", responses((status = OK, body = Plots)))]
+#[utoipa::path(get, path = "/plots", responses((status = OK, body = PlotWithCoords)))]
 pub async fn get_plots(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
 ) -> impl IntoResponse {
     // Default values for range and sorting
-    // let default_limit = 10;
-    // let default_offset = 0;
     let default_sort_column = "id";
     let default_sort_order = "ASC";
 
@@ -64,12 +57,13 @@ pub async fn get_plots(
         let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
         let start = range_vec.get(0).copied().unwrap_or(0);
         let end = range_vec.get(1).copied().unwrap_or(24);
-        let limit = (end - start + 1).min(25); // Calculate limit as `end - start + 1`, but cap at 25 if needed
+        let limit = end - start + 1;
         (start, limit) // Offset is `start`, limit is the number of documents to fetch
     } else {
         (0, 25) // Default to 25 documents starting at 0
     };
 
+    println!("Offset: {}, Limit: {}", offset, limit);
     let (sort_column, sort_order) = if let Some(sort) = params.sort {
         let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
             default_sort_column.to_string(),

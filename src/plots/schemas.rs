@@ -8,7 +8,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize, Default)]
+#[derive(ToSchema, Deserialize, Default)]
 pub struct FilterOptions {
     pub filter: Option<String>, // JSON-encoded filter
     pub range: Option<String>,  // range in the format "[0,24]"
@@ -37,7 +37,7 @@ pub struct Plot {
     coord_z: Option<f64>,
 }
 
-#[derive(FromQueryResult, Serialize)]
+#[derive(ToSchema, FromQueryResult, Serialize)]
 pub struct PlotWithCoords {
     id: Uuid,
     name: String,
