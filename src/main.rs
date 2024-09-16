@@ -1,10 +1,11 @@
 use axum::{extract::State, routing::get, Router};
 // use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber;
+mod areas;
 mod config;
 mod models;
-mod schemas;
-mod views;
+mod plots;
+
 use sea_orm::{Database, DatabaseConnection};
 use utoipa::OpenApi;
 // use utoipa_axum::router::OpenApiRouter;
@@ -28,8 +29,8 @@ async fn health() -> &'static str {
 async fn main() {
     #[derive(OpenApi)]
     #[openapi(
-        paths(views::plot::get_plots),
-        components(schemas(views::plot::Area, views::plot::Plot,))
+        paths(plots::views::get_plots),
+        components(schemas(plots::schemas::Area, plots::schemas::Plot,))
     )]
     struct ApiDoc;
 
@@ -54,7 +55,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route("/health", get(health))
-        .nest("/plots", views::plot::router(db))
+        .nest("/plots", plots::views::router(db))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));

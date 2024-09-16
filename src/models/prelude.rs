@@ -1,8 +1,6 @@
-pub use super::area::Entity as Area;
 pub use super::gnss::Entity as Gnss;
 pub use super::instrumentexperiment::Entity as Instrumentexperiment;
 pub use super::instrumentexperimentchannel::Entity as Instrumentexperimentchannel;
-pub use super::plot::Entity as Plot;
 pub use super::plotsample::Entity as Plotsample;
 pub use super::plotsensorassignments::Entity as Plotsensorassignments;
 pub use super::posts::Entity as Posts;

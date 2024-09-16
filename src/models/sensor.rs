@@ -2,6 +2,7 @@
 
 use chrono::NaiveDateTime;
 // use geo::Geometry;
+use crate::areas::models::Entity as Area;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
@@ -25,9 +26,9 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::area::Entity",
+        belongs_to = "Area",
         from = "Column::AreaId",
-        to = "super::area::Column::Id",
+        to = "crate::areas::models::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
@@ -38,7 +39,7 @@ pub enum Relation {
     Sensordata,
 }
 
-impl Related<super::area::Entity> for Entity {
+impl Related<Area> for Entity {
     fn to() -> RelationDef {
         Relation::Area.def()
     }

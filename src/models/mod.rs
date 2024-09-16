@@ -1,15 +1,12 @@
 pub mod prelude;
 
-pub mod area;
 pub mod gnss;
 pub mod instrumentexperiment;
 pub mod instrumentexperimentchannel;
-pub mod plot;
 pub mod plotsample;
 pub mod plotsensorassignments;
 pub mod posts;
 pub mod project;
-pub mod sea_orm_active_enums;
 pub mod sensor;
 pub mod sensordata;
 pub mod soilprofile;

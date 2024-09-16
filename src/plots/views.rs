@@ -1,103 +1,165 @@
-use crate::plots::models::PlotRead;
-use crate::plots::schemas::FilterOptions;
+use crate::areas::models::Entity as AreaDB;
+use crate::plots::models::Entity as PlotDB;
+use crate::plots::models::Gradientchoices;
+use crate::plots::schemas::{Area, FilterOptions, Plot, PlotWithCoords};
+use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, HeaderValue, StatusCode},
-    response::IntoResponse,
-    Json,
+    http::header::HeaderMap,
+    routing, Json, Router,
 };
-use sqlx::PgPool;
+use sea_orm::sqlx::Result;
+use sea_orm::Condition;
+use sea_orm::EntityTrait;
+use sea_orm::{query::*, DatabaseConnection};
+use sea_query::{Alias, Expr};
+use serde::Serialize;
+use serde_json::json;
+use std::collections::HashMap;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
+#[derive(OpenApi)]
+#[openapi(components(schemas(Plot)))]
+pub struct PlotApi;
+
+impl Serialize for Gradientchoices {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let gradient = match self {
+            Gradientchoices::Flat => "Flat",
+            Gradientchoices::Slope => "Slope",
+        };
+        serializer.serialize_str(gradient)
+    }
+}
+
+pub fn router(db: DatabaseConnection) -> Router {
+    Router::new()
+        .route("/", routing::get(get_plots))
+        .with_state(db)
+}
+
+#[utoipa::path(get, path = "", responses((status = OK, body = Plots)))]
 pub async fn get_plots(
-    opts: Option<Query<FilterOptions>>,
-    State(pool): State<PgPool>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    // Params
-    let Query(opts) = opts.unwrap_or_default();
+    Query(params): Query<FilterOptions>,
+    State(db): State<DatabaseConnection>,
+) -> impl IntoResponse {
+    // Default values for range and sorting
+    // let default_limit = 10;
+    // let default_offset = 0;
+    let default_sort_column = "id";
+    let default_sort_order = "ASC";
 
-    let limit = opts.limit.unwrap_or(10);
-    let page = opts.page.unwrap_or(1);
-    let offset = (page - 1) * limit;
+    // 1. Parse the filter, range, and sort parameters
+    let filters: HashMap<String, String> = if let Some(filter) = params.filter {
+        serde_json::from_str(&filter).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
 
-    // First query: Get total count of plots (without pagination)
-    let total_count: Option<i64> = sqlx::query_scalar!(
-        r#"
-        SELECT COUNT(*) FROM plot
-        "#
-    )
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| {
-        let error_response = serde_json::json!({
-            "status": "error",
-            "message": format!("Database error: {}", e),
-        });
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
-    })?;
+    let (offset, limit) = if let Some(range) = params.range {
+        let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
+        let start = range_vec.get(0).copied().unwrap_or(0);
+        let end = range_vec.get(1).copied().unwrap_or(24);
+        let limit = (end - start + 1).min(25); // Calculate limit as `end - start + 1`, but cap at 25 if needed
+        (start, limit) // Offset is `start`, limit is the number of documents to fetch
+    } else {
+        (0, 25) // Default to 25 documents starting at 0
+    };
 
-    // Second query: Get paginated plot records with area info
-    let plots = sqlx::query_as!(
-        PlotRead,
-        r#"
-        SELECT plot.id,
-            ST_X(st_transform(plot.geom, 2056)) as coord_x,
-            ST_Y(st_transform(plot.geom, 2056)) as coord_y,
-            ST_Z(st_transform(plot.geom, 2056)) as coord_z,
-            ST_X(st_transform(plot.geom, 4326)) as longitude,
-            ST_Y(st_transform(plot.geom, 4326)) as latitude,
-            plot.name, plot.area_id, plot.gradient::text, plot.vegetation_type,
-            plot.topography, plot.aspect, plot.weather, plot.lithology,
-            plot.image, plot.iterator, plot.plot_iterator, plot.last_updated, plot.created_on,
-            area.name as area_name, area.description as area_description, area.project_id as area_project_id
-        FROM plot
-        JOIN area ON plot.area_id = area.id
-        ORDER BY plot.id
-        OFFSET $1
-        LIMIT $2
-        "#,
-        offset as i32,
-        limit as i32
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| {
-        let error_response = serde_json::json!({
-            "status": "error",
-            "message": format!("Database error: {}", e),
-        });
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
-    })?;
+    let (sort_column, sort_order) = if let Some(sort) = params.sort {
+        let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
+            default_sort_column.to_string(),
+            default_sort_order.to_string(),
+        ]);
+        (
+            sort_vec
+                .get(0)
+                .cloned()
+                .unwrap_or(default_sort_column.to_string()),
+            sort_vec
+                .get(1)
+                .cloned()
+                .unwrap_or(default_sort_order.to_string()),
+        )
+    } else {
+        (
+            default_sort_column.to_string(),
+            default_sort_order.to_string(),
+        )
+    };
 
-    // Response body
-    let json_response = serde_json::json!({
-        "status": "ok",
-        "count": plots.len(),
-        "total_count": total_count,  // Return the total count
-        "plots": plots,
-        "offset": offset,
-        "pagination": {
-            "limit": limit,
-            "page": page,
-        },
-    });
+    // 2. Apply the filters to your query
+    let mut condition = Condition::all();
+    for (key, mut value) in filters {
+        println!("Key: {}, Value: {}", key, value);
+        value = value.trim().to_string();
 
-    // Set Content-Range header using the total count
+        // Check if the value is a valid UUID
+        if let Ok(uuid) = Uuid::parse_str(&value) {
+            // If the value is a valid UUID, filter it as a UUID
+            condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
+        } else {
+            // Otherwise, treat it as a regular string filter
+            condition = condition.add(Expr::col(Alias::new(&key)).eq(value));
+        }
+    }
+
+    // 3. Fetch the data from the database with filtering, sorting, and range (pagination)
+    let order_direction = if sort_order == "ASC" {
+        Order::Asc
+    } else {
+        Order::Desc
+    };
+    let order_column = match sort_column.as_str() {
+        "id" => <PlotDB as sea_orm::EntityTrait>::Column::Id,
+        "name" => <PlotDB as sea_orm::EntityTrait>::Column::Name,
+        "plot_iterator" => <PlotDB as sea_orm::EntityTrait>::Column::PlotIterator,
+        "area_id" => <PlotDB as sea_orm::EntityTrait>::Column::AreaId,
+        "gradient" => <PlotDB as sea_orm::EntityTrait>::Column::Gradient,
+        "vegetation_type" => <PlotDB as sea_orm::EntityTrait>::Column::VegetationType,
+        "topography" => <PlotDB as sea_orm::EntityTrait>::Column::Topography,
+        "aspect" => <PlotDB as sea_orm::EntityTrait>::Column::Aspect,
+        "created_on" => <PlotDB as sea_orm::EntityTrait>::Column::CreatedOn,
+        "weather" => <PlotDB as sea_orm::EntityTrait>::Column::Weather,
+        "lithology" => <PlotDB as sea_orm::EntityTrait>::Column::Lithology,
+        "iterator" => <PlotDB as sea_orm::EntityTrait>::Column::Iterator,
+        "last_updated" => <PlotDB as sea_orm::EntityTrait>::Column::LastUpdated,
+        "image" => <PlotDB as sea_orm::EntityTrait>::Column::Image,
+        _ => <PlotDB as sea_orm::EntityTrait>::Column::Id,
+    };
+
+    let objs = PlotDB::find()
+        .filter(condition)
+        .order_by(order_column, order_direction)
+        .offset(offset)
+        .limit(limit)
+        .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
+        .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
+        .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
+        // .column_as(Expr::cust("ST_AsEWKT(plot.geom)"), "geom")
+        .find_also_related(AreaDB)
+        .into_model::<PlotWithCoords, Area>()
+        // .into_json()
+        .all(&db)
+        .await
+        .unwrap();
+
+    // Map the results from the database models to the Plot struct
+    let plots: Vec<Plot> = objs
+        .into_iter()
+        .map(|(plot, area)| Plot::from((plot, area)))
+        .collect();
+
+    let total_plots: u64 = PlotDB::find().count(&db).await.unwrap();
+    let max_offset_limit = (offset + limit).min(total_plots);
+    let content_range = format!("plots {}-{}/{}", offset, max_offset_limit - 1, total_plots);
+
+    // Return the Content-Range as a header
     let mut headers = HeaderMap::new();
-    headers.insert(
-        "Content-Range",
-        HeaderValue::from_str(&format!(
-            "plot {}-{}/{}",
-            offset,
-            offset + plots.len(),
-            total_count.unwrap_or(0)
-        ))
-        .unwrap(),
-    );
-    headers.insert(
-        "Content-Length",
-        HeaderValue::from_str(&json_response.to_string().len().to_string()).unwrap(),
-    );
-
-    // Return JSON response with headers
-    Ok((StatusCode::OK, headers, Json(json_response)))
+    headers.insert("Content-Range", content_range.parse().unwrap());
+    (headers, Json(json!(plots)))
 }
