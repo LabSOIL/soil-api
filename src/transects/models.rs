@@ -29,7 +29,7 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Area,
-    #[sea_orm(has_many = "super::transectnode::Entity")]
+    #[sea_orm(has_many = "crate::transects::nodes::models::Entity")]
     Transectnode,
 }
 
@@ -39,7 +39,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<super::transectnode::Entity> for Entity {
+impl Related<crate::transects::nodes::models::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Transectnode.def()
     }

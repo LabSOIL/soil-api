@@ -44,9 +44,9 @@ pub enum Relation {
     )]
     Area,
     #[sea_orm(
-        belongs_to = "super::soiltype::Entity",
+        belongs_to = "crate::soil::types::models::Entity",
         from = "Column::SoilTypeId",
-        to = "super::soiltype::Column::Id",
+        to = "crate::soil::types::models::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
@@ -59,7 +59,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<super::soiltype::Entity> for Entity {
+impl Related<crate::soil::types::models::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Soiltype.def()
     }

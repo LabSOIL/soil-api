@@ -23,7 +23,7 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "Area")]
     Area,
-    #[sea_orm(has_many = "super::instrumentexperiment::Entity")]
+    #[sea_orm(has_many = "crate::instrument_experiments::models::Entity")]
     Instrumentexperiment,
 }
 
@@ -33,7 +33,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<super::instrumentexperiment::Entity> for Entity {
+impl Related<crate::instrument_experiments::models::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Instrumentexperiment.def()
     }

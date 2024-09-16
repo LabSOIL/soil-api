@@ -1,7 +1,13 @@
 mod areas;
 mod config;
-mod models;
+mod gnss;
+mod instrument_experiments;
 mod plots;
+mod projects;
+mod samples;
+mod sensors;
+mod soil;
+mod transects;
 
 use crate::plots::models::Gradientchoices;
 use crate::plots::schemas::{Area, FilterOptions, Plot, PlotWithCoords};

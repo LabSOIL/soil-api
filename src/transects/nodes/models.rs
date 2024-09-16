@@ -25,9 +25,9 @@ pub enum Relation {
     )]
     Plot,
     #[sea_orm(
-        belongs_to = "super::transect::Entity",
+        belongs_to = "crate::transects::models::Entity",
         from = "Column::TransectId",
-        to = "super::transect::Column::Id",
+        to = "crate::transects::models::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
@@ -40,7 +40,7 @@ impl Related<Plot> for Entity {
     }
 }
 
-impl Related<super::transect::Entity> for Entity {
+impl Related<crate::transects::models::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Transect.def()
     }

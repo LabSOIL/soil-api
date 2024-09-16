@@ -1,7 +1,7 @@
 use crate::areas::models::Entity as Area;
-use crate::models::plotsample::Entity as PlotSample;
-use crate::models::plotsensorassignments::Entity as PlotSensorAssignments;
-use crate::models::transectnode::Entity as TransectNode;
+use crate::plots::sensors::models::Entity as PlotSensorAssignments;
+use crate::samples::models::Entity as PlotSample;
+use crate::transects::nodes::models::Entity as TransectNode;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;

@@ -1,9 +1,9 @@
-use crate::models::project::Entity as ProjectDB;
-use crate::models::sensor::Entity as SensorDB;
-use crate::models::soilprofile::Entity as SoilProfileDB;
-use crate::models::transect::Entity as TransectDB;
-use crate::models::transectnode::Entity as TransectNodeDB;
 use crate::plots::models::Entity as PlotDB;
+use crate::projects::models::Entity as ProjectDB;
+use crate::sensors::models::Entity as SensorDB;
+use crate::soil::profiles::models::Entity as SoilProfileDB;
+use crate::transects::models::Entity as TransectDB;
+use crate::transects::nodes::models::Entity as TransectNodeDB;
 
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
@@ -138,7 +138,7 @@ impl Area {
 
         // Query for sensors with matching area_id
         let sensors: Vec<crate::areas::schemas::Sensor> = SensorDB::find()
-            .filter(crate::models::sensor::Column::AreaId.eq(area.id))
+            .filter(crate::sensors::models::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(sensor.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(sensor.geom)"), "coord_y")
             .column_as(Expr::cust("ST_Z(sensor.geom)"), "coord_z")
@@ -158,10 +158,10 @@ impl Area {
 
         // Query for transects with related transect nodes and their corresponding plots
         let transects: Vec<(
-            crate::models::transect::Model,
-            Vec<crate::models::transectnode::Model>,
+            crate::transects::models::Model,
+            Vec<crate::transects::nodes::models::Model>,
         )> = TransectDB::find()
-            .filter(crate::models::transect::Column::AreaId.eq(area.id))
+            .filter(crate::transects::models::Column::AreaId.eq(area.id))
             .find_with_related(TransectNodeDB)
             .all(&db)
             .await
@@ -209,7 +209,7 @@ impl Area {
 
         // Query for soil profiles with matching area_id
         let soil_profiles: Vec<crate::areas::schemas::SoilProfile> = SoilProfileDB::find()
-            .filter(crate::models::soilprofile::Column::AreaId.eq(area.id))
+            .filter(crate::soil::profiles::models::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
             .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
@@ -228,7 +228,7 @@ impl Area {
             .unwrap();
 
         let project: crate::areas::schemas::Project = ProjectDB::find()
-            .filter(crate::models::project::Column::Id.eq(area.project_id))
+            .filter(crate::projects::models::Column::Id.eq(area.project_id))
             .into_model::<crate::areas::schemas::Project>()
             .one(&db)
             .await

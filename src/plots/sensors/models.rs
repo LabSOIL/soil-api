@@ -1,5 +1,5 @@
-use crate::models::sensor::Entity as Sensor;
 use crate::plots::models::Entity as Plot;
+use crate::sensors::models::Entity as Sensor;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -31,7 +31,7 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Sensor",
         from = "Column::SensorId",
-        to = "crate::models::sensor::Column::Id",
+        to = "crate::sensors::models::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
