@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "area")]
 pub struct Model {
-    pub name: String,
+    pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
     #[sea_orm(primary_key)]

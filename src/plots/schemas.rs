@@ -62,7 +62,7 @@ pub struct PlotWithCoords {
 #[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct Area {
     id: Uuid,
-    name: String,
+    name: Option<String>,
     description: Option<String>,
 }
 
@@ -80,7 +80,7 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
         let area = area_db_vec.into_iter().next().map_or(
             Area {
                 id: Uuid::nil(),
-                name: "Unknown".to_string(),
+                name: None,
                 description: None,
             },
             Area::from,
