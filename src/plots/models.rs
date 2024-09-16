@@ -36,7 +36,7 @@ pub struct Model {
     pub iterator: i32,
     #[sea_orm(unique)]
     pub id: Uuid,
-    pub geom: Option<String>,
+    // pub geom: Option<String>,
     pub last_updated: NaiveDateTime,
     pub image: Option<String>,
 }

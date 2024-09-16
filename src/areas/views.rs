@@ -1,17 +1,20 @@
-use crate::areas::models::Entity as AreaDB;
-use crate::areas::schemas::{Area, AreaWithBoundary, FilterOptions};
+use crate::areas::models::Entity as AreaDB; // Add Relation here
+use crate::areas::schemas::{Area, FilterOptions};
+use crate::models::sensor::Entity as SensorDB;
+use crate::models::soilprofile::Entity as SoilProfileDB;
+use crate::models::transect::Entity as TransectDB;
+use crate::plots::models::Entity as PlotDB;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
     http::header::HeaderMap,
     routing, Json, Router,
 };
-use sea_orm::sqlx::Result;
+use sea_orm::ColumnTrait;
 use sea_orm::Condition;
 use sea_orm::EntityTrait;
 use sea_orm::{query::*, DatabaseConnection};
 use sea_query::{Alias, Expr};
-use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -105,17 +108,44 @@ pub async fn get_all(
         .order_by(order_column, order_direction)
         .offset(offset)
         .limit(limit)
-        // .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-        // .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-        // .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-        // .find_also_related(AreaDB)
-        // .into_model::<PlotWithCoords, Area>()
         .all(&db)
         .await
         .unwrap();
 
-    // Map the results from the database models to the Plot struct
-    let areas: Vec<Area> = objs.into_iter().map(|area| Area::from(area)).collect();
+    let mut areas: Vec<Area> = Vec::new();
+
+    // Loop through each area and fetch related data asynchronously
+    for obj in objs {
+        // Get all plots with matching area_id
+        let plots: Vec<crate::plots::models::Model> = PlotDB::find()
+            .filter(crate::plots::models::Column::AreaId.eq(obj.id))
+            .all(&db)
+            .await
+            .unwrap();
+
+        // Get all sensors with matching area_id
+        let sensors: Vec<crate::models::sensor::Model> = SensorDB::find()
+            .filter(crate::models::sensor::Column::AreaId.eq(obj.id))
+            .all(&db)
+            .await
+            .unwrap();
+
+        // Get all transects with matching area_id
+        let transects: Vec<crate::models::transect::Model> = TransectDB::find()
+            .filter(crate::models::transect::Column::AreaId.eq(obj.id))
+            .all(&db)
+            .await
+            .unwrap();
+
+        // Get all soil profiles with matching area_id
+        let soil_profiles: Vec<crate::models::soilprofile::Model> = SoilProfileDB::find()
+            .filter(crate::models::soilprofile::Column::AreaId.eq(obj.id))
+            .all(&db)
+            .await
+            .unwrap();
+
+        areas.push(Area::from(obj, plots, soil_profiles, sensors, transects));
+    }
 
     let total_areas: u64 = AreaDB::find().count(&db).await.unwrap();
     let max_offset_limit = (offset + limit).min(total_areas);
