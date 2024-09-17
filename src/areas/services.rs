@@ -34,9 +34,9 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
             vec![
                 0.01.into(),    // ST_Buffer value
                 4326.into(),    // ST_Transform value
-                4326.into(),    // ST_Transform value for plot.geom
-                4326.into(),    // ST_Transform value for soilprofile.geom
-                4326.into(),    // ST_Transform value for sensor.geom
+                2056.into(),    // ST_Transform value for plot.geom
+                2056.into(),    // ST_Transform value for soilprofile.geom
+                2056.into(),    // ST_Transform value for sensor.geom
                 area_id.into(), // The ID of the area
             ],
         ))
