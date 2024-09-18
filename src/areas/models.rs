@@ -57,6 +57,13 @@ pub struct Area {
     geom: Option<Value>,
 }
 
+#[derive(ToSchema, Serialize)]
+pub struct AreaBasicWithProject {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub project: crate::common::models::GenericNameAndID,
+}
+
 // impl Sensor {
 //     pub fn from(sensor_db: crate::db::sensor::Model) -> Self {
 //         Sensor {

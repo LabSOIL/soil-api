@@ -60,6 +60,7 @@ async fn main() {
         .nest("/v1/plots", plots::views::router(db.clone()))
         .nest("/v1/areas", areas::views::router(db.clone()))
         .nest("/v1/projects", projects::views::router(db.clone()))
+        .nest("/v1/plot_samples", samples::views::router(db.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));

@@ -19,6 +19,13 @@ pub struct PlotSimple {
     pub coord_z: Option<f64>,
 }
 #[derive(ToSchema, Serialize)]
+pub struct PlotBasicWithAreaAndProject {
+    pub id: Uuid,
+    pub name: String,
+    pub area: crate::areas::models::AreaBasicWithProject,
+}
+
+#[derive(ToSchema, Serialize)]
 pub struct Plot {
     id: Uuid,
     name: String,
@@ -78,6 +85,7 @@ impl From<areas::db::Model> for Area {
         }
     }
 }
+
 impl From<(PlotWithCoords, Option<Area>)> for Plot {
     fn from((plot_db, area_db_vec): (PlotWithCoords, Option<Area>)) -> Self {
         let area = area_db_vec.into_iter().next().map_or(
