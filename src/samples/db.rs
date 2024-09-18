@@ -1,4 +1,4 @@
-use crate::plots::models::Entity as Plot;
+use crate::plots::db::Entity as Plot;
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -84,7 +84,7 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Plot",
         from = "Column::PlotId",
-        to = "crate::plots::models::Column::Id",
+        to = "crate::plots::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]

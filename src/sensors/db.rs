@@ -1,4 +1,4 @@
-use crate::areas::models::Entity as Area;
+use crate::areas::db::Entity as Area;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -25,14 +25,14 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Area",
         from = "Column::AreaId",
-        to = "crate::areas::models::Column::Id",
+        to = "crate::areas::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Area,
-    #[sea_orm(has_many = "crate::plots::sensors::models::Entity")]
+    #[sea_orm(has_many = "crate::plots::sensors::db::Entity")]
     Plotsensorassignments,
-    #[sea_orm(has_many = "crate::sensors::data::models::Entity")]
+    #[sea_orm(has_many = "crate::sensors::data::db::Entity")]
     Sensordata,
 }
 
@@ -42,13 +42,13 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<crate::plots::sensors::models::Entity> for Entity {
+impl Related<crate::plots::sensors::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Plotsensorassignments.def()
     }
 }
 
-impl Related<crate::sensors::data::models::Entity> for Entity {
+impl Related<crate::sensors::data::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Sensordata.def()
     }

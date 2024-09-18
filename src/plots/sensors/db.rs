@@ -1,15 +1,21 @@
-use crate::plots::models::Entity as Plot;
+use crate::plots::db::Entity as Plot;
+use crate::sensors::db::Entity as Sensor;
+use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "transectnode")]
+#[sea_orm(table_name = "plotsensorassignments")]
 pub struct Model {
+    pub date_from: NaiveDateTime,
+    pub date_to: NaiveDateTime,
     pub plot_id: Uuid,
-    pub transect_id: Uuid,
-    pub order: i32,
-    #[sea_orm(primary_key, auto_increment = false)]
+    pub sensor_id: Uuid,
+    #[sea_orm(primary_key)]
+    pub iterator: i32,
+    #[sea_orm(unique)]
     pub id: Uuid,
+    pub depth_cm: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -17,19 +23,19 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Plot",
         from = "Column::PlotId",
-        to = "crate::plots::models::Column::Id",
+        to = "crate::plots::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Plot,
     #[sea_orm(
-        belongs_to = "crate::transects::models::Entity",
-        from = "Column::TransectId",
-        to = "crate::transects::models::Column::Id",
+        belongs_to = "Sensor",
+        from = "Column::SensorId",
+        to = "crate::sensors::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Transect,
+    Sensor,
 }
 
 impl Related<Plot> for Entity {
@@ -38,9 +44,9 @@ impl Related<Plot> for Entity {
     }
 }
 
-impl Related<crate::transects::models::Entity> for Entity {
+impl Related<Sensor> for Entity {
     fn to() -> RelationDef {
-        Relation::Transect.def()
+        Relation::Sensor.def()
     }
 }
 

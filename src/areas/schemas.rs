@@ -1,11 +1,11 @@
-use crate::plots::models::Entity as PlotDB;
+use crate::plots::db::Entity as PlotDB;
 use crate::plots::schemas::PlotSimple;
-use crate::projects::models::Entity as ProjectDB;
+use crate::projects::db::Entity as ProjectDB;
 use crate::projects::schemas::Project;
-use crate::sensors::models::Entity as SensorDB;
-use crate::soil::profiles::models::Entity as SoilProfileDB;
-use crate::transects::models::Entity as TransectDB;
-use crate::transects::nodes::models::Entity as TransectNodeDB;
+use crate::sensors::db::Entity as SensorDB;
+use crate::soil::profiles::db::Entity as SoilProfileDB;
+use crate::transects::db::Entity as TransectDB;
+use crate::transects::nodes::db::Entity as TransectNodeDB;
 use crate::transects::nodes::schemas::TransectNode;
 use crate::transects::schemas::Transect;
 use chrono::NaiveDateTime;
@@ -60,7 +60,7 @@ pub struct Area {
 }
 
 // impl Sensor {
-//     pub fn from(sensor_db: crate::models::sensor::Model) -> Self {
+//     pub fn from(sensor_db: crate::db::sensor::Model) -> Self {
 //         Sensor {
 //             id: sensor_db.id,
 //             name: sensor_db.name,
@@ -75,10 +75,10 @@ pub struct Area {
 // }
 
 impl Area {
-    pub async fn from(area: crate::areas::models::Model, db: DatabaseConnection) -> Self {
+    pub async fn from(area: crate::areas::db::Model, db: DatabaseConnection) -> Self {
         // Query for plots with matching area_id
         let plots: Vec<PlotSimple> = PlotDB::find()
-            .filter(crate::plots::models::Column::AreaId.eq(area.id))
+            .filter(crate::plots::db::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
             .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
@@ -98,7 +98,7 @@ impl Area {
 
         // Query for sensors with matching area_id
         let sensors: Vec<crate::areas::schemas::Sensor> = SensorDB::find()
-            .filter(crate::sensors::models::Column::AreaId.eq(area.id))
+            .filter(crate::sensors::db::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(sensor.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(sensor.geom)"), "coord_y")
             .column_as(Expr::cust("ST_Z(sensor.geom)"), "coord_z")
@@ -118,10 +118,10 @@ impl Area {
 
         // Query for transects with related transect nodes and their corresponding plots
         let transects: Vec<(
-            crate::transects::models::Model,
-            Vec<crate::transects::nodes::models::Model>,
+            crate::transects::db::Model,
+            Vec<crate::transects::nodes::db::Model>,
         )> = TransectDB::find()
-            .filter(crate::transects::models::Column::AreaId.eq(area.id))
+            .filter(crate::transects::db::Column::AreaId.eq(area.id))
             .find_with_related(TransectNodeDB)
             .all(&db)
             .await
@@ -133,7 +133,7 @@ impl Area {
 
             for node in nodes {
                 let plot: PlotSimple = PlotDB::find()
-                    .filter(crate::plots::models::Column::Id.eq(node.plot_id))
+                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                     .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
                     .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
                     .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
@@ -169,7 +169,7 @@ impl Area {
 
         // Query for soil profiles with matching area_id
         let soil_profiles: Vec<crate::areas::schemas::SoilProfile> = SoilProfileDB::find()
-            .filter(crate::soil::profiles::models::Column::AreaId.eq(area.id))
+            .filter(crate::soil::profiles::db::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
             .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
@@ -188,7 +188,7 @@ impl Area {
             .unwrap();
 
         let project: crate::areas::schemas::Project = ProjectDB::find()
-            .filter(crate::projects::models::Column::Id.eq(area.project_id))
+            .filter(crate::projects::db::Column::Id.eq(area.project_id))
             .into_model::<crate::areas::schemas::Project>()
             .one(&db)
             .await

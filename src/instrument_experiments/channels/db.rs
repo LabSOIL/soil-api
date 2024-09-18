@@ -22,16 +22,16 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "crate::instrument_experiments::models::Entity",
+        belongs_to = "crate::instrument_experiments::db::Entity",
         from = "Column::ExperimentId",
-        to = "crate::instrument_experiments::models::Column::Id",
+        to = "crate::instrument_experiments::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Instrumentexperiment,
 }
 
-impl Related<crate::instrument_experiments::models::Entity> for Entity {
+impl Related<crate::instrument_experiments::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Instrumentexperiment.def()
     }

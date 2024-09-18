@@ -1,4 +1,4 @@
-use crate::areas::models::Entity as Area;
+use crate::areas::db::Entity as Area;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde_json::Value as Json;
@@ -36,15 +36,15 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Area",
         from = "Column::AreaId",
-        to = "crate::areas::models::Column::Id",
+        to = "crate::areas::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Area,
     #[sea_orm(
-        belongs_to = "crate::soil::types::models::Entity",
+        belongs_to = "crate::soil::types::db::Entity",
         from = "Column::SoilTypeId",
-        to = "crate::soil::types::models::Column::Id",
+        to = "crate::soil::types::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
@@ -57,7 +57,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<crate::soil::types::models::Entity> for Entity {
+impl Related<crate::soil::types::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Soiltype.def()
     }

@@ -1,4 +1,4 @@
-use crate::areas::models::Entity as Area;
+use crate::areas::db::Entity as Area;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -21,7 +21,7 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "Area")]
     Area,
-    #[sea_orm(has_many = "crate::instrument_experiments::models::Entity")]
+    #[sea_orm(has_many = "crate::instrument_experiments::db::Entity")]
     Instrumentexperiment,
 }
 
@@ -31,7 +31,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<crate::instrument_experiments::models::Entity> for Entity {
+impl Related<crate::instrument_experiments::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Instrumentexperiment.def()
     }

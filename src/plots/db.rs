@@ -1,7 +1,7 @@
-use crate::areas::models::Entity as Area;
-use crate::plots::sensors::models::Entity as PlotSensorAssignments;
-use crate::samples::models::Entity as PlotSample;
-use crate::transects::nodes::models::Entity as TransectNode;
+use crate::areas::db::Entity as Area;
+use crate::plots::sensors::db::Entity as PlotSensorAssignments;
+use crate::samples::db::Entity as PlotSample;
+use crate::transects::nodes::db::Entity as TransectNode;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
@@ -46,7 +46,7 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Area",
         from = "Column::AreaId",
-        to = "crate::areas::models::Column::Id",
+        to = "crate::areas::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]

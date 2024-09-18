@@ -1,5 +1,5 @@
 use crate::common::schemas::FilterOptions;
-use crate::projects::models::Entity as ProjectDB;
+use crate::projects::db::Entity as ProjectDB;
 use crate::projects::schemas::Project;
 use axum::response::IntoResponse;
 use axum::{

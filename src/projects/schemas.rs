@@ -14,7 +14,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn from(obj: crate::projects::models::Model) -> Self {
+    pub fn from(obj: crate::projects::db::Model) -> Self {
         Project {
             id: obj.id,
             name: obj.name,

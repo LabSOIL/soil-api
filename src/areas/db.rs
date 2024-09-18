@@ -1,8 +1,8 @@
-use crate::plots::models::Entity as Plot;
-use crate::projects::models::Entity as Project;
-use crate::sensors::models::Entity as Sensor;
-use crate::soil::profiles::models::Entity as SoilProfile;
-use crate::transects::models::Entity as Transect;
+use crate::plots::db::Entity as Plot;
+use crate::projects::db::Entity as Project;
+use crate::sensors::db::Entity as Sensor;
+use crate::soil::profiles::db::Entity as SoilProfile;
+use crate::transects::db::Entity as Transect;
 
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
@@ -28,7 +28,7 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Project",
         from = "Column::ProjectId",
-        to = "crate::projects::models::Column::Id",
+        to = "crate::projects::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]

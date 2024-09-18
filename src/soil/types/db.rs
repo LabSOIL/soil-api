@@ -17,11 +17,11 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "crate::soil::profiles::models::Entity")]
+    #[sea_orm(has_many = "crate::soil::profiles::db::Entity")]
     Soilprofile,
 }
 
-impl Related<crate::soil::profiles::models::Entity> for Entity {
+impl Related<crate::soil::profiles::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Soilprofile.def()
     }

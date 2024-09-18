@@ -1,5 +1,5 @@
 use crate::areas;
-use crate::plots::models::Gradientchoices;
+use crate::plots::db::Gradientchoices;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::FromQueryResult;
@@ -69,8 +69,8 @@ pub struct Area {
     description: Option<String>,
 }
 
-impl From<areas::models::Model> for Area {
-    fn from(area_db: areas::models::Model) -> Self {
+impl From<areas::db::Model> for Area {
+    fn from(area_db: areas::db::Model) -> Self {
         Area {
             id: area_db.id,
             name: area_db.name,

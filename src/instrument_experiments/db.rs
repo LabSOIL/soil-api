@@ -33,25 +33,25 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "crate::instrument_experiments::channels::models::Entity")]
+    #[sea_orm(has_many = "crate::instrument_experiments::channels::db::Entity")]
     Instrumentexperimentchannel,
     #[sea_orm(
-        belongs_to = "crate::projects::models::Entity",
+        belongs_to = "crate::projects::db::Entity",
         from = "Column::ProjectId",
-        to = "crate::projects::models::Column::Id",
+        to = "crate::projects::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Project,
 }
 
-impl Related<crate::instrument_experiments::channels::models::Entity> for Entity {
+impl Related<crate::instrument_experiments::channels::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Instrumentexperimentchannel.def()
     }
 }
 
-impl Related<crate::projects::models::Entity> for Entity {
+impl Related<crate::projects::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Project.def()
     }

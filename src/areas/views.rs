@@ -1,4 +1,4 @@
-use crate::areas::models::Entity as AreaDB;
+use crate::areas::db::Entity as AreaDB;
 use crate::areas::schemas::Area;
 use crate::common::schemas::FilterOptions;
 use axum::response::IntoResponse;

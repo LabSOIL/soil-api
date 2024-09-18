@@ -1,4 +1,4 @@
-use crate::areas::models::Entity as Area;
+use crate::areas::db::Entity as Area;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -22,12 +22,12 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "Area",
         from = "Column::AreaId",
-        to = "crate::areas::models::Column::Id",
+        to = "crate::areas::db::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
     Area,
-    #[sea_orm(has_many = "crate::transects::nodes::models::Entity")]
+    #[sea_orm(has_many = "crate::transects::nodes::db::Entity")]
     Transectnode,
 }
 
@@ -37,7 +37,7 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<crate::transects::nodes::models::Entity> for Entity {
+impl Related<crate::transects::nodes::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Transectnode.def()
     }

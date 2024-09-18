@@ -1,7 +1,7 @@
-use crate::areas::models::Entity as AreaDB;
+use crate::areas::db::Entity as AreaDB;
 use crate::common::schemas::FilterOptions;
-use crate::plots::models::Entity as PlotDB;
-use crate::plots::models::Gradientchoices;
+use crate::plots::db::Entity as PlotDB;
+use crate::plots::db::Gradientchoices;
 use crate::plots::schemas::{Area, Plot, PlotWithCoords};
 use axum::response::IntoResponse;
 use axum::{
