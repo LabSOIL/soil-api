@@ -9,14 +9,14 @@ use uuid::Uuid;
 
 #[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct PlotSimple {
-    id: Uuid,
-    name: String,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
-    coord_srid: Option<i32>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
+    pub id: Uuid,
+    pub name: String,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub coord_srid: Option<i32>,
+    pub coord_x: Option<f64>,
+    pub coord_y: Option<f64>,
+    pub coord_z: Option<f64>,
 }
 #[derive(ToSchema, Serialize)]
 pub struct Plot {

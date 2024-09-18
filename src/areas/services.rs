@@ -32,7 +32,7 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
             DbBackend::Postgres,
             raw_sql,
             vec![
-                0.01.into(),    // ST_Buffer value
+                10.into(),      // ST_Buffer value
                 4326.into(),    // ST_Transform value
                 2056.into(),    // ST_Transform value for plot.geom
                 2056.into(),    // ST_Transform value for soilprofile.geom

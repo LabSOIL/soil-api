@@ -6,8 +6,6 @@ use crate::sensors::db::Entity as SensorDB;
 use crate::soil::profiles::db::Entity as SoilProfileDB;
 use crate::transects::db::Entity as TransectDB;
 use crate::transects::models::Transect;
-use crate::transects::nodes::db::Entity as TransectNodeDB;
-use crate::transects::nodes::models::TransectNode;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use sea_orm::ColumnTrait;
@@ -117,54 +115,20 @@ impl Area {
             .unwrap();
 
         // Query for transects with related transect nodes and their corresponding plots
-        let transects: Vec<(
-            crate::transects::db::Model,
-            Vec<crate::transects::nodes::db::Model>,
-        )> = TransectDB::find()
+        let transects: Vec<crate::transects::db::Model> = TransectDB::find()
             .filter(crate::transects::db::Column::AreaId.eq(area.id))
-            .find_with_related(TransectNodeDB)
+            // .find_with_related(TransectNodeDB)
             .all(&db)
             .await
             .unwrap();
 
         let mut transects_with_nodes: Vec<Transect> = Vec::new();
-        for (transect, nodes) in transects {
-            let mut transect_nodes: Vec<TransectNode> = Vec::new();
-
-            for node in nodes {
-                let plot: PlotSimple = PlotDB::find()
-                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
-                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-                    .column_as(
-                        Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
-                        "longitude",
-                    )
-                    .column_as(
-                        Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
-                        "latitude",
-                    )
-                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-                    .into_model::<PlotSimple>()
-                    .one(&db)
+        for transect in transects {
+            transects_with_nodes.push(
+                Transect::get_one(transect.id, &db)
                     .await
-                    .unwrap()
-                    .unwrap(); // Unwrapping safely assuming plot always exists
-
-                transect_nodes.push(TransectNode {
-                    id: node.id,
-                    name: None, // `name` doesn't exist in the `transectnode::Model`
-                    order: node.order,
-                    plot,
-                });
-            }
-
-            transects_with_nodes.push(Transect {
-                id: transect.id,
-                name: transect.name,
-                nodes: transect_nodes,
-            });
+                    .expect("Transect not found"),
+            );
         }
 
         // Query for soil profiles with matching area_id
@@ -207,8 +171,7 @@ impl Area {
             plots,
             soil_profiles,
             sensors,
-            // transects: transects_with_nodes, // Include transects with nodes
-            transects: vec![],
+            transects: transects_with_nodes, // Include transects with nodes
             project,
             geom,
         }
