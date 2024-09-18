@@ -33,11 +33,11 @@ async fn main() {
             common::views::healthz,
         ),
         components(schemas(
-            plots::schemas::Plot,
-            plots::schemas::PlotSimple,
-            areas::schemas::Area,
-            common::schemas::FilterOptions,
-            projects::schemas::Project,
+            plots::models::Plot,
+            plots::models::PlotSimple,
+            areas::models::Area,
+            common::models::FilterOptions,
+            projects::models::Project,
         ))
     )]
     struct ApiDoc;

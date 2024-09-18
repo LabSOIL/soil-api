@@ -1,6 +1,6 @@
-use crate::common::schemas::FilterOptions;
+use crate::common::models::FilterOptions;
 use crate::projects::db::Entity as ProjectDB;
-use crate::projects::schemas::Project;
+use crate::projects::models::Project;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},

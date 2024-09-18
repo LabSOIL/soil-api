@@ -1,11 +1,12 @@
-use crate::transects::nodes::schemas::TransectNode;
+use crate::plots::models::PlotSimple;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(ToSchema, Serialize)]
-pub struct Transect {
+pub struct TransectNode {
     pub id: Uuid,
     pub name: Option<String>,
-    pub nodes: Vec<TransectNode>,
+    pub order: i32,
+    pub plot: PlotSimple,
 }

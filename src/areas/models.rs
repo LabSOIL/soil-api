@@ -1,13 +1,13 @@
 use crate::plots::db::Entity as PlotDB;
-use crate::plots::schemas::PlotSimple;
+use crate::plots::models::PlotSimple;
 use crate::projects::db::Entity as ProjectDB;
-use crate::projects::schemas::Project;
+use crate::projects::models::Project;
 use crate::sensors::db::Entity as SensorDB;
 use crate::soil::profiles::db::Entity as SoilProfileDB;
 use crate::transects::db::Entity as TransectDB;
+use crate::transects::models::Transect;
 use crate::transects::nodes::db::Entity as TransectNodeDB;
-use crate::transects::nodes::schemas::TransectNode;
-use crate::transects::schemas::Transect;
+use crate::transects::nodes::models::TransectNode;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use sea_orm::ColumnTrait;
@@ -97,7 +97,7 @@ impl Area {
             .unwrap();
 
         // Query for sensors with matching area_id
-        let sensors: Vec<crate::areas::schemas::Sensor> = SensorDB::find()
+        let sensors: Vec<crate::areas::models::Sensor> = SensorDB::find()
             .filter(crate::sensors::db::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(sensor.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(sensor.geom)"), "coord_y")
@@ -111,7 +111,7 @@ impl Area {
                 "latitude",
             )
             .column_as(Expr::cust("st_srid(sensor.geom)"), "coord_srid")
-            .into_model::<crate::areas::schemas::Sensor>()
+            .into_model::<crate::areas::models::Sensor>()
             .all(&db)
             .await
             .unwrap();
@@ -168,7 +168,7 @@ impl Area {
         }
 
         // Query for soil profiles with matching area_id
-        let soil_profiles: Vec<crate::areas::schemas::SoilProfile> = SoilProfileDB::find()
+        let soil_profiles: Vec<crate::areas::models::SoilProfile> = SoilProfileDB::find()
             .filter(crate::soil::profiles::db::Column::AreaId.eq(area.id))
             .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
             .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
@@ -182,14 +182,14 @@ impl Area {
                 "latitude",
             )
             .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<crate::areas::schemas::SoilProfile>()
+            .into_model::<crate::areas::models::SoilProfile>()
             .all(&db)
             .await
             .unwrap();
 
-        let project: crate::areas::schemas::Project = ProjectDB::find()
+        let project: crate::areas::models::Project = ProjectDB::find()
             .filter(crate::projects::db::Column::Id.eq(area.project_id))
-            .into_model::<crate::areas::schemas::Project>()
+            .into_model::<crate::areas::models::Project>()
             .one(&db)
             .await
             .unwrap()

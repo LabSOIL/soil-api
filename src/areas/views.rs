@@ -1,6 +1,6 @@
 use crate::areas::db::Entity as AreaDB;
-use crate::areas::schemas::Area;
-use crate::common::schemas::FilterOptions;
+use crate::areas::models::Area;
+use crate::common::models::FilterOptions;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Query, State},
