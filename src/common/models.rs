@@ -16,3 +16,12 @@ pub struct GenericNameAndID {
     pub id: Uuid,
     pub name: String,
 }
+
+#[derive(Serialize)]
+pub struct ClosestFeature {
+    pub id: Uuid,
+    pub name: String,
+    pub distance: f64,
+    pub elevation_difference: f64,
+    pub feature_type: String,
+}
