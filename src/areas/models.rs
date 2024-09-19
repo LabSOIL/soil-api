@@ -15,6 +15,7 @@ use sea_orm::{query::*, DatabaseConnection};
 use sea_query::Expr;
 use serde::Serialize;
 use serde_json::Value;
+use tracing_subscriber::registry::Data;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -62,6 +63,33 @@ pub struct AreaBasicWithProject {
     pub id: Uuid,
     pub name: Option<String>,
     pub project: crate::common::models::GenericNameAndID,
+}
+
+impl AreaBasicWithProject {
+    pub async fn from(area_id: Uuid, db: DatabaseConnection) -> Self {
+        let area = super::db::Entity::find()
+            .filter(crate::areas::db::Column::Id.eq(area_id))
+            .one(&db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let project = ProjectDB::find()
+            .filter(crate::projects::db::Column::Id.eq(area.project_id))
+            .one(&db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        AreaBasicWithProject {
+            id: area_id,
+            name: area.name,
+            project: crate::common::models::GenericNameAndID {
+                id: project.id,
+                name: project.name,
+            },
+        }
+    }
 }
 
 // impl Sensor {

@@ -3,9 +3,10 @@ use crate::plots::models::PlotSimple;
 use crate::transects::db::Entity as TransectDB;
 use crate::transects::nodes::db::Entity as TransectNodeDB;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
-use sea_orm::ColumnTrait;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use sea_query::Expr;
+use sea_query::{Condition, Order};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -15,16 +16,29 @@ pub struct Transect {
     pub id: Uuid,
     pub name: Option<String>,
     pub nodes: Vec<TransectNodeAsPlotWithOrder>,
+    pub area_id: Uuid,
+    pub last_updated: chrono::NaiveDateTime,
+    pub area: Option<crate::areas::models::AreaBasicWithProject>,
 }
 
 impl Transect {
-    pub async fn get_all(db: &DatabaseConnection) -> Vec<Self> {
-        // Query for transects with related transect nodes and their corresponding plots
+    pub async fn get_all(
+        db: &DatabaseConnection,
+        condition: Condition,
+        order_column: crate::transects::db::Column,
+        order_direction: Order,
+        offset: u64,
+        limit: u64,
+    ) -> Vec<Self> {
         let transects: Vec<(
             crate::transects::db::Model,
             Vec<crate::transects::nodes::db::Model>,
-        )> = TransectDB::find()
-            .find_with_related(TransectNodeDB)
+        )> = crate::transects::db::Entity::find()
+            .filter(condition)
+            .order_by(order_column, order_direction)
+            .offset(offset)
+            .limit(limit)
+            .find_with_related(crate::transects::nodes::db::Entity)
             .all(db)
             .await
             .unwrap();
@@ -34,8 +48,7 @@ impl Transect {
             let mut transect_nodes: Vec<TransectNodeAsPlotWithOrder> = Vec::new();
 
             for node in nodes {
-                // Fetch associated plot for the node
-                let plot: PlotSimple = PlotDB::find()
+                let plot: PlotSimple = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                     .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
                     .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
@@ -53,7 +66,7 @@ impl Transect {
                     .one(db)
                     .await
                     .unwrap()
-                    .unwrap(); // Assuming plot always exists
+                    .unwrap();
 
                 transect_nodes.push(TransectNodeAsPlotWithOrder {
                     id: plot.id,
@@ -68,10 +81,17 @@ impl Transect {
                 });
             }
 
+            let area =
+                crate::areas::models::AreaBasicWithProject::from(transect.area_id, db.clone())
+                    .await;
+
             transects_with_nodes.push(Transect {
                 id: transect.id,
                 name: transect.name.clone(),
                 nodes: transect_nodes,
+                area_id: transect.area_id,
+                last_updated: transect.last_updated,
+                area: Some(area),
             });
         }
 
@@ -131,11 +151,18 @@ impl Transect {
                 });
             }
 
+            let area =
+                crate::areas::models::AreaBasicWithProject::from(transect.area_id, db.clone())
+                    .await;
+
             // Return the constructed Transect
             Some(Transect {
                 id: transect.id,
                 name: transect.name,
                 nodes: transect_nodes,
+                area_id: transect.area_id,
+                last_updated: transect.last_updated,
+                area: Some(area),
             })
         } else {
             // Return None if no transect is found
