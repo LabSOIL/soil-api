@@ -18,3 +18,14 @@ pub struct SoilTypeBasic {
     pub name: Option<String>,
     pub description: String,
 }
+
+impl From<crate::soil::types::db::Model> for SoilTypeBasic {
+    fn from(soil_type: crate::soil::types::db::Model) -> Self {
+        SoilTypeBasic {
+            id: soil_type.id,
+            last_updated: soil_type.last_updated,
+            name: Some(soil_type.name),
+            description: soil_type.description,
+        }
+    }
+}
