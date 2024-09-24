@@ -1,5 +1,4 @@
 use crate::common::models::FilterOptions;
-use crate::transects::models::Transect;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -9,20 +8,22 @@ use axum::{
     routing, Json, Router,
 };
 use sea_orm::query::*;
+use sea_orm::ColumnTrait;
 use sea_orm::{Condition, DatabaseConnection, EntityTrait};
 use sea_query::{Alias, Expr, Order};
 use std::collections::HashMap;
+use std::iter::Iterator;
 use uuid::Uuid;
 
 pub fn router(db: DatabaseConnection) -> Router {
     Router::new()
-        .route("/", routing::get(get_all_transects))
-        .route("/:transect_id", routing::get(get_one_transect))
+        .route("/", routing::get(get_all))
+        .route("/:id", routing::get(get_one))
         .with_state(db)
 }
 
-#[utoipa::path(get, path = "/v1/transects", responses((status = 200, body = Transect)))]
-pub async fn get_all_transects(
+#[utoipa::path(get, path = "/v1/soil_types", responses((status = 200, body = SoilType)))]
+pub async fn get_all(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
 ) -> impl IntoResponse {
@@ -90,26 +91,46 @@ pub async fn get_all_transects(
     };
 
     let order_column = match sort_column.as_str() {
-        "id" => crate::transects::db::Column::Id,
-        "name" => crate::transects::db::Column::Name,
-        _ => crate::transects::db::Column::Id, // Default to sorting by ID
+        "id" => super::db::Column::Id,
+        "name" => super::db::Column::Name,
+        "description" => super::db::Column::Description,
+        "last_updated" => super::db::Column::LastUpdated,
+        _ => super::db::Column::Id, // Default to sorting by ID
     };
 
     // Fetch transects with filtering, sorting, and pagination
-    let transects: Vec<Transect> =
-        Transect::get_all(&db, condition, order_column, order_direction, offset, limit).await;
+    let objs: Vec<super::db::Model> = super::db::Entity::find()
+        .filter(condition)
+        .order_by(order_column, order_direction)
+        .offset(offset)
+        .limit(limit)
+        .all(&db)
+        .await
+        .unwrap();
+
+    let transects: Vec<super::models::SoilTypeBasic> = objs
+        .into_iter()
+        .map(|obj| super::models::SoilTypeBasic {
+            id: obj.id,
+            last_updated: obj.last_updated,
+            name: Some(obj.name),
+            description: obj.description,
+        })
+        .collect();
 
     // Get total count for content range header
-    let total_transects: u64 = crate::transects::db::Entity::find()
+    let total_count: u64 = crate::transects::db::Entity::find()
         .count(&db)
         .await
         .unwrap();
-    let max_offset_limit = (offset + limit).min(total_transects);
+    let max_offset_limit = (offset + limit).min(total_count);
+    let resource_name = "soil_types";
     let content_range = format!(
-        "transects {}-{}/{}",
+        "{} {}-{}/{}",
+        resource_name,
         offset,
         max_offset_limit - 1,
-        total_transects
+        total_count
     );
 
     // Return Content-Range as a header
@@ -118,13 +139,16 @@ pub async fn get_all_transects(
     (headers, Json(transects))
 }
 
-#[utoipa::path(get, path = "/v1/transects/{transect_id}", responses((status = 200, body = Transect)))]
-pub async fn get_one_transect(
+#[utoipa::path(get, path = "/v1/soil_types/{id}", responses((status = 200, body = Transect)))]
+pub async fn get_one(
     State(db): State<DatabaseConnection>,
-
-    Path(transect_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let transect = Transect::get_one(transect_id, &db).await.unwrap();
+    let soil_type: Option<super::db::Model> = super::db::Entity::find()
+        .filter(super::db::Column::Id.eq(id))
+        .one(&db)
+        .await
+        .unwrap();
 
-    (StatusCode::OK, Json(transect))
+    (StatusCode::OK, Json(soil_type))
 }

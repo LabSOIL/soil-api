@@ -144,85 +144,85 @@ impl PlotSample {
         plot_samples
     }
 
-    pub async fn get_one(id: Uuid, db: &DatabaseConnection) -> Option<Self> {
-        let sample = crate::samples::db::Entity::find()
-            .filter(crate::samples::db::Column::Id.eq(id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
+    // pub async fn get_one(id: Uuid, db: &DatabaseConnection) -> Option<Self> {
+    //     let sample = crate::samples::db::Entity::find()
+    //         .filter(crate::samples::db::Column::Id.eq(id))
+    //         .one(db)
+    //         .await
+    //         .unwrap()
+    //         .unwrap();
 
-        let plot_obj = crate::plots::db::Entity::find()
-            .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
+    //     let plot_obj = crate::plots::db::Entity::find()
+    //         .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
+    //         .one(db)
+    //         .await
+    //         .unwrap()
+    //         .unwrap();
 
-        let area = crate::areas::db::Entity::find()
-            .filter(crate::areas::db::Column::Id.eq(plot_obj.area_id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
+    //     let area = crate::areas::db::Entity::find()
+    //         .filter(crate::areas::db::Column::Id.eq(plot_obj.area_id))
+    //         .one(db)
+    //         .await
+    //         .unwrap()
+    //         .unwrap();
 
-        let project = crate::projects::db::Entity::find()
-            .filter(crate::projects::db::Column::Id.eq(area.project_id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
+    //     let project = crate::projects::db::Entity::find()
+    //         .filter(crate::projects::db::Column::Id.eq(area.project_id))
+    //         .one(db)
+    //         .await
+    //         .unwrap()
+    //         .unwrap();
 
-        let plot = crate::plots::models::PlotBasicWithAreaAndProject {
-            id: plot_obj.id,
-            name: plot_obj.name,
-            area: crate::areas::models::AreaBasicWithProject {
-                id: area.id,
-                name: area.name,
-                project: crate::common::models::GenericNameAndID {
-                    id: project.id,
-                    name: project.name,
-                },
-            },
-        };
+    //     let plot = crate::plots::models::PlotBasicWithAreaAndProject {
+    //         id: plot_obj.id,
+    //         name: plot_obj.name,
+    //         area: crate::areas::models::AreaBasicWithProject {
+    //             id: area.id,
+    //             name: area.name,
+    //             project: crate::common::models::GenericNameAndID {
+    //                 id: project.id,
+    //                 name: project.name,
+    //             },
+    //         },
+    //     };
 
-        Some(PlotSample {
-            id: sample.id,
-            name: sample.name,
-            upper_depth_cm: sample.upper_depth_cm,
-            lower_depth_cm: sample.lower_depth_cm,
-            plot_id: sample.plot_id,
-            sample_weight: sample.sample_weight,
-            subsample_weight: sample.subsample_weight,
-            ph: sample.ph,
-            rh: sample.rh,
-            loi: sample.loi,
-            mfc: sample.mfc,
-            c: sample.c,
-            n: sample.n,
-            cn: sample.cn,
-            clay_percent: sample.clay_percent,
-            silt_percent: sample.silt_percent,
-            sand_percent: sample.sand_percent,
-            fe_ug_per_g: sample.fe_ug_per_g,
-            na_ug_per_g: sample.na_ug_per_g,
-            al_ug_per_g: sample.al_ug_per_g,
-            k_ug_per_g: sample.k_ug_per_g,
-            ca_ug_per_g: sample.ca_ug_per_g,
-            mg_ug_per_g: sample.mg_ug_per_g,
-            mn_ug_per_g: sample.mn_ug_per_g,
-            s_ug_per_g: sample.s_ug_per_g,
-            cl_ug_per_g: sample.cl_ug_per_g,
-            p_ug_per_g: sample.p_ug_per_g,
-            si_ug_per_g: sample.si_ug_per_g,
-            subsample_replica_weight: sample.subsample_replica_weight,
-            fungi_per_g: sample.fungi_per_g,
-            bacteria_per_g: sample.bacteria_per_g,
-            archea_per_g: sample.archea_per_g,
-            methanogens_per_g: sample.methanogens_per_g,
-            methanotrophs_per_g: sample.methanotrophs_per_g,
-            replicate: sample.replicate,
-            plot: plot,
-        })
-    }
+    //     Some(PlotSample {
+    //         id: sample.id,
+    //         name: sample.name,
+    //         upper_depth_cm: sample.upper_depth_cm,
+    //         lower_depth_cm: sample.lower_depth_cm,
+    //         plot_id: sample.plot_id,
+    //         sample_weight: sample.sample_weight,
+    //         subsample_weight: sample.subsample_weight,
+    //         ph: sample.ph,
+    //         rh: sample.rh,
+    //         loi: sample.loi,
+    //         mfc: sample.mfc,
+    //         c: sample.c,
+    //         n: sample.n,
+    //         cn: sample.cn,
+    //         clay_percent: sample.clay_percent,
+    //         silt_percent: sample.silt_percent,
+    //         sand_percent: sample.sand_percent,
+    //         fe_ug_per_g: sample.fe_ug_per_g,
+    //         na_ug_per_g: sample.na_ug_per_g,
+    //         al_ug_per_g: sample.al_ug_per_g,
+    //         k_ug_per_g: sample.k_ug_per_g,
+    //         ca_ug_per_g: sample.ca_ug_per_g,
+    //         mg_ug_per_g: sample.mg_ug_per_g,
+    //         mn_ug_per_g: sample.mn_ug_per_g,
+    //         s_ug_per_g: sample.s_ug_per_g,
+    //         cl_ug_per_g: sample.cl_ug_per_g,
+    //         p_ug_per_g: sample.p_ug_per_g,
+    //         si_ug_per_g: sample.si_ug_per_g,
+    //         subsample_replica_weight: sample.subsample_replica_weight,
+    //         fungi_per_g: sample.fungi_per_g,
+    //         bacteria_per_g: sample.bacteria_per_g,
+    //         archea_per_g: sample.archea_per_g,
+    //         methanogens_per_g: sample.methanogens_per_g,
+    //         methanotrophs_per_g: sample.methanotrophs_per_g,
+    //         replicate: sample.replicate,
+    //         plot: plot,
+    //     })
+    // }
 }

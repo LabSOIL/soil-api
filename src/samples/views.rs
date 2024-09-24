@@ -7,7 +7,6 @@ use axum::{
     http::header::HeaderMap,
     routing, Json, Router,
 };
-use sea_orm::sqlx::Result;
 use sea_orm::Condition;
 use sea_orm::EntityTrait;
 use sea_orm::{query::*, DatabaseConnection};
