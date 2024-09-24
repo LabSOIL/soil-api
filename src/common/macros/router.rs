@@ -105,10 +105,10 @@ macro_rules! generate_router {
                 .iter()
                 .find(|&&(col_name, _)| col_name == sort_column)
                 .map(|&(_, col)| col)
-                .unwrap_or(crate::soil::types::db::Column::Id);
+                .unwrap_or(<$db_columns>::Id);
 
             let objs: Vec<$db_model> = <$db_entity>::find()
-                .filter(condition)
+                .filter(condition.clone())
                 .order_by(order_column, order_direction)
                 .offset(offset)
                 .limit(limit)
@@ -124,6 +124,7 @@ macro_rules! generate_router {
 
             // Get total count for content range header
             let total_count: u64 = <$db_entity>::find()
+                .filter(condition.clone())
                 .count(&db)
                 .await
                 .unwrap();
@@ -153,7 +154,10 @@ macro_rules! generate_router {
                 .await
                 .unwrap();
 
-            (StatusCode::OK, Json(obj))
+            let response_obj: $get_one_response_model = obj.unwrap().into();
+
+            (StatusCode::OK, Json(response_obj))
+
         }
     };
 }

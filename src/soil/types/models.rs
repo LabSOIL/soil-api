@@ -29,3 +29,15 @@ impl From<crate::soil::types::db::Model> for SoilTypeBasic {
         }
     }
 }
+
+impl From<crate::soil::types::db::Model> for SoilType {
+    fn from(soil_type: crate::soil::types::db::Model) -> Self {
+        SoilType {
+            id: soil_type.id,
+            last_updated: soil_type.last_updated,
+            name: Some(soil_type.name),
+            description: soil_type.description,
+            image: soil_type.image,
+        }
+    }
+}

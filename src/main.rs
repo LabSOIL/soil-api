@@ -64,6 +64,10 @@ async fn main() {
         .nest("/v1/sensors", sensors::views::router(db.clone()))
         .nest("/v1/transects", transects::views::router(db.clone()))
         .nest("/v1/soil_types", soil::types::views::router(db.clone()))
+        .nest(
+            "/v1/soil_profiles",
+            soil::profiles::views::router(db.clone()),
+        )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));
