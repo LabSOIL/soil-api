@@ -12,5 +12,9 @@ generate_router!(
         ("name", crate::soil::types::db::Column::Name),
         ("description", crate::soil::types::db::Column::Description),
         ("last_updated", crate::soil::types::db::Column::LastUpdated),
+    ],
+    searchable_columns: [
+        ("name", crate::soil::types::db::Column::Name),
+        ("description", crate::soil::types::db::Column::Description),
     ]
 );

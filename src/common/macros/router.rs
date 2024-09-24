@@ -7,12 +7,14 @@ macro_rules! generate_router {
         db_columns: $db_columns:ty,
         get_one_response_model: $get_one_response_model:ty,
         get_all_response_model: $get_all_response_model:ty,
-        order_column_logic: $order_column_logic:expr
+        order_column_logic: $order_column_logic:expr,
+        searchable_columns: $searchable_columns:expr // New argument for searchable fields
     ) => {
         use crate::common::models::FilterOptions;
         use axum::extract::Path;
         use axum::http::StatusCode;
         use axum::response::IntoResponse;
+        use sea_query::{extension::postgres::PgExpr};
         use axum::{
             extract::{Query, State},
             http::header::HeaderMap,
@@ -83,14 +85,25 @@ macro_rules! generate_router {
 
             // Apply filters
             let mut condition = Condition::all();
-            for (key, mut value) in filters {
-                value = value.trim().to_string();
 
-                // Check if the value is a UUID, otherwise treat as a string filter
-                if let Ok(uuid) = Uuid::parse_str(&value) {
-                    condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
-                } else {
-                    condition = condition.add(Expr::col(Alias::new(&key)).eq(value));
+            if let Some(q_value) = filters.get("q") {
+                // Free-text search across specified columns
+                let mut or_conditions = Condition::any();
+                for (_col_name, col) in $searchable_columns {
+                    or_conditions = or_conditions.add(
+                        Expr::col(col).ilike(format!("%{}%", q_value)));
+                }
+                condition = condition.add(or_conditions);
+            } else {
+                for (key, mut value) in filters {
+                    value = value.trim().to_string();
+
+                    // Check if the value is a UUID, otherwise treat it as a string filter
+                    if let Ok(uuid) = Uuid::parse_str(&value) {
+                        condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
+                    } else {
+                        condition = condition.add(Expr::col(Alias::new(&key)).ilike(format!("%{}%", value)));
+                    }
                 }
             }
 
