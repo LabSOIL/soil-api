@@ -19,7 +19,7 @@ pub struct Model {
     pub shake: Option<i32>,
     pub error_flat: Option<i32>,
     #[sea_orm(unique)]
-    #[sea_orm(primary_key)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub sensor_id: Uuid,
     pub last_updated: NaiveDateTime,
