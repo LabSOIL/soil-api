@@ -46,4 +46,17 @@ utoipa-scalar = { version = "0.1.0", features = ["axum"] }
 wkb = "0.7.1"
 byteorder = "1.5.0"
 lttb = "0.2.0"
-# geo = "0.28.0"
+
+[dev-dependencies]
+tower = { version = "0.5.1", features = ["util"] }
+sea-orm = { version = "1.0.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-uuid",
+    "with-chrono",
+    "with-json",
+], default-features = false }
+rstest = "0.23.0"
+async-std = { version = "1.13", features = ["attributes"] }
