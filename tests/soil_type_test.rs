@@ -7,10 +7,32 @@ use tower::ServiceExt;
 mod mock_fixtures;
 use mock_fixtures::mock_api;
 use serde_json::{from_slice, Value};
+use uuid::Uuid;
 
 #[rstest]
 #[tokio::test]
 async fn test_get_all_soil_types(#[future(awt)] mock_api: Router) {
+    let now = chrono::Utc::now().naive_utc();
+
+    let soil_type_1 = serde_json::json!({
+        "id": Uuid::new_v4(),
+        "iterator": 1,
+        "last_updated": now,
+        "name": "Clay",
+        "description": "Clay soil type",
+        "image": "clay.png"
+    });
+
+    let soil_type_2 = serde_json::json!({
+        "id": Uuid::new_v4(),
+        "iterator": 2,
+        "last_updated": now,
+        "name": "Sand",
+        "description": "Sandy soil type",
+        "image": null
+    });
+
+    // Add objects to the POST endpoint
     let response = mock_api
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await

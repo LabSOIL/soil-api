@@ -1,5 +1,4 @@
 use axum::routing::Router;
-use chrono::NaiveDateTime;
 use rstest::fixture;
 use sea_orm::sea_query::TableCreateStatement;
 use sea_orm::Database;
@@ -12,15 +11,6 @@ pub async fn setup_database() -> DatabaseConnection {
     // Use an in-memory SQLite database for testing.
     let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
 
-    // // Drop the table if it exists.
-    // db.execute(sea_orm::Statement::from_string(
-    //     db.get_database_backend(),
-    //     "DROP TABLE IF EXISTS soiltype;",
-    // ))
-    // .await
-    // .unwrap();
-
-    // Create the table schema.
     let schema = Schema::new(db.get_database_backend());
     let stmt: TableCreateStatement = schema.create_table_from_entity(Entity).to_owned();
 
@@ -32,7 +22,7 @@ pub async fn setup_database() -> DatabaseConnection {
 }
 
 pub async fn insert_mock_data(db: &DatabaseConnection) {
-    let now = NaiveDateTime::from_timestamp_opt(chrono::Utc::now().timestamp(), 0).unwrap();
+    let now = chrono::Utc::now().naive_utc();
 
     let soil_type_1 = soil_api_rust::soil::types::db::ActiveModel {
         id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
@@ -42,7 +32,6 @@ pub async fn insert_mock_data(db: &DatabaseConnection) {
         description: sea_orm::ActiveValue::Set("Clay soil type".to_string()),
         image: sea_orm::ActiveValue::Set(Some("clay.png".to_string())),
     };
-    // ...
     soil_type_1.insert(db).await.unwrap();
 
     let soil_type_2 = soil_api_rust::soil::types::db::ActiveModel {
@@ -58,15 +47,8 @@ pub async fn insert_mock_data(db: &DatabaseConnection) {
 
 #[fixture]
 pub async fn mock_api() -> Router {
-    // Use a unique in-memory SQLite database per test run to avoid shared state.
+    // Use a unique in-memory SQLite database per test run
     let db = setup_database().await;
     insert_mock_data(&db).await;
-
-    // Step 4: Set up the router.
-    //  let app = router(db);
     router(db)
-
-    // let db = setup_database().await;
-    // insert_mock_data(&db).await;
-    // db
 }

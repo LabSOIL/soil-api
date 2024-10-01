@@ -101,5 +101,6 @@ macro_rules! generate_router {
             (StatusCode::OK, Json(response_obj))
 
         }
+
     };
 }
