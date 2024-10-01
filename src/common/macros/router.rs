@@ -11,20 +11,19 @@ macro_rules! generate_router {
         searchable_columns: $searchable_columns:expr // New argument for searchable fields
     ) => {
         use crate::common::models::FilterOptions;
+        use crate::common::sort::generic_sort;
+        use crate::common::filter::{parse_range, apply_filters};
+        use crate::common::pagination::calculate_content_range;
         use axum::extract::Path;
         use axum::http::StatusCode;
         use axum::response::IntoResponse;
-        use sea_query::{extension::postgres::PgExpr};
         use axum::{
             extract::{Query, State},
-            http::header::HeaderMap,
             routing, Json, Router,
         };
         use sea_orm::query::*;
         use sea_orm::ColumnTrait;
-        use sea_orm::{Condition, DatabaseConnection, EntityTrait};
-        use sea_query::{Alias, Expr, Order};
-        use std::collections::HashMap;
+        use sea_orm::{DatabaseConnection, EntityTrait};
         use std::iter::Iterator;
         use uuid::Uuid;
 
@@ -40,86 +39,20 @@ macro_rules! generate_router {
             Query(params): Query<FilterOptions>,
             State(db): State<DatabaseConnection>,
         ) -> impl IntoResponse {
-            // Default sorting and range values
-            let default_sort_column = "id";
-            let default_sort_order = "ASC";
 
-            // Parse filter, range, and sort parameters
-            let filters: HashMap<String, String> = if let Some(filter) = params.filter {
-                serde_json::from_str(&filter).unwrap_or_default()
-            } else {
-                HashMap::new()
-            };
-
-            let (offset, limit) = if let Some(range) = params.range {
-                let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]);
-                let start = range_vec.get(0).copied().unwrap_or(0);
-                let end = range_vec.get(1).copied().unwrap_or(24);
-                let limit = end - start + 1;
-                (start, limit)
-            } else {
-                (0, 25)
-            };
-
-            let (sort_column, sort_order) = if let Some(sort) = params.sort {
-                let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
-                    default_sort_column.to_string(),
-                    default_sort_order.to_string(),
-                ]);
-                (
-                    sort_vec
-                        .get(0)
-                        .cloned()
-                        .unwrap_or(default_sort_column.to_string()),
-                    sort_vec
-                        .get(1)
-                        .cloned()
-                        .unwrap_or(default_sort_order.to_string()),
-                )
-            } else {
-                (
-                    default_sort_column.to_string(),
-                    default_sort_order.to_string(),
-                )
-            };
+            let (offset, limit) = parse_range(params.range.clone());
 
             // Apply filters
-            let mut condition = Condition::all();
+            let condition = apply_filters(params.filter.clone(), &$searchable_columns);
 
-            if let Some(q_value) = filters.get("q") {
-                // Free-text search across specified columns
-                let mut or_conditions = Condition::any();
-                for (_col_name, col) in $searchable_columns {
-                    or_conditions = or_conditions.add(
-                        Expr::col(col).ilike(format!("%{}%", q_value)));
-                }
-                condition = condition.add(or_conditions);
-            } else {
-                for (key, mut value) in filters {
-                    value = value.trim().to_string();
+            // Apply sorting
+            let (order_column, order_direction) = generic_sort(
+                params.sort.clone(),
+                &$order_column_logic[..],
+                <$db_columns>::Id,
+            );
 
-                    // Check if the value is a UUID, otherwise treat it as a string filter
-                    if let Ok(uuid) = Uuid::parse_str(&value) {
-                        condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
-                    } else {
-                        condition = condition.add(Expr::col(Alias::new(&key)).ilike(format!("%{}%", value)));
-                    }
-                }
-            }
-
-            // Sorting and pagination
-            let order_direction = if sort_order == "ASC" {
-                Order::Asc
-            } else {
-                Order::Desc
-            };
-
-            let order_column = $order_column_logic
-                .iter()
-                .find(|&&(col_name, _)| col_name == sort_column)
-                .map(|&(_, col)| col)
-                .unwrap_or(<$db_columns>::Id);
-
+            // Do the query
             let objs: Vec<$db_model> = <$db_entity>::find()
                 .filter(condition.clone())
                 .order_by(order_column, order_direction)
@@ -140,19 +73,15 @@ macro_rules! generate_router {
                 .filter(condition.clone())
                 .count(&db)
                 .await
-                .unwrap();
-            let max_offset_limit = (offset + limit-1).min(total_count);
-            let content_range = format!(
-                "{} {}-{}/{}",
-                $resource_name,
+                .unwrap_or(0);
+
+            let headers = calculate_content_range(
                 offset,
-                max_offset_limit,
-                total_count
+                limit,
+                total_count,
+                $resource_name,
             );
 
-            // Return Content-Range as a header
-            let mut headers = HeaderMap::new();
-            headers.insert("Content-Range", content_range.parse().unwrap());
             (headers, Json(objs))
         }
 
