@@ -4,11 +4,13 @@ macro_rules! generate_router {
         resource_name: $resource_name:expr,
         db_entity: $db_entity:ty,
         db_model: $db_model:ty,
+        active_model: $active_model:ty,
         db_columns: $db_columns:ty,
         get_one_response_model: $get_one_response_model:ty,
         get_all_response_model: $get_all_response_model:ty,
+        create_one_request_model: $create_one_request_model:ty,
         order_column_logic: $order_column_logic:expr,
-        searchable_columns: $searchable_columns:expr // New argument for searchable fields
+        searchable_columns: $searchable_columns:expr
     ) => {
         use crate::common::models::FilterOptions;
         use crate::common::sort::generic_sort;
@@ -23,13 +25,13 @@ macro_rules! generate_router {
         };
         use sea_orm::query::*;
         use sea_orm::ColumnTrait;
-        use sea_orm::{DatabaseConnection, EntityTrait};
+        use sea_orm::{DatabaseConnection, EntityTrait,ActiveModelTrait};
         use std::iter::Iterator;
         use uuid::Uuid;
 
         pub fn router(db: DatabaseConnection) -> Router {
             Router::new()
-                .route("/", routing::get(get_all))
+                .route("/", routing::get(get_all).post(create_one))
                 .route("/:id", routing::get(get_one))
                 .with_state(db)
         }
@@ -102,5 +104,16 @@ macro_rules! generate_router {
 
         }
 
+        #[utoipa::path(post, path = format!("/v1/{}", $resource_name), responses((status = 201, body = $get_one_response_model)))]
+        pub async fn create_one(
+            State(db): State<DatabaseConnection>,
+            Json(payload): Json<$create_one_request_model>,
+        ) -> impl IntoResponse {
+            let db_obj: $active_model = <$active_model>::from(payload);
+            let response = db_obj.insert(&db).await.unwrap();
+            let response_obj: $get_one_response_model = response.into();
+
+            (StatusCode::CREATED, Json(response_obj))
+        }
     };
 }

@@ -4,9 +4,11 @@ generate_router!(
     resource_name: "soil_profiles",
     db_entity: crate::soil::profiles::db::Entity,
     db_model: crate::soil::profiles::db::Model,
+    active_model: crate::soil::profiles::db::ActiveModel,
     db_columns: crate::soil::profiles::db::Column,
     get_one_response_model: crate::soil::profiles::models::SoilProfile,
     get_all_response_model: crate::soil::profiles::models::SoilProfileBasic,
+    create_one_request_model: crate::soil::profiles::models::SoilProfileCreate,
     order_column_logic: [
         ("id", crate::soil::profiles::db::Column::Id),
         ("name", crate::soil::profiles::db::Column::Name),
