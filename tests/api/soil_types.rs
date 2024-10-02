@@ -1,12 +1,11 @@
+use crate::mock_fixtures::mock_api;
 use axum::body::to_bytes;
 use axum::body::Body;
 use axum::routing::Router;
 use hyper::{Request, StatusCode};
 use rstest::*;
-use tower::ServiceExt;
-mod mock_fixtures;
-use mock_fixtures::mock_api;
 use serde_json::{from_slice, Value};
+use tower::ServiceExt;
 
 #[rstest]
 #[tokio::test]
@@ -24,7 +23,7 @@ async fn test_get_all_soil_types(#[future(awt)] mock_api: Router) {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/")
+                .uri("/v1/soil_types")
                 .header("Content-Type", "application/json")
                 .body(Body::from(soil_type.clone().to_string()))
                 .unwrap(),
@@ -37,7 +36,12 @@ async fn test_get_all_soil_types(#[future(awt)] mock_api: Router) {
     // Get all from API
     let response = mock_api
         .clone()
-        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/v1/soil_types")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 

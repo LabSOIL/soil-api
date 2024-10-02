@@ -4,6 +4,7 @@ use crate::samples::db::Entity as PlotSample;
 use crate::transects::nodes::db::Entity as TransectNode;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+// use geozero::wkb;
 use sea_orm::entity::prelude::*;
 use sea_orm::EntityTrait;
 use utoipa::ToSchema;
@@ -17,6 +18,11 @@ pub enum Gradientchoices {
     #[sea_orm(string_value = "slope")]
     Slope,
 }
+
+// #[derive(sqlx::Type)]
+// #[sqlx(transparent)]
+// struct MyInt4(i32);
+// use crate::common::db::types::PointZ;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, ToSchema)]
 #[sea_orm(table_name = "plot")]
@@ -37,6 +43,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub id: Uuid,
     // pub geom: Option<String>,
+    // pub geom: PointZ,
     pub last_updated: NaiveDateTime,
     pub image: Option<String>,
 }

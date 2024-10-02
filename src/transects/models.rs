@@ -1,3 +1,4 @@
+use crate::areas::models::AreaBasicWithProject;
 use crate::plots::db::Entity as PlotDB;
 use crate::plots::models::PlotSimple;
 use crate::transects::db::Entity as TransectDB;
@@ -22,6 +23,71 @@ pub struct Transect {
 }
 
 impl Transect {
+    pub async fn from_area(
+        area: &crate::areas::db::Model,
+        db: &DatabaseConnection,
+    ) -> Vec<Transect> {
+        let transects: Vec<(
+            crate::transects::db::Model,
+            Vec<crate::transects::nodes::db::Model>,
+        )> = TransectDB::find()
+            .filter(crate::transects::db::Column::AreaId.eq(area.id))
+            .find_with_related(TransectNodeDB)
+            .all(db)
+            .await
+            .unwrap();
+
+        let mut transects_with_nodes: Vec<Transect> = Vec::new();
+        for (transect, nodes) in transects {
+            let mut transect_nodes: Vec<TransectNodeAsPlotWithOrder> = Vec::new();
+
+            for node in nodes {
+                let plot: PlotSimple = PlotDB::find()
+                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
+                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
+                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
+                    .column_as(
+                        Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
+                        "longitude",
+                    )
+                    .column_as(
+                        Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
+                        "latitude",
+                    )
+                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
+                    .into_model::<PlotSimple>()
+                    .one(db)
+                    .await
+                    .unwrap()
+                    .unwrap();
+
+                transect_nodes.push(TransectNodeAsPlotWithOrder {
+                    id: plot.id,
+                    order: node.order,
+                    name: plot.name,
+                    latitude: plot.latitude,
+                    longitude: plot.longitude,
+                    coord_srid: plot.coord_srid,
+                    coord_x: plot.coord_x,
+                    coord_y: plot.coord_y,
+                    coord_z: plot.coord_z,
+                });
+            }
+            let area_with_project = AreaBasicWithProject::from(area.id, db.clone()).await;
+            transects_with_nodes.push(Transect {
+                id: transect.id,
+                name: transect.name.clone(),
+                nodes: transect_nodes,
+                area_id: transect.area_id,
+                last_updated: transect.last_updated,
+                area: Some(area_with_project),
+            });
+        }
+
+        transects_with_nodes
+    }
+
     pub async fn get_all(
         db: &DatabaseConnection,
         condition: Condition,

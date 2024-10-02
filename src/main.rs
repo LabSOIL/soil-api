@@ -45,6 +45,7 @@ async fn main() {
 
     // Load configuration
     let cfg = config::Config::from_env();
+
     let db: DatabaseConnection = Database::connect(&*cfg.db_url.as_ref().unwrap())
         .await
         .unwrap();

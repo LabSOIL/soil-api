@@ -2,7 +2,10 @@ use crate::areas;
 use crate::plots::db::Gradientchoices;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use sea_orm::FromQueryResult;
+use sea_orm::{
+    entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+};
+use sea_query::Expr;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -17,6 +20,50 @@ pub struct PlotSimple {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+}
+
+impl PlotSimple {
+    pub async fn from_db(plot: super::db::Model, db: &DatabaseConnection) -> Self {
+        let plot = super::db::Entity::find()
+            .filter(super::db::Column::Id.eq(plot.id))
+            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
+            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
+            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
+            .column_as(Expr::cust("ST_SRID(geom)"), "coord_srid")
+            .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
+            .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
+            .into_model::<PlotSimple>()
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        PlotSimple {
+            id: plot.id,
+            name: plot.name,
+            latitude: plot.latitude,
+            longitude: plot.longitude,
+            coord_srid: plot.coord_srid,
+            coord_x: plot.coord_x,
+            coord_y: plot.coord_y,
+            coord_z: plot.coord_z,
+        }
+    }
+
+    pub async fn from_area(area: &crate::areas::db::Model, db: &DatabaseConnection) -> Vec<Self> {
+        super::db::Entity::find()
+            .filter(super::db::Column::AreaId.eq(area.id))
+            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
+            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
+            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
+            .column_as(Expr::cust("ST_SRID(geom)"), "coord_srid")
+            .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
+            .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
+            .into_model::<PlotSimple>()
+            .all(db)
+            .await
+            .unwrap()
+    }
 }
 #[derive(ToSchema, Serialize)]
 pub struct PlotBasicWithAreaAndProject {

@@ -1,48 +1,15 @@
-use crate::areas::db::ActiveModel as AreaActiveModel;
-use crate::plots::db::Entity as PlotDB;
 use crate::plots::models::PlotSimple;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
-use crate::sensors::db::Entity as SensorDB;
-use crate::soil::profiles::db::Entity as SoilProfileDB;
-use crate::transects::db::Entity as TransectDB;
+use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
+use crate::{areas::db::ActiveModel as AreaActiveModel, sensors::models::SensorSimple};
 use chrono::NaiveDateTime;
-use sea_orm::entity::prelude::*;
-use sea_orm::ActiveValue;
-use sea_orm::ColumnTrait;
-use sea_orm::EntityTrait;
-use sea_orm::FromQueryResult;
-use sea_orm::{query::*, DatabaseConnection};
-use sea_query::Expr;
+use sea_orm::{entity::prelude::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct SoilProfile {
-    id: Uuid,
-    name: String,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
-    coord_srid: Option<i32>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
-}
-
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct Sensor {
-    id: Uuid,
-    name: Option<String>,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
-    coord_srid: Option<i32>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
-}
 
 #[derive(ToSchema, Serialize)]
 pub struct AreaRead {
@@ -54,7 +21,7 @@ pub struct AreaRead {
     project: Project,
     soil_profiles: Vec<SoilProfile>,
     plots: Vec<PlotSimple>,
-    sensors: Vec<Sensor>,
+    sensors: Vec<SensorSimple>,
     transects: Vec<Transect>,
     geom: Option<Value>,
 }
@@ -114,90 +81,11 @@ impl AreaActiveModel {
 
 impl AreaRead {
     pub async fn from_db(area: super::db::Model, db: &DatabaseConnection) -> Self {
-        // Query for plots with matching area_id
-        let plots: Vec<PlotSimple> = PlotDB::find()
-            .filter(crate::plots::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-            .column_as(
-                Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-            .into_model::<PlotSimple>()
-            .all(db)
-            .await
-            .unwrap();
-
-        // Query for sensors with matching area_id
-        let sensors: Vec<crate::areas::models::Sensor> = SensorDB::find()
-            .filter(crate::sensors::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(sensor.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(sensor.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(sensor.geom)"), "coord_z")
-            .column_as(
-                Expr::cust("ST_X(st_transform(sensor.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(sensor.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(sensor.geom)"), "coord_srid")
-            .into_model::<crate::areas::models::Sensor>()
-            .all(db)
-            .await
-            .unwrap();
-
-        // Query for transects with related transect nodes and their corresponding plots
-        let transects: Vec<crate::transects::db::Model> = TransectDB::find()
-            .filter(crate::transects::db::Column::AreaId.eq(area.id))
-            // .find_with_related(TransectNodeDB)
-            .all(db)
-            .await
-            .unwrap();
-
-        let mut transects_with_nodes: Vec<Transect> = Vec::new();
-        for transect in transects {
-            transects_with_nodes.push(
-                Transect::get_one(transect.id, &db)
-                    .await
-                    .expect("Transect not found"),
-            );
-        }
-
-        // Query for soil profiles with matching area_id
-        let soil_profiles: Vec<crate::areas::models::SoilProfile> = SoilProfileDB::find()
-            .filter(crate::soil::profiles::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
-            .column_as(
-                Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<crate::areas::models::SoilProfile>()
-            .all(db)
-            .await
-            .unwrap();
-
-        let project: crate::areas::models::Project = ProjectDB::find()
-            .filter(crate::projects::db::Column::Id.eq(area.project_id))
-            .into_model::<crate::areas::models::Project>()
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
+        let plots: Vec<PlotSimple> = PlotSimple::from_area(&area, db).await;
+        let sensors: Vec<SensorSimple> = SensorSimple::from_area(&area, db).await;
+        let transects: Vec<Transect> = Transect::from_area(&area, db).await;
+        let soil_profiles: Vec<SoilProfile> = SoilProfile::from_area(&area, db).await;
+        let project: Project = Project::from_area(&area, db).await;
 
         // Fetch convex hull geom for the area
         let geom: Option<Value> = crate::areas::services::get_convex_hull(&db, area.id).await;
@@ -211,7 +99,7 @@ impl AreaRead {
             plots,
             soil_profiles,
             sensors,
-            transects: transects_with_nodes, // Include transects with nodes
+            transects, // Include transects with nodes
             project,
             geom,
         }

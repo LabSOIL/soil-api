@@ -25,3 +25,13 @@ pub struct ClosestFeature {
     pub elevation_difference: f64,
     pub feature_type: String,
 }
+
+#[derive(ToSchema, Deserialize, Serialize)]
+pub struct XYZGeometry {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub srid: i32,
+    pub latitude: f64,
+    pub longitude: f64,
+}
