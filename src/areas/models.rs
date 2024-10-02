@@ -1,3 +1,4 @@
+use crate::areas::db::ActiveModel as AreaActiveModel;
 use crate::plots::db::Entity as PlotDB;
 use crate::plots::models::PlotSimple;
 use crate::projects::db::Entity as ProjectDB;
@@ -8,12 +9,13 @@ use crate::transects::db::Entity as TransectDB;
 use crate::transects::models::Transect;
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
+use sea_orm::ActiveValue;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::FromQueryResult;
 use sea_orm::{query::*, DatabaseConnection};
 use sea_query::Expr;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -43,7 +45,7 @@ pub struct Sensor {
 }
 
 #[derive(ToSchema, Serialize)]
-pub struct Area {
+pub struct AreaRead {
     id: Uuid,
     last_updated: NaiveDateTime,
     name: Option<String>,
@@ -55,6 +57,12 @@ pub struct Area {
     sensors: Vec<Sensor>,
     transects: Vec<Transect>,
     geom: Option<Value>,
+}
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct AreaCreate {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub project_id: Uuid,
 }
 
 #[derive(ToSchema, Serialize)]
@@ -91,23 +99,21 @@ impl AreaBasicWithProject {
     }
 }
 
-// impl Sensor {
-//     pub fn from(sensor_db: crate::db::sensor::Model) -> Self {
-//         Sensor {
-//             id: sensor_db.id,
-//             name: sensor_db.name,
-//             latitude: sensor_db.latitude,
-//             longitude: sensor_db.longitude,
-//             coord_srid: sensor_db.coord_srid,
-//             coord_x: sensor_db.coord_x,
-//             coord_y: sensor_db.coord_y,
-//             coord_z: sensor_db.coord_z,
-//         }
-//     }
-// }
+impl AreaActiveModel {
+    pub fn from_create(area_create: AreaCreate) -> Self {
+        AreaActiveModel {
+            name: ActiveValue::Set(area_create.name),
+            description: ActiveValue::Set(area_create.description),
+            project_id: ActiveValue::Set(area_create.project_id),
+            iterator: ActiveValue::NotSet,
+            id: ActiveValue::Set(Uuid::new_v4()),
+            last_updated: ActiveValue::NotSet,
+        }
+    }
+}
 
-impl Area {
-    pub async fn from(area: crate::areas::db::Model, db: DatabaseConnection) -> Self {
+impl AreaRead {
+    pub async fn from_db(area: super::db::Model, db: &DatabaseConnection) -> Self {
         // Query for plots with matching area_id
         let plots: Vec<PlotSimple> = PlotDB::find()
             .filter(crate::plots::db::Column::AreaId.eq(area.id))
@@ -124,7 +130,7 @@ impl Area {
             )
             .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
             .into_model::<PlotSimple>()
-            .all(&db)
+            .all(db)
             .await
             .unwrap();
 
@@ -144,7 +150,7 @@ impl Area {
             )
             .column_as(Expr::cust("st_srid(sensor.geom)"), "coord_srid")
             .into_model::<crate::areas::models::Sensor>()
-            .all(&db)
+            .all(db)
             .await
             .unwrap();
 
@@ -152,7 +158,7 @@ impl Area {
         let transects: Vec<crate::transects::db::Model> = TransectDB::find()
             .filter(crate::transects::db::Column::AreaId.eq(area.id))
             // .find_with_related(TransectNodeDB)
-            .all(&db)
+            .all(db)
             .await
             .unwrap();
 
@@ -181,14 +187,14 @@ impl Area {
             )
             .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
             .into_model::<crate::areas::models::SoilProfile>()
-            .all(&db)
+            .all(db)
             .await
             .unwrap();
 
         let project: crate::areas::models::Project = ProjectDB::find()
             .filter(crate::projects::db::Column::Id.eq(area.project_id))
             .into_model::<crate::areas::models::Project>()
-            .one(&db)
+            .one(db)
             .await
             .unwrap()
             .unwrap();
@@ -196,7 +202,7 @@ impl Area {
         // Fetch convex hull geom for the area
         let geom: Option<Value> = crate::areas::services::get_convex_hull(&db, area.id).await;
 
-        Area {
+        AreaRead {
             id: area.id,
             name: area.name,
             description: area.description,

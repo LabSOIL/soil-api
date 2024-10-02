@@ -28,6 +28,7 @@ macro_rules! generate_router {
         use sea_orm::{DatabaseConnection, EntityTrait,ActiveModelTrait};
         use std::iter::Iterator;
         use uuid::Uuid;
+        use futures::StreamExt;
 
         pub fn router(db: DatabaseConnection) -> Router {
             Router::new()
@@ -65,10 +66,10 @@ macro_rules! generate_router {
                 .unwrap();
 
             // Maps the database model to the response model
-            let objs: Vec<$get_all_response_model> = objs
-                .into_iter()
-                .map(Into::into)
-                .collect();
+            let objs: Vec<$get_all_response_model> = futures::stream::iter(objs)
+                .then(|obj| <$get_all_response_model>::from_db(obj, &db) )
+                .collect()
+                .await;
 
             // Get total count for content range header
             let total_count: u64 = <$db_entity>::find()
@@ -98,7 +99,7 @@ macro_rules! generate_router {
                 .await
                 .unwrap();
 
-            let response_obj: $get_one_response_model = obj.unwrap().into();
+            let response_obj: $get_one_response_model = <$get_one_response_model>::from_db(obj.unwrap(), &db).await;
 
             (StatusCode::OK, Json(response_obj))
 
@@ -109,9 +110,9 @@ macro_rules! generate_router {
             State(db): State<DatabaseConnection>,
             Json(payload): Json<$create_one_request_model>,
         ) -> impl IntoResponse {
-            let db_obj: $active_model = <$active_model>::from(payload);
+            let db_obj: $active_model = <$active_model>::from_create(payload);
             let response = db_obj.insert(&db).await.unwrap();
-            let response_obj: $get_one_response_model = response.into();
+            let response_obj = <$get_one_response_model>::from_db(response, &db).await;
 
             (StatusCode::CREATED, Json(response_obj))
         }

@@ -2492,6 +2492,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "dotenvy",
+ "futures",
  "geo-types",
  "geozero",
  "hyper",
