@@ -141,6 +141,7 @@ generate_router!(
     get_one_response_model: crate::projects::models::Project,
     get_all_response_model: crate::projects::models::Project,
     create_one_request_model: crate::projects::models::ProjectCreate,
+    update_one_request_model: crate::projects::models::ProjectUpdate,
     order_column_logic: [
         ("id", crate::projects::db::Column::Id),
         ("name", crate::projects::db::Column::Name),

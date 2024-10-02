@@ -9,6 +9,7 @@ macro_rules! generate_router {
         get_one_response_model: $get_one_response_model:ty,
         get_all_response_model: $get_all_response_model:ty,
         create_one_request_model: $create_one_request_model:ty,
+        update_one_request_model: $update_one_request_model:ty,
         order_column_logic: $order_column_logic:expr,
         searchable_columns: $searchable_columns:expr
     ) => {
@@ -25,7 +26,7 @@ macro_rules! generate_router {
         };
         use sea_orm::query::*;
         use sea_orm::ColumnTrait;
-        use sea_orm::{DatabaseConnection, EntityTrait,ActiveModelTrait};
+        use sea_orm::{DatabaseConnection, EntityTrait, ModelTrait, ActiveModelTrait};
         use std::iter::Iterator;
         use uuid::Uuid;
         use futures::StreamExt;
@@ -33,7 +34,7 @@ macro_rules! generate_router {
         pub fn router(db: DatabaseConnection) -> Router {
             Router::new()
                 .route("/", routing::get(get_all).post(create_one))
-                .route("/:id", routing::get(get_one))
+                .route("/:id", routing::get(get_one).delete(delete_one))
                 .with_state(db)
         }
 
@@ -116,5 +117,48 @@ macro_rules! generate_router {
 
             (StatusCode::CREATED, Json(response_obj))
         }
+
+        // Delete one and update one routes
+        #[utoipa::path(delete, path = concat!("/v1/",$resource_name, "/{id}"), responses((status = 204, body = ())))]
+        pub async fn delete_one(
+            State(db): State<DatabaseConnection>,
+            Path(id): Path<Uuid>,
+        ) -> impl IntoResponse {
+            let obj: $db_model = <$db_entity>::find()
+                .filter(<$db_columns>::Id.eq(id))
+                .one(&db)
+                .await
+                .unwrap()
+                .unwrap();
+
+            obj.delete(&db).await.expect("Failed to delete object");
+
+            StatusCode::NO_CONTENT
+        }
+        // #[utoipa::path(put, path = concat!("/v1/",$resource_name, "/{id}"), responses((status = 200, body = $get_one_response_model)))]
+        // pub async fn update_one(
+        //     State(db): State<DatabaseConnection>,
+        //     Path(id): Path<Uuid>,
+        //     Json(payload): Json<$update_one_request_model>,
+        // ) -> impl IntoResponse {
+        //     // Load the existing active model from the database
+        //     let mut active_model: $active_model = <$db_entity>::find()
+        //         .filter(<$db_columns>::Id.eq(id))
+        //         .one(&db)
+        //         .await
+        //         .unwrap()
+        //         .unwrap()
+        //         .into();
+
+        //     // Merge the updates from the payload into the active model
+        //     let update_active_model: $active_model = payload.into();
+        //     active_model = active_model.merge(update_active_model);
+
+        //     // Save the updated model back to the database
+        //     let response = active_model.update(&db).await.unwrap();
+        //     let response_obj = <$get_one_response_model>::from_db(response, &db).await;
+
+        //     (StatusCode::OK, Json(response_obj))
+        // }
     };
 }

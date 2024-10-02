@@ -9,6 +9,7 @@ generate_router!(
     get_one_response_model: crate::soil::profiles::models::SoilProfile,
     get_all_response_model: crate::soil::profiles::models::SoilProfileBasic,
     create_one_request_model: crate::soil::profiles::models::SoilProfileCreate,
+    update_one_request_model: crate::soil::profiles::models::SoilProfileUpdate,
     order_column_logic: [
         ("id", crate::soil::profiles::db::Column::Id),
         ("name", crate::soil::profiles::db::Column::Name),

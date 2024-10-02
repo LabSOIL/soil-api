@@ -32,6 +32,13 @@ pub struct AreaCreate {
     pub project_id: Uuid,
 }
 
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct AreaUpdate {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub project_id: Uuid,
+}
+
 #[derive(ToSchema, Serialize)]
 pub struct AreaBasicWithProject {
     pub id: Uuid,
@@ -102,6 +109,42 @@ impl AreaRead {
             transects, // Include transects with nodes
             project,
             geom,
+        }
+    }
+}
+
+impl From<AreaUpdate> for super::db::ActiveModel {
+    fn from(area: AreaUpdate) -> Self {
+        super::db::ActiveModel {
+            name: ActiveValue::Set(area.name),
+            description: ActiveValue::Set(area.description),
+            project_id: ActiveValue::Set(area.project_id),
+            id: ActiveValue::NotSet,
+            last_updated: ActiveValue::NotSet,
+            iterator: ActiveValue::NotSet,
+        }
+    }
+}
+
+impl super::db::ActiveModel {
+    pub fn merge(self, other: Self) -> Self {
+        super::db::ActiveModel {
+            name: match other.name {
+                ActiveValue::Set(value) => ActiveValue::Set(value),
+                _ => self.name,
+            },
+            description: match other.description {
+                ActiveValue::Set(value) => ActiveValue::Set(value),
+                _ => self.description,
+            },
+            project_id: match other.project_id {
+                ActiveValue::Set(value) => ActiveValue::Set(value),
+                _ => self.project_id,
+            },
+            // Keep all other fields unchanged if not set in `other`
+            id: self.id,
+            last_updated: self.last_updated,
+            iterator: self.iterator,
         }
     }
 }

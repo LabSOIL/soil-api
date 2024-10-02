@@ -137,6 +137,7 @@ generate_router!(
     get_one_response_model: crate::areas::models::AreaRead,
     get_all_response_model: crate::areas::models::AreaRead,
     create_one_request_model: crate::areas::models::AreaCreate,
+    update_one_request_model: crate::areas::models::AreaUpdate,
     order_column_logic: [
         ("id", crate::areas::db::Column::Id),
         ("name", crate::areas::db::Column::Name),
