@@ -1,7 +1,5 @@
-use crate::common::models::FilterOptions;
 use crate::sensors::data::db::Entity as SensorDataDB;
 use crate::sensors::db::Entity as SensorDB;
-use crate::sensors::models::SensorSimple;
 use crate::sensors::models::SensorWithData;
 use crate::sensors::services::simplify_sensor_data_lttb;
 use axum::extract::Path;
@@ -9,14 +7,10 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use axum::{http::header::HeaderMap, routing, Router};
-use sea_orm::prelude::*;
-use sea_orm::{query::*, ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
+use axum::{routing, Router};
+use sea_orm::{query::*, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use sea_query::Expr;
-use sea_query::{Alias, Order};
 use serde::Deserialize;
-use serde_json::json;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Deserialize)]

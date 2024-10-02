@@ -1,9 +1,6 @@
-use chrono::NaiveDateTime;
 use sea_orm::{
-    entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    EntityTrait, FromQueryResult,
+    entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
 };
-use sea_query::Order;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

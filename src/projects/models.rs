@@ -56,8 +56,8 @@ pub struct ProjectBasic {
     pub name: String,
 }
 
-impl super::db::ActiveModel {
-    pub fn from_create(project: ProjectCreate) -> Self {
+impl From<ProjectCreate> for super::db::ActiveModel {
+    fn from(project: ProjectCreate) -> Self {
         super::db::ActiveModel {
             color: ActiveValue::set(project.color),
             description: ActiveValue::set(project.description),

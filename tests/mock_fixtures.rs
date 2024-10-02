@@ -77,9 +77,9 @@ pub async fn mock_api() -> Router {
         .nest("/v1/plot_samples", samples::views::router(db.clone()))
         .nest("/v1/sensors", sensors::views::router(db.clone()))
         .nest("/v1/transects", transects::views::router(db.clone()))
-    // .nest("/v1/soil_types", soil::types::views::router(db.clone()))
-    // .nest(
-    // "/v1/soil_profiles",
-    // soil::profiles::views::router(db.clone()),
-    // )
+        .nest("/v1/soil_types", soil::types::views::router(db.clone()))
+        .nest(
+            "/v1/soil_profiles",
+            soil::profiles::views::router(db.clone()),
+        )
 }

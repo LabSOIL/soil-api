@@ -110,7 +110,7 @@ macro_rules! generate_router {
             State(db): State<DatabaseConnection>,
             Json(payload): Json<$create_one_request_model>,
         ) -> impl IntoResponse {
-            let db_obj: $active_model = <$active_model>::from_create(payload);
+            let db_obj: $active_model = <$active_model>::from(payload);
             let response = db_obj.insert(&db).await.unwrap();
             let response_obj = <$get_one_response_model>::from_db(response, &db).await;
 

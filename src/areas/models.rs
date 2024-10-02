@@ -66,8 +66,8 @@ impl AreaBasicWithProject {
     }
 }
 
-impl AreaActiveModel {
-    pub fn from_create(area_create: AreaCreate) -> Self {
+impl From<AreaCreate> for AreaActiveModel {
+    fn from(area_create: AreaCreate) -> Self {
         AreaActiveModel {
             name: ActiveValue::Set(area_create.name),
             description: ActiveValue::Set(area_create.description),

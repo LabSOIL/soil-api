@@ -1,3 +1,4 @@
+use sea_orm::{entity::prelude::*, ColumnTrait, DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -17,6 +18,36 @@ pub struct SoilTypeBasic {
     pub last_updated: chrono::NaiveDateTime,
     pub name: Option<String>,
     pub description: String,
+}
+
+impl SoilType {
+    pub async fn from_db(
+        soil_type: crate::soil::types::db::Model,
+        db: &DatabaseConnection,
+    ) -> Self {
+        let soil_type = crate::soil::types::db::Entity::find()
+            .filter(crate::soil::types::db::Column::Id.eq(soil_type.id))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        SoilType::from(soil_type)
+    }
+}
+
+impl SoilTypeBasic {
+    pub async fn from_db(
+        soil_type: crate::soil::types::db::Model,
+        db: &DatabaseConnection,
+    ) -> Self {
+        let soil_type = crate::soil::types::db::Entity::find()
+            .filter(crate::soil::types::db::Column::Id.eq(soil_type.id))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        SoilTypeBasic::from(soil_type)
+    }
 }
 
 impl From<crate::soil::types::db::Model> for SoilTypeBasic {

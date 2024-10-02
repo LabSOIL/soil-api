@@ -58,6 +58,18 @@ impl SoilProfile {
             .await
             .unwrap()
     }
+    pub async fn from_db(
+        soil_profile: crate::soil::profiles::db::Model,
+        db: &DatabaseConnection,
+    ) -> Self {
+        crate::soil::profiles::db::Entity::find()
+            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
+            .into_model::<SoilProfile>()
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap()
+    }
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
@@ -76,6 +88,21 @@ impl From<crate::soil::profiles::db::Model> for SoilProfileBasic {
             name: Some(soil_profile.name),
             description_horizon: soil_profile.description_horizon,
         }
+    }
+}
+
+impl SoilProfileBasic {
+    pub async fn from_db(
+        soil_profile: crate::soil::profiles::db::Model,
+        db: &DatabaseConnection,
+    ) -> Self {
+        let soil_profile = crate::soil::profiles::db::Entity::find()
+            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        SoilProfileBasic::from(soil_profile)
     }
 }
 
