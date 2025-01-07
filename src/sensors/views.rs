@@ -12,8 +12,10 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use axum::{routing, Router};
-use sea_orm::{query::*, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use sea_query::Expr;
+use sea_orm::{
+    query::*, sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+};
+// use sea_query::Expr;
 use serde::Deserialize;
 use uuid::Uuid;
 

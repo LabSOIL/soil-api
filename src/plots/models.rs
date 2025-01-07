@@ -3,9 +3,9 @@ use crate::plots::db::Gradientchoices;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::{
-    entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    entity::prelude::*, query::*, sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult,
 };
-use sea_query::Expr;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

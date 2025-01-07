@@ -1,8 +1,7 @@
 use sea_orm::ColumnTrait;
 use sea_orm::Condition;
 use sea_orm::EntityTrait;
-use sea_orm::{query::*, DatabaseConnection, QueryFilter, QueryOrder};
-use sea_query::Order;
+use sea_orm::{query::*, sea_query::Order, DatabaseConnection, QueryFilter, QueryOrder};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

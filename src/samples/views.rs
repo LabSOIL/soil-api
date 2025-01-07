@@ -9,8 +9,11 @@ use axum::{
 };
 use sea_orm::Condition;
 use sea_orm::EntityTrait;
-use sea_orm::{query::*, DatabaseConnection};
-use sea_query::{Alias, Expr};
+use sea_orm::{
+    query::*,
+    sea_query::{Alias, Expr},
+    DatabaseConnection,
+};
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;

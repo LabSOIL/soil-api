@@ -5,9 +5,11 @@ use crate::transects::db::Entity as TransectDB;
 use crate::transects::nodes::db::Entity as TransectNodeDB;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
 
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
-use sea_query::Expr;
-use sea_query::{Condition, Order};
+use sea_orm::{
+    sea_query::Expr,
+    sea_query::{Condition, Order},
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

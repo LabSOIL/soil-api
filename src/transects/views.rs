@@ -9,8 +9,10 @@ use axum::{
     routing, Json, Router,
 };
 use sea_orm::query::*;
-use sea_orm::{Condition, DatabaseConnection, EntityTrait};
-use sea_query::{Alias, Expr, Order};
+use sea_orm::{
+    sea_query::{Alias, Expr, Order},
+    Condition, DatabaseConnection, EntityTrait,
+};
 use std::collections::HashMap;
 use uuid::Uuid;
 
