@@ -39,6 +39,25 @@ pub struct SensorSimple {
     coord_z: Option<f64>,
 }
 
+impl From<super::db::Model> for SensorSimple {
+    fn from(model: super::db::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            serial_number: model.serial_number,
+            manufacturer: model.manufacturer,
+            description: model.description,
+            area_id: model.area_id,
+            latitude: None,
+            longitude: None,
+            coord_srid: None,
+            coord_x: None,
+            coord_y: None,
+            coord_z: None,
+        }
+    }
+}
+
 impl SensorSimple {
     pub async fn from_area(area: &crate::areas::db::Model, db: &DatabaseConnection) -> Vec<Self> {
         super::db::Entity::find()

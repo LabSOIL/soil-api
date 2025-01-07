@@ -1,3 +1,7 @@
+use crate::common::filter::{apply_filters, parse_range};
+use crate::common::models::FilterOptions;
+use crate::common::pagination::calculate_content_range;
+use crate::common::sort::generic_sort;
 use crate::sensors::data::db::Entity as SensorDataDB;
 use crate::sensors::db::Entity as SensorDB;
 use crate::sensors::models::SensorWithData;
@@ -13,6 +17,7 @@ use sea_query::Expr;
 use serde::Deserialize;
 use uuid::Uuid;
 
+const RESOURCE_NAME: &str = "sensors";
 #[derive(Deserialize)]
 pub struct SensorQueryParams {
     pub low_resolution: Option<bool>,
@@ -20,7 +25,7 @@ pub struct SensorQueryParams {
 pub fn router(db: DatabaseConnection) -> Router {
     Router::new()
         .route("/:sensor_id", routing::get(get_one))
-        // .route("/", routing::get(get_all))
+        .route("/", routing::get(get_all))
         .with_state(db)
 }
 
@@ -85,99 +90,40 @@ pub async fn get_one(
     (StatusCode::OK, Json(response))
 }
 
-// #[utoipa::path(get, path = "/api/sensors", responses((status = OK, body = SensorWithoutData)))]
-// pub async fn get_all(
-//     Query(params): Query<FilterOptions>,
-//     State(db): State<DatabaseConnection>,
-// ) -> impl IntoResponse {
-//     // Default values for range and sorting
-//     let default_sort_column = "id";
-//     let default_sort_order = "ASC";
+pub async fn get_all(
+    Query(params): Query<FilterOptions>,
+    State(db): State<DatabaseConnection>,
+) -> impl IntoResponse {
+    let (offset, limit) = parse_range(params.range.clone());
 
-//     // Parse the filter, range, and sort parameters
-//     let filters: HashMap<String, String> = if let Some(filter) = params.filter {
-//         serde_json::from_str(&filter).unwrap_or_default()
-//     } else {
-//         HashMap::new()
-//     };
+    let condition = apply_filters(params.filter.clone(), &[("name", super::db::Column::Name)]);
 
-//     let (offset, limit) = if let Some(range) = params.range {
-//         let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
-//         let start = range_vec.get(0).copied().unwrap_or(0);
-//         let end = range_vec.get(1).copied().unwrap_or(24);
-//         let limit = end - start + 1;
-//         (start, limit) // Offset is `start`, limit is the number of documents to fetch
-//     } else {
-//         (0, 25) // Default to 25 documents starting at 0
-//     };
+    let (order_column, order_direction) = generic_sort(
+        params.sort.clone(),
+        &[("id", super::db::Column::Id)],
+        super::db::Column::Id,
+    );
 
-//     let (sort_column, sort_order) = if let Some(sort) = params.sort {
-//         let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
-//             default_sort_column.to_string(),
-//             default_sort_order.to_string(),
-//         ]);
-//         (
-//             sort_vec
-//                 .get(0)
-//                 .cloned()
-//                 .unwrap_or(default_sort_column.to_string()),
-//             sort_vec
-//                 .get(1)
-//                 .cloned()
-//                 .unwrap_or(default_sort_order.to_string()),
-//         )
-//     } else {
-//         (
-//             default_sort_column.to_string(),
-//             default_sort_order.to_string(),
-//         )
-//     };
+    let objs: Vec<super::db::Model> = super::db::Entity::find()
+        .filter(condition.clone())
+        .order_by(order_column, order_direction)
+        .offset(offset)
+        .limit(limit)
+        .all(&db)
+        .await
+        .unwrap();
 
-//     // Apply filters
-//     let mut condition = Condition::all();
-//     for (key, mut value) in filters {
-//         value = value.trim().to_string();
+    // Map the results from the database models
+    let response_objs: Vec<super::models::SensorSimple> =
+        objs.into_iter().map(|obj| obj.into()).collect();
 
-//         // Check if the value is a valid UUID
-//         if let Ok(uuid) = Uuid::parse_str(&value) {
-//             // If the value is a valid UUID, filter it as a UUID
-//             condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
-//         } else {
-//             // Otherwise, treat it as a regular string filter
-//             condition = condition.add(Expr::col(Alias::new(&key)).eq(value));
-//         }
-//     }
+    let total_count: u64 = <super::db::Entity>::find()
+        .filter(condition.clone())
+        .count(&db)
+        .await
+        .unwrap_or(0);
 
-//     // Sorting and pagination
-//     let order_direction = if sort_order == "ASC" {
-//         Order::Asc
-//     } else {
-//         Order::Desc
-//     };
+    let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
 
-//     let order_column = match sort_column.as_str() {
-//         "id" => <SensorDB as sea_orm::EntityTrait>::Column::Id,
-//         "name" => <SensorDB as sea_orm::EntityTrait>::Column::Name,
-//         "last_updated" => <SensorDB as sea_orm::EntityTrait>::Column::LastUpdated,
-//         "area_id" => <SensorDB as sea_orm::EntityTrait>::Column::AreaId,
-//         _ => <SensorDB as sea_orm::EntityTrait>::Column::Id,
-//     };
-
-//     // Querying sensors with filtering, sorting, and pagination
-//     let sensors: Vec<super::models::SensorSimple> =
-//         SensorSimple::get_all(&db, condition, order_column, order_direction, offset, limit).await;
-
-//     let total_sensors: u64 = SensorDB::find().count(&db).await.unwrap();
-//     let max_offset_limit = (offset + limit).min(total_sensors);
-//     let content_range = format!(
-//         "sensors {}-{}/{}",
-//         offset,
-//         max_offset_limit - 1,
-//         total_sensors
-//     );
-
-//     // Return the Content-Range as a header
-//     let mut headers = HeaderMap::new();
-//     headers.insert("Content-Range", content_range.parse().unwrap());
-//     (headers, Json(json!(sensors)))
-// }
+    (headers, Json(response_objs))
+}
