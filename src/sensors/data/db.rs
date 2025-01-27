@@ -1,9 +1,10 @@
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, ToSchema)]
 #[sea_orm(table_name = "sensordata")]
 pub struct Model {
     pub instrument_seq: i32,

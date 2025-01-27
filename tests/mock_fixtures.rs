@@ -71,6 +71,7 @@ pub async fn mock_api() -> Router {
     // Build the router with routes similar to the main function
     Router::new()
         .route("/healthz", get(common::views::healthz))
+        .with_state(db.clone())
         .nest("/v1/plots", plots::views::router(db.clone()))
         .nest("/v1/areas", areas::views::router(db.clone()))
         .nest("/v1/projects", projects::views::router(db.clone()))

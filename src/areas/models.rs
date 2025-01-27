@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(ToSchema, Serialize)]
-pub struct AreaRead {
+pub struct Area {
     id: Uuid,
     last_updated: NaiveDateTime,
     name: Option<String>,
@@ -79,14 +79,14 @@ impl From<AreaCreate> for AreaActiveModel {
             name: ActiveValue::Set(area_create.name),
             description: ActiveValue::Set(area_create.description),
             project_id: ActiveValue::Set(area_create.project_id),
-            iterator: ActiveValue::NotSet,
+            // iterator: ActiveValue::NotSet,
             id: ActiveValue::Set(Uuid::new_v4()),
             last_updated: ActiveValue::NotSet,
         }
     }
 }
 
-impl AreaRead {
+impl Area {
     pub async fn from_db(area: super::db::Model, db: &DatabaseConnection) -> Self {
         let plots: Vec<PlotSimple> = PlotSimple::from_area(&area, db).await;
         let sensors: Vec<SensorSimple> = SensorSimple::from_area(&area, db).await;
@@ -97,7 +97,7 @@ impl AreaRead {
         // Fetch convex hull geom for the area
         let geom: Option<Value> = crate::areas::services::get_convex_hull(&db, area.id).await;
 
-        AreaRead {
+        Area {
             id: area.id,
             name: area.name,
             description: area.description,
@@ -121,7 +121,7 @@ impl From<AreaUpdate> for super::db::ActiveModel {
             project_id: ActiveValue::Set(area.project_id),
             id: ActiveValue::NotSet,
             last_updated: ActiveValue::NotSet,
-            iterator: ActiveValue::NotSet,
+            // iterator: ActiveValue::NotSet,
         }
     }
 }
@@ -144,7 +144,7 @@ impl super::db::ActiveModel {
             // Keep all other fields unchanged if not set in `other`
             id: self.id,
             last_updated: self.last_updated,
-            iterator: self.iterator,
+            // iterator: self.iterator,
         }
     }
 }
