@@ -13,17 +13,17 @@ use uuid::Uuid;
 
 #[derive(ToSchema, Serialize)]
 pub struct Area {
-    id: Uuid,
-    last_updated: NaiveDateTime,
-    name: Option<String>,
-    description: Option<String>,
-    project_id: Uuid,
-    project: Project,
-    soil_profiles: Vec<SoilProfile>,
-    plots: Vec<PlotSimple>,
-    sensors: Vec<SensorSimple>,
-    transects: Vec<Transect>,
-    geom: Option<Value>,
+    pub id: Uuid,
+    pub last_updated: NaiveDateTime,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub project_id: Uuid,
+    pub project: Project,
+    pub soil_profiles: Vec<SoilProfile>,
+    pub plots: Vec<PlotSimple>,
+    pub sensors: Vec<SensorSimple>,
+    pub transects: Vec<Transect>,
+    pub geom: Option<Value>,
 }
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct AreaCreate {

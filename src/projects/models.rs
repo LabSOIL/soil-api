@@ -1,3 +1,4 @@
+use super::db::{ActiveModel, Model};
 use chrono::NaiveDateTime;
 use sea_orm::FromQueryResult;
 use sea_orm::{entity::prelude::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait};
@@ -12,6 +13,17 @@ pub struct Project {
     description: Option<String>,
     id: Uuid,
     name: String,
+}
+impl From<Model> for Project {
+    fn from(model: Model) -> Self {
+        Self {
+            color: model.color,
+            last_updated: model.last_updated,
+            description: model.description,
+            id: model.id,
+            name: model.name,
+        }
+    }
 }
 
 impl Project {

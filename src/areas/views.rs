@@ -37,6 +37,7 @@ use axum::{
 use axum_keycloak_auth::{
     instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
 };
+use itertools::izip;
 use sea_orm::{
     query::*, ActiveModelTrait, DatabaseConnection, DeleteResult, EntityTrait, LoaderTrait,
     ModelTrait, SqlErr,
@@ -147,27 +148,29 @@ pub async fn get_all(
         .await
         .unwrap();
 
-    // println!("{:?}", objs);
-    println!("{:?}", project);
+    // Create empty areas to push in from looping through the objects
+    let mut areas: Vec<super::models::Area> = Vec::new();
 
-    // let area = objs.load_one(crate::areas::db::Entity, &db).await.unwrap();
-    // let related = objs
-    //     .load_many(crate::sites::replicates::db::Entity, &db)
-    //     .await
-    //     .unwrap();
+    for (area, project, plots, sensors, soil_profiles, transects) in
+        izip!(objs, project, plots, sensors, soil_profiles, transects)
+    {
+        let convex_hull = super::services::get_convex_hull(&db, area.id).await;
+        let area = super::models::Area {
+            geom: convex_hull,
+            last_updated: area.last_updated,
+            project_id: area.project_id,
+            id: area.id,
+            name: area.name,
+            description: area.description,
+            project: project.unwrap().into(),
+            plots: plots.into_iter().map(Into::into).collect(),
+            sensors: sensors.into_iter().map(Into::into).collect(),
+            soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
+            transects: transects.into_iter().map(Into::into).collect(),
+        };
 
-    // // Map the project, plots, sensors, soil_profiles and transects to the area
-    // let response_objs: Vec<super::models::Area> = objs
-    //     .into_iter()
-    //     .zip(project.into_iter())
-    //     .zip(plots.into_iter())
-    //     .zip(sensors.into_iter())w
-    //     .zip(soil_profiles.into_iter())
-    //     .zip(transects.into_iter())
-    //     .map(|((((area, project), plots), sensors), soil_profiles), transects)| {
-    //         (area, project, plots, sensors, soil_profiles, transects).into()
-    //     })
-    //     .collect();
+        areas.push(area);
+    }
 
     let total_count: u64 = <super::db::Entity>::find()
         .filter(condition.clone())
@@ -177,10 +180,8 @@ pub async fn get_all(
         .await
         .unwrap_or(0);
 
-    // let convex_hull = super::services::get_convex_hull(&db, area.id).await;
-
     let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
-    (headers, ())
+    (headers, Json(areas))
     // (headers, Json(response_objs))
 }
 

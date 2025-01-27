@@ -1,3 +1,4 @@
+use super::db::{ActiveModel, Model};
 use crate::areas;
 use crate::plots::db::Gradientchoices;
 use chrono::NaiveDate;
@@ -20,6 +21,21 @@ pub struct PlotSimple {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+}
+
+impl From<Model> for PlotSimple {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            latitude: None,
+            longitude: None,
+            coord_srid: None,
+            coord_x: None,
+            coord_y: None,
+            coord_z: None,
+        }
+    }
 }
 
 impl PlotSimple {

@@ -1,3 +1,4 @@
+use super::db::{ActiveModel, Model};
 use chrono::NaiveDateTime;
 use sea_orm::{
     entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
@@ -32,6 +33,36 @@ pub struct SoilProfile {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+}
+
+impl From<Model> for SoilProfile {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            profile_iterator: model.profile_iterator,
+            gradient: model.gradient,
+            description_horizon: model.description_horizon,
+            last_updated: model.last_updated,
+            weather: model.weather,
+            topography: model.topography,
+            vegetation_type: model.vegetation_type,
+            aspect: model.aspect,
+            lythology_surficial_deposit: model.lythology_surficial_deposit,
+            created_on: model.created_on,
+            soil_type_id: model.soil_type_id,
+            area_id: model.area_id,
+            soil_diagram: model.soil_diagram,
+            photo: model.photo,
+            parent_material: model.parent_material,
+            latitude: None,
+            longitude: None,
+            coord_srid: None,
+            coord_x: None,
+            coord_y: None,
+            coord_z: None,
+        }
+    }
 }
 
 impl SoilProfile {

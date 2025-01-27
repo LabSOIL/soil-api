@@ -1,4 +1,4 @@
-use super::db::ActiveModel;
+use super::db::{ActiveModel, Model};
 use sea_orm::{
     entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
 };
@@ -23,6 +23,27 @@ pub struct Sensor {
     coord_z: Option<f64>,
     data: Option<Vec<crate::sensors::data::models::SensorData>>,
     area: Option<crate::areas::models::AreaBasicWithProject>,
+}
+
+impl From<Model> for Sensor {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            serial_number: model.serial_number,
+            manufacturer: model.manufacturer,
+            description: model.description,
+            area_id: model.area_id,
+            latitude: None,
+            longitude: None,
+            coord_srid: None,
+            coord_x: None,
+            coord_y: None,
+            coord_z: None,
+            data: None,
+            area: None,
+        }
+    }
 }
 
 #[derive(ToSchema, Serialize, FromQueryResult)]

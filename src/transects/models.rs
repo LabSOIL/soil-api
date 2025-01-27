@@ -1,10 +1,10 @@
+use super::db::{ActiveModel, Model};
 use crate::areas::models::AreaBasicWithProject;
 use crate::plots::db::Entity as PlotDB;
 use crate::plots::models::PlotSimple;
 use crate::transects::db::Entity as TransectDB;
 use crate::transects::nodes::db::Entity as TransectNodeDB;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
-
 use sea_orm::{
     sea_query::Expr,
     sea_query::{Condition, Order},
@@ -22,6 +22,19 @@ pub struct Transect {
     pub area_id: Uuid,
     pub last_updated: chrono::NaiveDateTime,
     pub area: Option<crate::areas::models::AreaBasicWithProject>,
+}
+
+impl From<Model> for Transect {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            nodes: Vec::new(),
+            area_id: model.area_id,
+            last_updated: model.last_updated,
+            area: None,
+        }
+    }
 }
 
 impl Transect {

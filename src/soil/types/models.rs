@@ -1,3 +1,4 @@
+use super::db::{ActiveModel, Model};
 use sea_orm::{entity::prelude::*, ColumnTrait, DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -10,6 +11,29 @@ pub struct SoilType {
     pub name: Option<String>,
     pub description: String,
     pub image: Option<String>,
+}
+
+impl From<Model> for SoilType {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            last_updated: model.last_updated,
+            name: Some(model.name),
+            description: model.description,
+            image: model.image,
+        }
+    }
+}
+
+impl From<Model> for SoilTypeBasic {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            last_updated: model.last_updated,
+            name: Some(model.name),
+            description: model.description,
+        }
+    }
 }
 
 #[derive(ToSchema, Serialize, Deserialize)]
@@ -47,29 +71,6 @@ impl SoilTypeBasic {
             .unwrap()
             .unwrap();
         SoilTypeBasic::from(soil_type)
-    }
-}
-
-impl From<crate::soil::types::db::Model> for SoilTypeBasic {
-    fn from(soil_type: crate::soil::types::db::Model) -> Self {
-        SoilTypeBasic {
-            id: soil_type.id,
-            last_updated: soil_type.last_updated,
-            name: Some(soil_type.name),
-            description: soil_type.description,
-        }
-    }
-}
-
-impl From<crate::soil::types::db::Model> for SoilType {
-    fn from(soil_type: crate::soil::types::db::Model) -> Self {
-        SoilType {
-            id: soil_type.id,
-            last_updated: soil_type.last_updated,
-            name: Some(soil_type.name),
-            description: soil_type.description,
-            image: soil_type.image,
-        }
     }
 }
 
