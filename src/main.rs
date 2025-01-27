@@ -1,12 +1,20 @@
-use axum::{routing::get, Router};
+use axum::{
+    http::{Request, Uri},
+    middleware::Next,
+    response::Response,
+    routing::get,
+    Router,
+};
 use sea_orm::{Database, DatabaseConnection};
 use soil_api_rust::{areas, common, config, plots, projects, samples, sensors, soil, transects};
+use std::time::Duration;
+use tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
+use tracing::Span;
 use tracing_subscriber;
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use utoipa_swagger_ui::SwaggerUi;
-
 #[tokio::main]
 async fn main() {
     // Set up tracing/logging

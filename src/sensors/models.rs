@@ -1,7 +1,9 @@
+use super::db::ActiveModel;
 use sea_orm::{
     entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
 };
-use serde::Serialize;
+use sea_orm::{NotSet, Set};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -73,67 +75,6 @@ impl SensorSimple {
             .await
             .unwrap()
     }
-    // pub async fn get_all(
-    //     db: &DatabaseConnection,
-    //     condition: Condition,
-    //     order_column: <super::db::Entity as sea_orm::EntityTrait>::Column,
-    //     order_direction: Order,
-    //     offset: u64,
-    //     limit: u64,
-    // ) -> Vec<Self> {
-    //     let sensors = crate::sensors::db::Entity::find()
-    //         .filter(condition)
-    //         .order_by(order_column, order_direction)
-    //         .offset(offset)
-    //         .limit(limit)
-    //         .all(db)
-    //         .await
-    //         .unwrap();
-
-    //     let mut sensor_without_data: Vec<SensorSimple> = Vec::new();
-
-    //     for sensor in sensors {
-    //         let area = crate::areas::db::Entity::find()
-    //             .filter(crate::areas::db::Column::Id.eq(sensor.area_id))
-    //             .one(db)
-    //             .await
-    //             .unwrap()
-    //             .unwrap();
-
-    //         let project = crate::projects::db::Entity::find()
-    //             .filter(crate::projects::db::Column::Id.eq(area.project_id))
-    //             .one(db)
-    //             .await
-    //             .unwrap()
-    //             .unwrap();
-
-    //         let area_with_project = crate::areas::models::AreaBasicWithProject {
-    //             id: area.id,
-    //             name: area.name,
-    //             project: crate::common::models::GenericNameAndID {
-    //                 id: project.id,
-    //                 name: project.name,
-    //             },
-    //         };
-
-    //         sensor_without_data.push(SensorSimple {
-    //             id: sensor.id,
-    //             name: sensor.name,
-    //             description: sensor.description,
-    //             area_id: sensor.area_id,
-    //             manufacturer: sensor.manufacturer,
-    //             serial_number: sensor.serial_number,
-    //             latitude: sensor.latitude,
-    //             longitude: sensor.longitude,
-    //             coord_srid: sensor.coord_srid,
-    //             coord_x: sensor.coord_x,
-    //             coord_y: sensor.coord_y,
-    //             coord_z: sensor.coord_z,
-    //         });
-    //     }
-
-    //     sensor_without_data
-    // }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -155,4 +96,92 @@ pub struct SensorWithCoords {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+}
+
+#[derive(ToSchema, Deserialize)]
+pub struct SensorUpdate {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub name: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub description: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub manufacturer: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub serial_number: Option<Option<String>>,
+    pub area_id: Option<Uuid>,
+}
+
+impl From<SensorUpdate> for ActiveModel {
+    fn from(update: SensorUpdate) -> Self {
+        // If the field is Some(None), update the field to None, if None,
+        // do not update the field (double option)
+
+        Self {
+            name: match update.name {
+                Some(Some(name)) => Set(Some(name)),
+                Some(_) => NotSet,
+                _ => NotSet,
+            },
+            description: match update.description {
+                Some(Some(description)) => Set(Some(description)),
+                Some(_) => Set(None),
+                _ => NotSet,
+            },
+            manufacturer: match update.manufacturer {
+                Some(Some(manufacturer)) => Set(Some(manufacturer)),
+                Some(_) => Set(None),
+                _ => NotSet,
+            },
+            serial_number: match update.serial_number {
+                Some(Some(serial_number)) => Set(Some(serial_number)),
+                Some(_) => Set(None),
+                _ => NotSet,
+            },
+            area_id: match update.area_id {
+                Some(area_id) => Set(area_id),
+                _ => NotSet,
+            },
+            last_updated: Set(chrono::Utc::now().naive_utc()),
+            iterator: NotSet,
+            comment: NotSet,
+            id: NotSet,
+        }
+    }
+}
+impl SensorUpdate {
+    pub fn merge_into_activemodel(&self, mut model: ActiveModel) -> ActiveModel {
+        // If the field is Some(None), update the field to None, if None,
+        // do not update the field (double option)
+
+        model.name = match self.name {
+            Some(Some(ref name)) => Set(Some(name.clone())),
+            Some(_) => NotSet,
+            _ => NotSet,
+        };
+
+        model.description = match self.description {
+            Some(Some(ref description)) => Set(Some(description.clone())),
+            Some(_) => Set(None),
+            _ => NotSet,
+        };
+        model.last_updated = Set(chrono::Utc::now().naive_utc());
+
+        model
+    }
 }

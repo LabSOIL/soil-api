@@ -13,9 +13,9 @@ use axum::response::IntoResponse;
 use axum::Json;
 use axum::{routing, Router};
 use sea_orm::{
-    query::*, sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    query::*, sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
+    QueryFilter,
 };
-// use sea_query::Expr;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ pub struct SensorQueryParams {
 }
 pub fn router(db: DatabaseConnection) -> Router {
     Router::new()
-        .route("/:sensor_id", routing::get(get_one))
+        .route("/:sensor_id", routing::get(get_one).put(update_one))
         .route("/", routing::get(get_all))
         .with_state(db)
 }
@@ -128,4 +128,27 @@ pub async fn get_all(
     let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
 
     (headers, Json(response_objs))
+}
+
+pub async fn update_one(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<super::models::SensorUpdate>,
+) -> impl IntoResponse {
+    println!("Updating sensor with ID: {}", id);
+    let obj: super::db::ActiveModel = super::db::Entity::find()
+        .filter(super::db::Column::Id.eq(id))
+        .one(&db)
+        .await
+        .unwrap()
+        .expect("Failed to find object")
+        .into();
+
+    let obj: super::db::ActiveModel = payload.merge_into_activemodel(obj);
+
+    let obj: super::db::Model = obj.update(&db).await.unwrap();
+
+    let response_obj: super::models::SensorSimple = obj.into();
+
+    Json(response_obj)
 }

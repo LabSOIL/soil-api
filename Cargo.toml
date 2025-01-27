@@ -47,6 +47,8 @@ wkb = "0.7.1"
 byteorder = "1.5.0"
 lttb = "0.2.0"
 futures = "0.3.30"
+serde_with = "3.10.0"
+tower-http = { version = "0.6.2", features = ["trace"] }
 
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["util"] }
