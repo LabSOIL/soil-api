@@ -5,9 +5,14 @@ use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
 use crate::{areas::db::ActiveModel as AreaActiveModel, sensors::models::SensorSimple};
 use chrono::NaiveDateTime;
-use sea_orm::{entity::prelude::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait};
+// use sea_orm::{};
+use sea_orm::{
+    entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
+    DeriveIntoActiveModel, EntityTrait, IntoActiveModel, NotSet, Order, QueryOrder, Set,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing_subscriber::filter::combinator::Not;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -25,6 +30,136 @@ pub struct Area {
     pub transects: Vec<Transect>,
     pub geom: Option<Value>,
 }
+
+impl Area {
+    pub async fn get_one(area_id: Uuid, db: DatabaseConnection) -> Self {
+        let obj = super::db::Entity::find_by_id(area_id)
+            .one(&db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let project = obj
+            .find_related(crate::projects::db::Entity)
+            .one(&db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let plots = obj
+            .find_related(crate::plots::db::Entity)
+            .all(&db)
+            .await
+            .unwrap();
+
+        let sensors = obj
+            .find_related(crate::sensors::db::Entity)
+            .all(&db)
+            .await
+            .unwrap();
+
+        let soil_profiles = obj
+            .find_related(crate::soil::profiles::db::Entity)
+            .all(&db)
+            .await
+            .unwrap();
+
+        let transects = obj
+            .find_related(crate::transects::db::Entity)
+            .all(&db)
+            .await
+            .unwrap();
+
+        let convex_hull = super::services::get_convex_hull(&db, obj.id).await;
+
+        let area = super::models::Area {
+            geom: convex_hull,
+            last_updated: obj.last_updated,
+            project_id: obj.project_id,
+            id: obj.id,
+            name: obj.name,
+            description: obj.description,
+            project: project.into(),
+            plots: plots.into_iter().map(Into::into).collect(),
+            sensors: sensors.into_iter().map(Into::into).collect(),
+            soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
+            transects: transects.into_iter().map(Into::into).collect(),
+        };
+        area
+    }
+}
+
+impl Area {
+    pub async fn get_all(
+        db: DatabaseConnection,
+        condition: Condition,
+        order_column: super::db::Column,
+        order_direction: Order,
+        offset: u64,
+        limit: u64,
+    ) -> Vec<Self> {
+        // let objs = super::db::Entity::find().all(&db).await.unwrap();
+        let objs = super::db::Entity::find()
+            .filter(condition.clone())
+            .order_by(order_column, order_direction)
+            .offset(offset)
+            .limit(limit)
+            .all(&db)
+            .await
+            .unwrap();
+        let mut areas = Vec::new();
+        for obj in objs {
+            let project = obj
+                .find_related(crate::projects::db::Entity)
+                .one(&db)
+                .await
+                .unwrap()
+                .unwrap();
+
+            let plots = obj
+                .find_related(crate::plots::db::Entity)
+                .all(&db)
+                .await
+                .unwrap();
+
+            let sensors = obj
+                .find_related(crate::sensors::db::Entity)
+                .all(&db)
+                .await
+                .unwrap();
+
+            let soil_profiles = obj
+                .find_related(crate::soil::profiles::db::Entity)
+                .all(&db)
+                .await
+                .unwrap();
+
+            let transects = obj
+                .find_related(crate::transects::db::Entity)
+                .all(&db)
+                .await
+                .unwrap();
+
+            let convex_hull = super::services::get_convex_hull(&db, obj.id).await;
+
+            let area = super::models::Area {
+                geom: convex_hull,
+                last_updated: obj.last_updated,
+                project_id: obj.project_id,
+                id: obj.id,
+                name: obj.name,
+                description: obj.description,
+                project: project.into(),
+                plots: plots.into_iter().map(Into::into).collect(),
+                sensors: sensors.into_iter().map(Into::into).collect(),
+                soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
+                transects: transects.into_iter().map(Into::into).collect(),
+            };
+            areas.push(area);
+        }
+        areas
+    }
+}
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct AreaCreate {
     pub name: Option<String>,
@@ -34,9 +169,48 @@ pub struct AreaCreate {
 
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct AreaUpdate {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub project_id: Uuid,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub name: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub description: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub project_id: Option<Option<Uuid>>,
+}
+
+impl AreaUpdate {
+    pub fn merge_into_activemodel(self, mut model: AreaActiveModel) -> AreaActiveModel {
+        model.name = match self.name {
+            Some(Some(value)) => Set(Some(value)),
+            Some(_) => NotSet,
+            _ => NotSet,
+        };
+
+        model.description = match self.description {
+            Some(Some(value)) => Set(Some(value)),
+            Some(_) => NotSet,
+            _ => NotSet,
+        };
+
+        model.project_id = match self.project_id {
+            Some(Some(value)) => Set(value),
+            Some(_) => NotSet,
+            _ => NotSet,
+        };
+
+        model
+    }
 }
 
 #[derive(ToSchema, Serialize)]
@@ -113,38 +287,38 @@ impl Area {
     }
 }
 
-impl From<AreaUpdate> for super::db::ActiveModel {
-    fn from(area: AreaUpdate) -> Self {
-        super::db::ActiveModel {
-            name: ActiveValue::Set(area.name),
-            description: ActiveValue::Set(area.description),
-            project_id: ActiveValue::Set(area.project_id),
-            id: ActiveValue::NotSet,
-            last_updated: ActiveValue::NotSet,
-            // iterator: ActiveValue::NotSet,
-        }
-    }
-}
+// impl From<AreaUpdate> for super::db::ActiveModel {
+//     fn from(area: AreaUpdate) -> Self {
+//         super::db::ActiveModel {
+//             name: ActiveValue::Set(area.name),
+//             description: ActiveValue::Set(area.description),
+//             project_id: ActiveValue::Set(area.project_id),
+//             id: ActiveValue::NotSet,
+//             last_updated: ActiveValue::NotSet,
+//             // iterator: ActiveValue::NotSet,
+//         }
+//     }
+// }
 
-impl super::db::ActiveModel {
-    pub fn merge(self, other: Self) -> Self {
-        super::db::ActiveModel {
-            name: match other.name {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.name,
-            },
-            description: match other.description {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.description,
-            },
-            project_id: match other.project_id {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.project_id,
-            },
-            // Keep all other fields unchanged if not set in `other`
-            id: self.id,
-            last_updated: self.last_updated,
-            // iterator: self.iterator,
-        }
-    }
-}
+// impl super::db::ActiveModel {
+//     pub fn merge(self, other: Self) -> Self {
+//         super::db::ActiveModel {
+//             name: match other.name {
+//                 ActiveValue::Set(value) => ActiveValue::Set(value),
+//                 _ => self.name,
+//             },
+//             description: match other.description {
+//                 ActiveValue::Set(value) => ActiveValue::Set(value),
+//                 _ => self.description,
+//             },
+//             project_id: match other.project_id {
+//                 ActiveValue::Set(value) => ActiveValue::Set(value),
+//                 _ => self.project_id,
+//             },
+//             // Keep all other fields unchanged if not set in `other`
+//             id: self.id,
+//             last_updated: self.last_updated,
+//             // iterator: self.iterator,
+//         }
+//     }
+// }

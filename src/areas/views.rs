@@ -39,8 +39,8 @@ use axum_keycloak_auth::{
 };
 use itertools::izip;
 use sea_orm::{
-    query::*, ActiveModelTrait, DatabaseConnection, DeleteResult, EntityTrait, LoaderTrait,
-    ModelTrait, SqlErr,
+    query::*, ActiveModelTrait, DatabaseConnection, DbBackend, DeleteResult, EntityTrait,
+    LoaderTrait, ModelTrait, SqlErr,
 };
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -84,7 +84,7 @@ pub fn router(
     let router = Router::new()
         // let router = router
         .route("/", routing::get(get_all))
-        // .route("/{id}", routing::get(get_one))
+        .route("/{id}", routing::get(get_one))
         .with_state(db.clone())
         .merge(mutating_router);
     // .merge(Scalar::with_url("/docs", ApiDoc::openapi()));
@@ -113,64 +113,15 @@ pub async fn get_all(
         ],
         super::db::Column::Id,
     );
-
-    let objs = super::db::Entity::find()
-        // .find_with_related(crate::sites::replicates::db::Entity)
-        .filter(condition.clone())
-        .order_by(order_column, order_direction)
-        .offset(offset)
-        .limit(limit)
-        .all(&db)
-        .await
-        .unwrap();
-
-    // For each area, get the project, plots, sensors, soil_profiles, transects
-    // and the convex hull using the given function in services
-
-    // let convex_hull = super::services::get_convex_hull(&db, obj.id).await;
-    // }
-
-    let project = objs
-        .load_one(crate::projects::db::Entity, &db)
-        .await
-        .unwrap();
-    let plots = objs.load_many(crate::plots::db::Entity, &db).await.unwrap();
-    let sensors = objs
-        .load_many(crate::sensors::db::Entity, &db)
-        .await
-        .unwrap();
-    let soil_profiles = objs
-        .load_many(crate::soil::profiles::db::Entity, &db)
-        .await
-        .unwrap();
-    let transects = objs
-        .load_many(crate::transects::db::Entity, &db)
-        .await
-        .unwrap();
-
-    // Create empty areas to push in from looping through the objects
-    let mut areas: Vec<super::models::Area> = Vec::new();
-
-    for (area, project, plots, sensors, soil_profiles, transects) in
-        izip!(objs, project, plots, sensors, soil_profiles, transects)
-    {
-        let convex_hull = super::services::get_convex_hull(&db, area.id).await;
-        let area = super::models::Area {
-            geom: convex_hull,
-            last_updated: area.last_updated,
-            project_id: area.project_id,
-            id: area.id,
-            name: area.name,
-            description: area.description,
-            project: project.unwrap().into(),
-            plots: plots.into_iter().map(Into::into).collect(),
-            sensors: sensors.into_iter().map(Into::into).collect(),
-            soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
-            transects: transects.into_iter().map(Into::into).collect(),
-        };
-
-        areas.push(area);
-    }
+    let areas = super::models::Area::get_all(
+        db.clone(),
+        condition.clone(),
+        order_column.clone(),
+        order_direction.clone(),
+        offset,
+        limit,
+    )
+    .await;
 
     let total_count: u64 = <super::db::Entity>::find()
         .filter(condition.clone())
@@ -182,179 +133,162 @@ pub async fn get_all(
 
     let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
     (headers, Json(areas))
-    // (headers, Json(response_objs))
 }
 
-// #[utoipa::path(
-//     get,
-//     path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-//     responses((status = OK, body = super::models::Area))
-// )]
-// pub async fn get_one(
-//     State(db): State<DatabaseConnection>,
-//     Path(id): Path<Uuid>,
-// ) -> Result<Json<super::models::Area>, (StatusCode, Json<String>)> {
-//     let obj = match super::db::Entity::find_by_id(id).one(&db).await {
-//         Ok(Some(obj)) => obj,
-//         Ok(None) => return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
-//         Err(_) => {
-//             return Err((
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 Json("Internal Server Error".to_string()),
-//             ))
-//         }
-//     };
+#[utoipa::path(
+    get,
+    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
+    responses((status = OK, body = super::models::Area))
+)]
+pub async fn get_one(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<super::models::Area>, (StatusCode, Json<String>)> {
+    let area = super::models::Area::get_one(id, db).await;
+    println!("{:}", area.id);
 
-//     let project = obj
-//         .find_related(crate::projects::db::Entity)
-//         .all(&db)
-//         .await
-//         .unwrap();
+    Ok(Json(area))
+}
 
-//     let obj: super::models::Area = (obj, related).into();
+#[utoipa::path(
+    post,
+    path = format!("/api/{}", RESOURCE_NAME),
+    responses((status = CREATED, body = super::models::Area))
+)]
+pub async fn create_one(
+    State(db): State<DatabaseConnection>,
+    Json(payload): Json<super::models::AreaCreate>,
+) -> Result<(StatusCode, Json<super::models::Area>), (StatusCode, Json<String>)> {
+    let new_obj: super::db::ActiveModel = payload.into();
 
-//     Ok(Json(obj))
-// }
+    match super::db::Entity::insert(new_obj).exec(&db).await {
+        Ok(insert_result) => {
+            let response_obj: super::models::Area =
+                get_one(State(db.clone()), Path(insert_result.last_insert_id))
+                    .await
+                    .unwrap()
+                    .0;
 
-// #[utoipa::path(
-//     post,
-//     path = format!("/api/{}", RESOURCE_NAME),
-//     responses((status = CREATED, body = super::models::Area))
-// )]
-// pub async fn create_one(
-//     State(db): State<DatabaseConnection>,
-//     Json(payload): Json<super::models::AreaCreate>,
-// ) -> Result<(StatusCode, Json<super::models::Area>), (StatusCode, Json<String>)> {
-//     let new_obj: super::db::ActiveModel = payload.into();
+            Ok((StatusCode::CREATED, Json(response_obj)))
+        }
+        Err(err) => match err.sql_err() {
+            Some(SqlErr::UniqueConstraintViolation(_)) => {
+                Err((StatusCode::CONFLICT, Json("Duplicate entry".to_string())))
+            }
+            Some(_) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Error adding object".to_string()),
+            )),
+            _ => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Server error".to_string()),
+            )),
+        },
+    }
+}
 
-//     match super::db::Entity::insert(new_obj).exec(&db).await {
-//         Ok(insert_result) => {
-//             let response_obj: super::models::Area =
-//                 get_one(State(db.clone()), Path(insert_result.last_insert_id))
-//                     .await
-//                     .unwrap()
-//                     .0;
+#[utoipa::path(
+    put,
+    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
+    responses((status = OK, body = super::models::Area))
+)]
+pub async fn update_one(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<super::models::AreaUpdate>,
+) -> impl IntoResponse {
+    let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
+        .one(&db)
+        .await
+        .unwrap()
+        .expect("Failed to find object")
+        .into();
 
-//             Ok((StatusCode::CREATED, Json(response_obj)))
-//         }
-//         Err(err) => match err.sql_err() {
-//             Some(SqlErr::UniqueConstraintViolation(_)) => {
-//                 Err((StatusCode::CONFLICT, Json("Duplicate entry".to_string())))
-//             }
-//             Some(_) => Err((
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 Json("Error adding object".to_string()),
-//             )),
-//             _ => Err((
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 Json("Server error".to_string()),
-//             )),
-//         },
-//     }
-// }
+    let updated_obj: super::db::ActiveModel = payload.merge_into_activemodel(db_obj);
+    let response_obj = updated_obj.update(&db).await.unwrap();
 
-// #[utoipa::path(
-//     put,
-//     path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-//     responses((status = OK, body = super::models::Area))
-// )]
-// pub async fn update_one(
-//     State(db): State<DatabaseConnection>,
-//     Path(id): Path<Uuid>,
-//     Json(payload): Json<super::models::AreaUpdate>,
-// ) -> impl IntoResponse {
-//     let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
-//         .one(&db)
-//         .await
-//         .unwrap()
-//         .expect("Failed to find object")
-//         .into();
+    // Assert response is ok
+    assert_eq!(response_obj.id, id);
 
-//     let updated_obj: super::db::ActiveModel = payload.merge_into_activemodel(db_obj);
-//     let response_obj: super::models::Area = updated_obj.update(&db).await.unwrap().into();
+    // Return the new object
+    let obj = get_one(State(db.clone()), Path(id.clone()))
+        .await
+        .unwrap()
+        .0;
 
-//     // Assert response is ok
-//     assert_eq!(response_obj.id, id);
+    Json(obj)
+}
 
-//     // Return the new object
-//     let obj = get_one(State(db.clone()), Path(id.clone()))
-//         .await
-//         .unwrap()
-//         .0;
+// Deletes a single object
+#[utoipa::path(
+    delete,
+    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
+    responses(
+        (status = NO_CONTENT, body = Uuid),
+        (status = NOT_FOUND, body = String),
+        (status = INTERNAL_SERVER_ERROR, body = String)
+    )
+)]
+pub async fn delete_one(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+) -> Result<(StatusCode, Json<Uuid>), (StatusCode, Json<String>)> {
+    let obj = match super::db::Entity::find_by_id(id.clone()).one(&db).await {
+        Ok(Some(obj)) => obj,
+        Ok(None) => return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
+        _ => return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
+    };
 
-//     Json(obj)
-// }
+    let res: DeleteResult = obj.delete(&db).await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json("Failed to delete object".to_string()),
+        )
+    })?;
 
-// // Deletes a single object
-// #[utoipa::path(
-//     delete,
-//     path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-//     responses(
-//         (status = NO_CONTENT, body = Uuid),
-//         (status = NOT_FOUND, body = String),
-//         (status = INTERNAL_SERVER_ERROR, body = String)
-//     )
-// )]
-// pub async fn delete_one(
-//     State(db): State<DatabaseConnection>,
-//     Path(id): Path<Uuid>,
-// ) -> Result<(StatusCode, Json<Uuid>), (StatusCode, Json<String>)> {
-//     let obj = match super::db::Entity::find_by_id(id.clone()).one(&db).await {
-//         Ok(Some(obj)) => obj,
-//         Ok(None) => return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
-//         _ => return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
-//     };
+    if res.rows_affected == 0 {
+        return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())));
+    }
 
-//     let res: DeleteResult = obj.delete(&db).await.map_err(|_| {
-//         (
-//             StatusCode::INTERNAL_SERVER_ERROR,
-//             Json("Failed to delete object".to_string()),
-//         )
-//     })?;
+    Ok((StatusCode::NO_CONTENT, Json(id)))
+}
 
-//     if res.rows_affected == 0 {
-//         return Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())));
-//     }
+#[utoipa::path(
+    delete,
+    path = format!("/api/{}/batch", RESOURCE_NAME),
+    responses(
+        (status = NO_CONTENT, body = Vec<Uuid>),
+        (status = INTERNAL_SERVER_ERROR, body = String)
+    ),
+)]
+pub async fn delete_many(
+    State(db): State<DatabaseConnection>,
+    Json(ids): Json<Vec<Uuid>>,
+) -> Result<(StatusCode, Json<Vec<Uuid>>), (StatusCode, Json<String>)> {
+    let mut deleted_ids = Vec::new();
+    for id in ids {
+        let obj = match super::db::Entity::find_by_id(id.clone()).one(&db).await {
+            Ok(Some(obj)) => obj,
+            Ok(None) => continue,
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Failed to delete objects".to_string()),
+                ))
+            }
+        };
 
-//     Ok((StatusCode::NO_CONTENT, Json(id)))
-// }
+        let res: DeleteResult = obj.delete(&db).await.map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Failed to delete object".to_string()),
+            )
+        })?;
 
-// #[utoipa::path(
-//     delete,
-//     path = format!("/api/{}/batch", RESOURCE_NAME),
-//     responses(
-//         (status = NO_CONTENT, body = Vec<Uuid>),
-//         (status = INTERNAL_SERVER_ERROR, body = String)
-//     ),
-// )]
-// pub async fn delete_many(
-//     State(db): State<DatabaseConnection>,
-//     Json(ids): Json<Vec<Uuid>>,
-// ) -> Result<(StatusCode, Json<Vec<Uuid>>), (StatusCode, Json<String>)> {
-//     let mut deleted_ids = Vec::new();
-//     for id in ids {
-//         let obj = match super::db::Entity::find_by_id(id.clone()).one(&db).await {
-//             Ok(Some(obj)) => obj,
-//             Ok(None) => continue,
-//             Err(_) => {
-//                 return Err((
-//                     StatusCode::INTERNAL_SERVER_ERROR,
-//                     Json("Failed to delete objects".to_string()),
-//                 ))
-//             }
-//         };
+        if res.rows_affected > 0 {
+            deleted_ids.push(id);
+        }
+    }
 
-//         let res: DeleteResult = obj.delete(&db).await.map_err(|_| {
-//             (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 Json("Failed to delete object".to_string()),
-//             )
-//         })?;
-
-//         if res.rows_affected > 0 {
-//             deleted_ids.push(id);
-//         }
-//     }
-
-//     Ok((StatusCode::NO_CONTENT, Json(deleted_ids)))
-// }
+    Ok((StatusCode::NO_CONTENT, Json(deleted_ids)))
+}
