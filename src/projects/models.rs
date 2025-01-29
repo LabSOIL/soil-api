@@ -88,10 +88,18 @@ impl ApiResource for Project {
             .map(|res| res.rows_affected as usize)
     }
 
-    fn default_index_column() -> impl sea_orm::ColumnTrait {
+    fn default_index_column() -> <Self::EntityType as EntityTrait>::Column {
         super::db::Column::Id
     }
 
+    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
+        Self::EntityType::find()
+            .filter(condition)
+            .select_only()
+            .count(db)
+            .await
+            .unwrap_or(0)
+    }
     fn sortable_columns<'a>() -> &'a [(&'a str, impl ColumnTrait)] {
         &[
             ("id", super::db::Column::Id),

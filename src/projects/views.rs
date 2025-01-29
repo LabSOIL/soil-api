@@ -164,6 +164,7 @@ use crate::common::models::FilterOptions;
 use crate::common::pagination::calculate_content_range;
 use crate::common::sort::generic_sort;
 use crate::common::traits::ApiResource;
+use crate::projects::models::Project;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -174,6 +175,8 @@ use axum_keycloak_auth::{
     instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
 };
 use itertools::izip;
+
+use sea_orm::SelectorTrait;
 use sea_orm::{
     query::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, DeleteResult,
     EntityTrait, LoaderTrait, ModelTrait, QuerySelect, QueryTrait, SqlErr,
@@ -181,10 +184,7 @@ use sea_orm::{
 use std::sync::Arc;
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
-use uuid::Uuid;
-
-use crate::projects::models::Project;
-
+use uuid::Uuid; // <--- important
 const RESOURCE_NAME: &str = "projects";
 
 // Generic get_all function
@@ -207,21 +207,16 @@ pub async fn get_all<T: ApiResource + EntityTrait + ColumnTrait + QueryTrait>(
         T::default_index_column(),
     );
 
-    let items = T::get_all(&db, condition, order_column, order_direction, offset, limit).await;
-
-    let total_count: u64 = <T::EntityType as EntityTrait>::find()
-        .filter(condition.clone())
-        .select_only()
-        .column(T::default_index_column())
-        .count(&db)
-        .await
-        .unwrap_or(0);
-
-    // let total_count = T::EntityType::find()
-    //     .filter(condition.clone())
-    //     .count(&db)
-    //     .await
-    //     .unwrap_or(0);
+    let items = T::get_all(
+        &db,
+        condition.clone(),
+        order_column,
+        order_direction,
+        offset,
+        limit,
+    )
+    .await;
+    let total_count = T::total_count(&db, condition).await;
 
     let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
     (headers, Json(items))

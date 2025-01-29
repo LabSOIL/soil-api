@@ -45,7 +45,16 @@ pub trait ApiResource: Sized {
     // Function to delete a record by ID
     async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, sea_orm::DbErr>;
 
-    fn default_index_column() -> impl sea_orm::ColumnTrait;
+    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64;
+
+    // let total_count: u64 = <T::EntityType as EntityTrait>::find()
+    //     .filter(condition.clone())
+    //     .select_only()
+    //     .column(T::default_index_column())
+    //     .count(&db)
+    //     .await
+    //     .unwrap_or(0);
+    fn default_index_column() -> <Self::EntityType as EntityTrait>::Column;
     fn sortable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
     fn filterable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
 }
