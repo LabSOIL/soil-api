@@ -1,9 +1,9 @@
-use sea_orm::sea_query::Order;
+use sea_orm::{sea_query::Order, ColumnTrait};
 
 pub fn generic_sort<C>(
     sort: Option<String>,
     order_column_logic: &[(&str, C)],
-    db_columns: C,
+    db_columns: impl ColumnTrait,
 ) -> (C, Order)
 where
     C: sea_orm::ColumnTrait,

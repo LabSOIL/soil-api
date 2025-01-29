@@ -21,7 +21,7 @@ pub trait ApiResource: Sized {
     async fn get_all(
         db: &DatabaseConnection,
         condition: Condition,
-        order_column: <Self::EntityType as EntityTrait>::Column,
+        order_column: impl ColumnTrait,
         order_direction: Order,
         offset: u64,
         limit: u64,
@@ -45,7 +45,7 @@ pub trait ApiResource: Sized {
     // Function to delete a record by ID
     async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, sea_orm::DbErr>;
 
-    fn default_sort_column() -> &'static str;
-    fn sortable_columns() -> &'static [(&'static str, sea_orm::ColumnTrait)];
+    fn default_sort_column() -> impl sea_orm::ColumnTrait;
+    fn sortable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
     fn filterable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
 }

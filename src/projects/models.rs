@@ -88,11 +88,11 @@ impl ApiResource for Project {
             .map(|res| res.rows_affected as usize)
     }
 
-    fn default_sort_column() -> &'static str {
-        "id"
+    fn default_sort_column() -> impl sea_orm::ColumnTrait {
+        super::db::Column::Id
     }
 
-    fn sortable_columns() -> &'static [(&'static str, super::db::Column)] {
+    fn sortable_columns<'a>() -> &'a [(&'a str, impl ColumnTrait)] {
         &[
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
