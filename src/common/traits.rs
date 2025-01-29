@@ -45,7 +45,7 @@ pub trait ApiResource: Sized {
     // Function to delete a record by ID
     async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, sea_orm::DbErr>;
 
-    fn default_sort_column() -> impl sea_orm::ColumnTrait;
+    fn default_index_column() -> impl sea_orm::ColumnTrait;
     fn sortable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
     fn filterable_columns<'a>() -> &'a [(&'a str, impl sea_orm::ColumnTrait)];
 }

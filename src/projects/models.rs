@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use sea_orm::{
     entity::prelude::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    FromQueryResult, NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
+    FromQueryResult, NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, QueryTrait, Set,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -88,7 +88,7 @@ impl ApiResource for Project {
             .map(|res| res.rows_affected as usize)
     }
 
-    fn default_sort_column() -> impl sea_orm::ColumnTrait {
+    fn default_index_column() -> impl sea_orm::ColumnTrait {
         super::db::Column::Id
     }
 

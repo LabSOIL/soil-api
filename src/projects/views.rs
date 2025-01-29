@@ -175,8 +175,8 @@ use axum_keycloak_auth::{
 };
 use itertools::izip;
 use sea_orm::{
-    query::*, ActiveModelTrait, DatabaseConnection, DbBackend, DeleteResult, EntityTrait,
-    LoaderTrait, ModelTrait, SqlErr,
+    query::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, DeleteResult,
+    EntityTrait, LoaderTrait, ModelTrait, QuerySelect, QueryTrait, SqlErr,
 };
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -193,7 +193,7 @@ const RESOURCE_NAME: &str = "projects";
     path = format!("/api/{}", RESOURCE_NAME),
     responses((status = 200, body = Vec<Project>))
 )]
-pub async fn get_all<T: ApiResource>(
+pub async fn get_all<T: ApiResource + EntityTrait + ColumnTrait + QueryTrait>(
     Query(params): Query<FilterOptions>,
     State(db): State<Arc<DatabaseConnection>>,
 ) -> impl IntoResponse {
@@ -204,16 +204,24 @@ pub async fn get_all<T: ApiResource>(
     let (order_column, order_direction) = generic_sort(
         params.sort.clone(),
         &T::sortable_columns(),
-        T::default_sort_column(),
+        T::default_index_column(),
     );
 
     let items = T::get_all(&db, condition, order_column, order_direction, offset, limit).await;
 
-    let total_count = T::EntityType::find()
+    let total_count: u64 = <T::EntityType as EntityTrait>::find()
         .filter(condition.clone())
+        .select_only()
+        .column(T::default_index_column())
         .count(&db)
         .await
         .unwrap_or(0);
+
+    // let total_count = T::EntityType::find()
+    //     .filter(condition.clone())
+    //     .count(&db)
+    //     .await
+    //     .unwrap_or(0);
 
     let headers = calculate_content_range(offset, limit, total_count, RESOURCE_NAME);
     (headers, Json(items))
