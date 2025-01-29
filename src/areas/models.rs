@@ -5,14 +5,12 @@ use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
 use crate::{areas::db::ActiveModel as AreaActiveModel, sensors::models::SensorSimple};
 use chrono::NaiveDateTime;
-// use sea_orm::{};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DeriveIntoActiveModel, EntityTrait, IntoActiveModel, NotSet, Order, QueryOrder, Set,
+    EntityTrait, NotSet, Order, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing_subscriber::filter::combinator::Not;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -259,66 +257,3 @@ impl From<AreaCreate> for AreaActiveModel {
         }
     }
 }
-
-impl Area {
-    pub async fn from_db(area: super::db::Model, db: &DatabaseConnection) -> Self {
-        let plots: Vec<PlotSimple> = PlotSimple::from_area(&area, db).await;
-        let sensors: Vec<SensorSimple> = SensorSimple::from_area(&area, db).await;
-        let transects: Vec<Transect> = Transect::from_area(&area, db).await;
-        let soil_profiles: Vec<SoilProfile> = SoilProfile::from_area(&area, db).await;
-        let project: Project = Project::from_area(&area, db).await;
-
-        // Fetch convex hull geom for the area
-        let geom: Option<Value> = crate::areas::services::get_convex_hull(&db, area.id).await;
-
-        Area {
-            id: area.id,
-            name: area.name,
-            description: area.description,
-            project_id: area.project_id,
-            last_updated: area.last_updated,
-            plots,
-            soil_profiles,
-            sensors,
-            transects, // Include transects with nodes
-            project,
-            geom,
-        }
-    }
-}
-
-// impl From<AreaUpdate> for super::db::ActiveModel {
-//     fn from(area: AreaUpdate) -> Self {
-//         super::db::ActiveModel {
-//             name: ActiveValue::Set(area.name),
-//             description: ActiveValue::Set(area.description),
-//             project_id: ActiveValue::Set(area.project_id),
-//             id: ActiveValue::NotSet,
-//             last_updated: ActiveValue::NotSet,
-//             // iterator: ActiveValue::NotSet,
-//         }
-//     }
-// }
-
-// impl super::db::ActiveModel {
-//     pub fn merge(self, other: Self) -> Self {
-//         super::db::ActiveModel {
-//             name: match other.name {
-//                 ActiveValue::Set(value) => ActiveValue::Set(value),
-//                 _ => self.name,
-//             },
-//             description: match other.description {
-//                 ActiveValue::Set(value) => ActiveValue::Set(value),
-//                 _ => self.description,
-//             },
-//             project_id: match other.project_id {
-//                 ActiveValue::Set(value) => ActiveValue::Set(value),
-//                 _ => self.project_id,
-//             },
-//             // Keep all other fields unchanged if not set in `other`
-//             id: self.id,
-//             last_updated: self.last_updated,
-//             // iterator: self.iterator,
-//         }
-//     }
-// }

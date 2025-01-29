@@ -11,8 +11,6 @@ pub struct Model {
     pub description: Option<String>,
     pub color: String,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     pub last_updated: NaiveDateTime,
 }

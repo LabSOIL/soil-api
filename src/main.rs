@@ -1,43 +1,19 @@
-use axum::{
-    http::{Request, Uri},
-    middleware::Next,
-    response::Response,
-    routing::get,
-    Router,
-};
+use axum::Router;
 use sea_orm::{Database, DatabaseConnection};
-use soil_api_rust::{areas, common, config, plots, projects, samples, sensors, soil, transects};
-use std::time::Duration;
-use tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
-use tracing::Span;
+use soil_api_rust::{
+    areas,
+    config,
+    projects,
+    // plots,
+    //   samples, sensors, soil, transects
+};
 use tracing_subscriber;
-use utoipa::OpenApi;
-use utoipa_redoc::{Redoc, Servable};
-use utoipa_scalar::{Scalar, Servable as ScalarServable};
-use utoipa_swagger_ui::SwaggerUi;
+
 #[tokio::main]
 async fn main() {
     // Set up tracing/logging
     tracing_subscriber::fmt::init();
     println!("Starting server...");
-
-    #[derive(OpenApi)]
-    #[openapi(
-        paths(
-            plots::views::get_all,
-            areas::views::get_all,
-            projects::views::get_all,
-            common::views::healthz,
-        ),
-        components(schemas(
-            plots::models::Plot,
-            plots::models::PlotSimple,
-            areas::models::Area,
-            common::models::FilterOptions,
-            projects::models::Project,
-        ))
-    )]
-    struct ApiDoc;
 
     // Load configuration
     let cfg = config::Config::from_env();
@@ -57,7 +33,7 @@ async fn main() {
         // .route("/healthz", get(common::views::healthz))
         // .nest("/v1/plots", plots::views::router(db.clone()))
         .nest("/v1/areas", areas::views::router(db.clone()))
-        // .nest("/v1/projects", projects::views::router(db.clone()))
+        .nest("/v1/projects", projects::views::router(db.clone()))
         // .nest("/v1/plot_samples", samples::views::router(db.clone()))
         // .nest("/v1/sensors", sensors::views::router(db.clone()))
         // .nest("/v1/transects", transects::views::router(db.clone()))

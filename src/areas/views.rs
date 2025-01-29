@@ -1,29 +1,3 @@
-// use crate::generate_router;
-
-// generate_router!(
-//     resource_name: "areas",
-//     db_entity: crate::areas::db::Entity,
-//     db_model: crate::areas::db::Model,
-//     active_model: crate::areas::db::ActiveModel,
-//     db_columns: crate::areas::db::Column,
-//     get_one_response_model: crate::areas::models::AreaRead,
-//     get_all_response_model: crate::areas::models::AreaRead,
-//     create_one_request_model: crate::areas::models::AreaCreate,
-//     update_one_request_model: crate::areas::models::AreaUpdate,
-//     order_column_logic: [
-//         ("id", crate::areas::db::Column::Id),
-//         ("name", crate::areas::db::Column::Name),
-//         ("last_updated", crate::areas::db::Column::LastUpdated),
-//         ("description", crate::areas::db::Column::Description),
-//         ("project_id", crate::areas::db::Column::ProjectId),
-//     ],
-//     searchable_columns: [
-//         ("name", crate::areas::db::Column::Name),
-//         ("description", crate::areas::db::Column::Description),
-//         ("project_id", crate::areas::db::Column::ProjectId)
-//     ]
-// );
-use crate::common::auth::Role;
 use crate::common::filter::{apply_filters, parse_range};
 use crate::common::models::FilterOptions;
 use crate::common::pagination::calculate_content_range;
@@ -34,69 +8,23 @@ use axum::{
     response::IntoResponse,
     routing, Json, Router,
 };
-use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
-};
-use itertools::izip;
 use sea_orm::{
-    query::*, ActiveModelTrait, DatabaseConnection, DbBackend, DeleteResult, EntityTrait,
-    LoaderTrait, ModelTrait, SqlErr,
+    query::*, ActiveModelTrait, DatabaseConnection, DeleteResult, EntityTrait, ModelTrait, SqlErr,
 };
-use std::sync::Arc;
-use utoipa::OpenApi;
-use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use uuid::Uuid;
 
 const RESOURCE_NAME: &str = "areas";
 
-// #[derive(OpenApi)]
-// #[openapi(paths(get_all, get_one, create_one, update_one, delete_one, delete_many))]
-// struct ApiDoc;
-
-pub fn router(
-    db: DatabaseConnection,
-    // keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router {
-    let mutating_router = Router::new()
-        // .route("/", routing::post(create_one))
-        // .route("/{id}", routing::put(update_one).delete(delete_one))
-        // .route("/batch", routing::delete(delete_many))
-        .with_state(db.clone());
-
-    // if let Some(instance) = keycloak_auth_instance {
-    //     mutating_router = mutating_router.layer(
-    //         KeycloakAuthLayer::<Role>::builder()
-    //             .instance(instance)
-    //             .passthrough_mode(PassthroughMode::Block)
-    //             .persist_raw_claims(false)
-    //             .expected_audiences(vec![String::from("account")])
-    //             .required_roles(vec![Role::Administrator])
-    //             .build(),
-    //     );
-    // } else {
-    //     println!(
-    //         "Warning: Mutating routes of '{}' router are not protected",
-    //         RESOURCE_NAME
-    //     );
-    // }
-
-    // All the routes that do not mutate the database.
-    let router = Router::new()
-        // let router = router
+pub fn router(db: DatabaseConnection) -> Router {
+    Router::new()
         .route("/", routing::get(get_all))
         .route("/{id}", routing::get(get_one))
+        .route("/", routing::post(create_one))
+        .route("/{id}", routing::put(update_one).delete(delete_one))
+        .route("/batch", routing::delete(delete_many))
         .with_state(db.clone())
-        .merge(mutating_router);
-    // .merge(Scalar::with_url("/docs", ApiDoc::openapi()));
-
-    router
 }
 
-#[utoipa::path(
-    get,
-    path = format!("/api/{}", RESOURCE_NAME),
-    responses((status = OK, body = super::models::Area))
-)]
 pub async fn get_all(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,
@@ -135,11 +63,6 @@ pub async fn get_all(
     (headers, Json(areas))
 }
 
-#[utoipa::path(
-    get,
-    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-    responses((status = OK, body = super::models::Area))
-)]
 pub async fn get_one(
     State(db): State<DatabaseConnection>,
     Path(id): Path<Uuid>,
@@ -150,11 +73,6 @@ pub async fn get_one(
     Ok(Json(area))
 }
 
-#[utoipa::path(
-    post,
-    path = format!("/api/{}", RESOURCE_NAME),
-    responses((status = CREATED, body = super::models::Area))
-)]
 pub async fn create_one(
     State(db): State<DatabaseConnection>,
     Json(payload): Json<super::models::AreaCreate>,
@@ -187,11 +105,6 @@ pub async fn create_one(
     }
 }
 
-#[utoipa::path(
-    put,
-    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-    responses((status = OK, body = super::models::Area))
-)]
 pub async fn update_one(
     State(db): State<DatabaseConnection>,
     Path(id): Path<Uuid>,
@@ -219,16 +132,6 @@ pub async fn update_one(
     Json(obj)
 }
 
-// Deletes a single object
-#[utoipa::path(
-    delete,
-    path = format!("/api/{}/{{id}}", RESOURCE_NAME),
-    responses(
-        (status = NO_CONTENT, body = Uuid),
-        (status = NOT_FOUND, body = String),
-        (status = INTERNAL_SERVER_ERROR, body = String)
-    )
-)]
 pub async fn delete_one(
     State(db): State<DatabaseConnection>,
     Path(id): Path<Uuid>,
@@ -253,14 +156,6 @@ pub async fn delete_one(
     Ok((StatusCode::NO_CONTENT, Json(id)))
 }
 
-#[utoipa::path(
-    delete,
-    path = format!("/api/{}/batch", RESOURCE_NAME),
-    responses(
-        (status = NO_CONTENT, body = Vec<Uuid>),
-        (status = INTERNAL_SERVER_ERROR, body = String)
-    ),
-)]
 pub async fn delete_many(
     State(db): State<DatabaseConnection>,
     Json(ids): Json<Vec<Uuid>>,

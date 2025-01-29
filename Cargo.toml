@@ -51,6 +51,7 @@ serde_with = "3.10.0"
 tower-http = { version = "0.6.2", features = ["trace"] }
 axum-keycloak-auth = "0.7.0"
 itertools = "0.14.0"
+async-trait = "0.1.85"
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
