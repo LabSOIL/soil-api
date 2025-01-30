@@ -1,4 +1,4 @@
-use crate::common::models::FilterOptions;
+use crate::common::crud::models::FilterOptions;
 use crate::transects::models::Transect;
 use axum::extract::Path;
 use axum::http::StatusCode;

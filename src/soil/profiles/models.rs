@@ -1,4 +1,4 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use chrono::NaiveDateTime;
 use sea_orm::{
     entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,

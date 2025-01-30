@@ -1,10 +1,6 @@
 use async_trait::async_trait;
-use axum::{response::IntoResponse, Json};
-use hyper::HeaderMap;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, ModelTrait,
-    Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select,
-};
+use axum::response::IntoResponse;
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, ModelTrait, Order};
 use uuid::Uuid;
 
 // Define a trait that encapsulates the necessary operations

@@ -1,4 +1,4 @@
-use crate::common::models::FilterOptions;
+use crate::common::crud::models::FilterOptions;
 use crate::samples::db::Entity as PlotSampleDB;
 use crate::samples::models::PlotSample;
 use axum::response::IntoResponse;

@@ -13,7 +13,7 @@ macro_rules! generate_router {
         order_column_logic: $order_column_logic:expr,
         searchable_columns: $searchable_columns:expr
     ) => {
-        use crate::common::models::FilterOptions;
+        use crate::common::crud::models::FilterOptions;
         use crate::common::sort::generic_sort;
         use crate::common::filter::{parse_range, apply_filters};
         use crate::common::pagination::calculate_content_range;
@@ -27,7 +27,6 @@ macro_rules! generate_router {
         use sea_orm::query::*;
         use sea_orm::ColumnTrait;
         use sea_orm::{DatabaseConnection, EntityTrait, ModelTrait, ActiveModelTrait};
-        use std::iter::Iterator;
         use uuid::Uuid;
         use futures::StreamExt;
 

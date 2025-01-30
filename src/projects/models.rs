@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use axum::response::{IntoResponse, Response};
 use chrono::NaiveDateTime;
 use sea_orm::{
-    entity::prelude::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    FromQueryResult, NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
+    entity::prelude::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
+    NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -196,7 +196,6 @@ impl ProjectUpdate {
         model.description = match self.description {
             Some(description) => Set(description),
             None => NotSet,
-            _ => NotSet,
         };
         model.name = match self.name {
             Some(Some(name)) => Set(name),

@@ -1,9 +1,4 @@
 use axum::http::header::HeaderMap;
-use sea_orm::ColumnTrait;
-use sea_orm::Condition;
-use sea_orm::QueryFilter;
-use sea_orm::QuerySelect;
-use sea_orm::{ConnectionTrait, DatabaseConnection};
 
 /// Function to calculate the total count and generate the Content-Range header.
 pub fn calculate_content_range(

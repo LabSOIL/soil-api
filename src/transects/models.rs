@@ -1,5 +1,4 @@
-use super::db::{ActiveModel, Model};
-use crate::areas::models::AreaBasicWithProject;
+use super::db::Model;
 use crate::plots::db::Entity as PlotDB;
 use crate::plots::models::PlotSimple;
 use crate::transects::db::Entity as TransectDB;

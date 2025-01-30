@@ -94,7 +94,7 @@ impl PlotSample {
                 area: crate::areas::models::AreaBasicWithProject {
                     id: area.id,
                     name: area.name,
-                    project: crate::common::models::GenericNameAndID {
+                    project: crate::common::crud::models::GenericNameAndID {
                         id: project.id,
                         name: project.name,
                     },
@@ -178,7 +178,7 @@ impl PlotSample {
     //         area: crate::areas::models::AreaBasicWithProject {
     //             id: area.id,
     //             name: area.name,
-    //             project: crate::common::models::GenericNameAndID {
+    //             project: crate::common::crud::models::GenericNameAndID {
     //                 id: project.id,
     //                 name: project.name,
     //             },

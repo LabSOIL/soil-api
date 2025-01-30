@@ -1,4 +1,4 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use sea_orm::{entity::prelude::*, ColumnTrait, DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

@@ -215,7 +215,7 @@ impl AreaUpdate {
 pub struct AreaBasicWithProject {
     pub id: Uuid,
     pub name: Option<String>,
-    pub project: crate::common::models::GenericNameAndID,
+    pub project: crate::common::crud::models::GenericNameAndID,
 }
 
 impl AreaBasicWithProject {
@@ -237,7 +237,7 @@ impl AreaBasicWithProject {
         AreaBasicWithProject {
             id: area_id,
             name: area.name,
-            project: crate::common::models::GenericNameAndID {
+            project: crate::common::crud::models::GenericNameAndID {
                 id: project.id,
                 name: project.name,
             },

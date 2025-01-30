@@ -1,5 +1,4 @@
 use super::models::HealthCheck;
-use crate::common::models::UIConfiguration;
 use axum::{extract::State, http::StatusCode, Json};
 use sea_orm::DatabaseConnection;
 

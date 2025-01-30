@@ -1,4 +1,4 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use chrono::NaiveDateTime;
 use serde::Serialize;
 use utoipa::ToSchema;

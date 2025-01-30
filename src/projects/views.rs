@@ -1,5 +1,5 @@
+use crate::common::crud::models::FilterOptions;
 use crate::common::filter::{apply_filters, parse_range};
-use crate::common::models::FilterOptions;
 use crate::common::pagination::calculate_content_range;
 use crate::common::sort::generic_sort;
 use crate::common::traits::ApiResource;

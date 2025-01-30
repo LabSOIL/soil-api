@@ -1,5 +1,5 @@
 use crate::areas::db::Entity as AreaDB;
-use crate::common::models::FilterOptions;
+use crate::common::crud::models::FilterOptions;
 use crate::plots::db::Entity as PlotDB;
 use crate::plots::db::Gradientchoices;
 use crate::plots::models::{Area, Plot, PlotWithCoords};

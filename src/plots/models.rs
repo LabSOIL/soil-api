@@ -1,4 +1,4 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use crate::areas;
 use crate::plots::db::Gradientchoices;
 use chrono::NaiveDate;
