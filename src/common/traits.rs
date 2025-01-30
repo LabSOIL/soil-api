@@ -11,6 +11,10 @@ pub trait ApiResource: Sized {
     type ModelType: ModelTrait;
     type ActiveModelType: sea_orm::ActiveModelTrait;
     type ApiModel: IntoResponse + From<Self::ModelType>;
+    type CreateModel: Into<Self::ActiveModelType>;
+    type UpdateModel: Send + Sync;
+
+    const RESOURCE_NAME: &str;
 
     // Function to get all records with filtering, sorting, and pagination
     async fn get_all(
@@ -25,21 +29,20 @@ pub trait ApiResource: Sized {
     // Function to get a single record by ID
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr>;
 
-    // Function to insert a new record
     async fn create(
         db: &DatabaseConnection,
-        active_model: Self::ActiveModelType,
-    ) -> Result<Self::ApiModel, sea_orm::DbErr>;
+        create_model: Self::CreateModel,
+    ) -> Result<Self::ApiModel, DbErr>;
 
-    // Function to update an existing record
     async fn update(
         db: &DatabaseConnection,
-        active_model: Self::ActiveModelType,
-    ) -> Result<Self::ApiModel, sea_orm::DbErr>;
+        id: Uuid,
+        update_model: Self::UpdateModel,
+    ) -> Result<Self::ApiModel, DbErr>;
 
     // Function to delete a record by ID
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, sea_orm::DbErr>;
-
+    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr>;
+    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr>;
     async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64;
 
     // let total_count: u64 = <T::EntityType as EntityTrait>::find()

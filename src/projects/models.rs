@@ -43,6 +43,10 @@ impl ApiResource for Project {
     type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
     type ApiModel = Project;
+    type CreateModel = ProjectCreate;
+    type UpdateModel = ProjectUpdate;
+
+    const RESOURCE_NAME: &'static str = "projects";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -72,29 +76,42 @@ impl ApiResource for Project {
 
     async fn create(
         db: &DatabaseConnection,
-        active_model: Self::ActiveModelType,
+        create_model: Self::CreateModel,
     ) -> Result<Self::ApiModel, DbErr> {
-        let res = active_model.insert(db).await?;
-        Ok(Self::ApiModel::from(res))
+        let active_model: Self::ActiveModelType = create_model.into();
+        let inserted = active_model.insert(db).await?;
+        Self::get_one(inserted.id, db)
+            .await
+            .ok_or(DbErr::RecordNotFound("Project not found".into()))
     }
 
     async fn update(
         db: &DatabaseConnection,
-        active_model: Self::ActiveModelType,
+        id: Uuid,
+        update_model: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
-        let res = active_model.update(db).await?;
-        Ok(Self::ApiModel::from(res))
+        let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Project not found".into()))?
+            .into();
+
+        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated = updated_model.update(db).await?;
+        Ok(Self::ApiModel::from(updated))
     }
 
     async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        Self::EntityType::delete_by_id(id)
-            .exec(db)
-            .await
-            .map(|res| res.rows_affected as usize)
+        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
+        Ok(res.rows_affected as usize)
     }
 
-    fn default_index_column() -> Self::ColumnType {
-        super::db::Column::Id
+    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
+        Self::EntityType::delete_many()
+            .filter(Self::ColumnType::Id.is_in(ids.clone()))
+            .exec(db)
+            .await?;
+        Ok(ids)
     }
 
     async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
@@ -106,23 +123,27 @@ impl ApiResource for Project {
             .unwrap_or(0)
     }
 
+    fn default_index_column() -> Self::ColumnType {
+        Self::ColumnType::Id
+    }
+
     fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
         &[
-            ("id", super::db::Column::Id),
-            ("name", super::db::Column::Name),
-            ("description", super::db::Column::Description),
-            ("color", super::db::Column::Color),
-            ("last_updated", super::db::Column::LastUpdated),
+            ("id", Self::ColumnType::Id),
+            ("name", Self::ColumnType::Name),
+            ("description", Self::ColumnType::Description),
+            ("color", Self::ColumnType::Color),
+            ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 
     fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
         &[
-            ("id", super::db::Column::Id),
-            ("name", super::db::Column::Name),
-            ("description", super::db::Column::Description),
-            ("color", super::db::Column::Color),
-            ("last_updated", super::db::Column::LastUpdated),
+            ("id", Self::ColumnType::Id),
+            ("name", Self::ColumnType::Name),
+            ("description", Self::ColumnType::Description),
+            ("color", Self::ColumnType::Color),
+            ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 }
