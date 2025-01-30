@@ -3,10 +3,10 @@ use sea_orm::{sea_query::Order, ColumnTrait};
 pub fn generic_sort<C>(
     sort: Option<String>,
     order_column_logic: &[(&str, C)],
-    db_columns: impl ColumnTrait,
+    default_column: C,
 ) -> (C, Order)
 where
-    C: sea_orm::ColumnTrait,
+    C: ColumnTrait,
 {
     // Default sorting values
     let default_sort_column = "id";
@@ -47,7 +47,7 @@ where
         .iter()
         .find(|&&(col_name, _)| col_name == sort_column)
         .map(|&(_, col)| col)
-        .unwrap_or(db_columns);
+        .unwrap_or(default_column);
 
     (order_column, order_direction)
 }

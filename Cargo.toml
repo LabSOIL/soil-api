@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.8.0" }
+axum = { version = "0.8.1", features = ["macros"] }
 dotenvy = "0.15.7"
 serde = { version = "1.0.217", features = ["derive"] }
 # geo-types = { version = "0.7.13", features = ["serde"] }

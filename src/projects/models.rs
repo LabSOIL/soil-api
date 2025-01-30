@@ -1,10 +1,11 @@
 use super::db::{ActiveModel, Model};
 use crate::common::traits::ApiResource;
 use async_trait::async_trait;
+use axum::response::{IntoResponse, Response};
 use chrono::NaiveDateTime;
 use sea_orm::{
     entity::prelude::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    FromQueryResult, NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, QueryTrait, Set,
+    FromQueryResult, NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -17,6 +18,12 @@ pub struct Project {
     id: Uuid,
     name: String,
 }
+impl IntoResponse for Project {
+    fn into_response(self) -> Response {
+        axum::Json(self).into_response()
+    }
+}
+
 impl From<Model> for Project {
     fn from(model: Model) -> Self {
         Self {
@@ -32,6 +39,7 @@ impl From<Model> for Project {
 #[async_trait]
 impl ApiResource for Project {
     type EntityType = super::db::Entity;
+    type ColumnType = super::db::Column;
     type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
     type ApiModel = Project;
@@ -39,30 +47,27 @@ impl ApiResource for Project {
     async fn get_all(
         db: &DatabaseConnection,
         condition: Condition,
-        order_column: super::db::Column,
+        order_column: Self::ColumnType,
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Vec<Self::ApiModel> {
-        Self::EntityType::find()
+    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+        let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
             .all(db)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(Self::ApiModel::from)
-            .collect()
+            .await?;
+        Ok(models.into_iter().map(Self::ApiModel::from).collect())
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Option<Self::ApiModel> {
-        Self::EntityType::find_by_id(id)
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+        let model = Self::EntityType::find_by_id(id)
             .one(db)
-            .await
-            .unwrap()
-            .map(Self::ApiModel::from)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
+        Ok(Self::ApiModel::from(model))
     }
 
     async fn create(
@@ -88,7 +93,7 @@ impl ApiResource for Project {
             .map(|res| res.rows_affected as usize)
     }
 
-    fn default_index_column() -> <Self::EntityType as EntityTrait>::Column {
+    fn default_index_column() -> Self::ColumnType {
         super::db::Column::Id
     }
 
@@ -100,7 +105,8 @@ impl ApiResource for Project {
             .await
             .unwrap_or(0)
     }
-    fn sortable_columns<'a>() -> &'a [(&'a str, impl ColumnTrait)] {
+
+    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
         &[
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
@@ -110,7 +116,7 @@ impl ApiResource for Project {
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, impl ColumnTrait)] {
+    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
         &[
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
