@@ -1,4 +1,5 @@
 use super::models::HealthCheck;
+use super::models::UIConfiguration;
 use axum::{extract::State, http::StatusCode, Json};
 use sea_orm::DatabaseConnection;
 
@@ -35,18 +36,18 @@ pub async fn healthz(State(db): State<DatabaseConnection>) -> (StatusCode, Json<
     )
 }
 
-// #[utoipa::path(
-//     get,
-//     path = "/api/config",
-//     responses(
-//         (
-//             status = OK,
-//             description = "Web UI configuration",
-//             body = str,
-//             content_type = "text/plain"
-//         )
-//     )
-// )]
-// pub async fn get_ui_config() -> Json<UIConfiguration> {
-//     Json(UIConfiguration::new())
-// }
+#[utoipa::path(
+    get,
+    path = "/api/config",
+    responses(
+        (
+            status = OK,
+            description = "Web UI configuration",
+            body = str,
+            content_type = "text/plain"
+        )
+    )
+)]
+pub async fn get_ui_config() -> Json<UIConfiguration> {
+    Json(UIConfiguration::new())
+}

@@ -3,6 +3,7 @@ use crate::common::traits::ApiResource;
 use async_trait::async_trait;
 use axum::response::{IntoResponse, Response};
 use chrono::NaiveDateTime;
+use rand::Rng;
 use sea_orm::{
     entity::prelude::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
@@ -177,10 +178,9 @@ impl Project {
             .collect()
     }
 }
-
 #[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
 pub struct ProjectCreate {
-    pub color: String,
+    pub color: Option<String>,
     pub description: Option<String>,
     pub name: String,
 }
@@ -235,13 +235,17 @@ pub struct ProjectBasic {
 
 impl From<ProjectCreate> for super::db::ActiveModel {
     fn from(project: ProjectCreate) -> Self {
+        // If color is not provided, generate a random color
+        let color = project.color.unwrap_or_else(|| {
+            let mut rng = rand::rng();
+            format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
+        });
         super::db::ActiveModel {
-            color: ActiveValue::set(project.color),
+            color: ActiveValue::set(color),
             description: ActiveValue::set(project.description),
             name: ActiveValue::set(project.name),
-            id: ActiveValue::NotSet,
-            last_updated: ActiveValue::NotSet,
-            // iterator: ActiveValue::NotSet,
+            id: ActiveValue::set(Uuid::new_v4()),
+            last_updated: ActiveValue::set(chrono::Utc::now().naive_utc()),
         }
     }
 }

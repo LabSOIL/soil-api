@@ -1,3 +1,4 @@
+use crate::config::Config;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -14,19 +15,19 @@ pub struct UIConfiguration {
     pub deployment: String,
 }
 
-// impl UIConfiguration {
-//     pub fn new() -> Self {
-//         let config: Config = Config::from_env();
-//         Self {
-//             keycloak: Keycloak {
-//                 client_id: config.keycloak_ui_id,
-//                 realm: config.keycloak_realm,
-//                 url: config.keycloak_url,
-//             },
-//             deployment: config.deployment,
-//         }
-//     }
-// }
+impl UIConfiguration {
+    pub fn new() -> Self {
+        let config: Config = Config::from_env();
+        Self {
+            keycloak: Keycloak {
+                client_id: config.keycloak_ui_id,
+                realm: config.keycloak_realm,
+                url: config.keycloak_url,
+            },
+            deployment: config.deployment,
+        }
+    }
+}
 
 #[derive(ToSchema, Deserialize, Serialize)]
 pub struct HealthCheck {

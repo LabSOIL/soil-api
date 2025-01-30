@@ -1,5 +1,6 @@
 use axum::Router;
 use sea_orm::{Database, DatabaseConnection};
+use soil_api_rust::common::views::{get_ui_config, healthz};
 use soil_api_rust::{
     areas,
     config,
@@ -30,10 +31,12 @@ async fn main() {
 
     // Build the router with routes from the plots module
     let app = Router::new()
-        // .route("/healthz", get(common::views::healthz))
+        .route("/healthz", axum::routing::get(healthz))
+        .route("/api/config", axum::routing::get(get_ui_config))
+        .with_state(db.clone())
         // .nest("/v1/plots", plots::views::router(db.clone()))
-        .nest("/v1/areas", areas::views::router(db.clone()))
-        .nest("/v1/projects", projects::views::router(db.clone()))
+        .nest("/api/areas", areas::views::router(db.clone()))
+        .nest("/api/projects", projects::views::router(db.clone()))
         // .nest("/v1/plot_samples", samples::views::router(db.clone()))
         // .nest("/v1/sensors", sensors::views::router(db.clone()))
         // .nest("/v1/transects", transects::views::router(db.clone()))
