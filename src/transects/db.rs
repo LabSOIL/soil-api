@@ -11,8 +11,6 @@ pub struct Model {
     pub date_created: Option<NaiveDateTime>,
     pub last_updated: NaiveDateTime,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     pub area_id: Uuid,
 }

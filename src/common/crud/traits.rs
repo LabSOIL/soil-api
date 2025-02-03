@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sea_orm::{ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, ModelTrait, Order};
+use sea_orm::{entity::prelude::*, Condition, DatabaseConnection, EntityTrait, Order};
 use uuid::Uuid;
 
 #[async_trait]

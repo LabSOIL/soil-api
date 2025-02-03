@@ -16,10 +16,9 @@ const RESOURCE_NAME: &str = "projects";
 
 // #[utoipa::path(
 //     get,
-//     path = format!("/api/{}", <T as ApiResource>::RESOURCE_NAME),
+//     path = "/api/projects",
 //     responses((status = 200, body = Vec<T::ApiModel>))
 // )]
-// #[axum::debug_handler] // Helps with better compile-time error messages
 pub async fn get_all<T>(
     Query(params): Query<FilterOptions>,
     State(db): State<DatabaseConnection>,

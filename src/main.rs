@@ -5,6 +5,7 @@ use soil_api_rust::{
     areas,
     config,
     projects,
+    transects,
     // plots,
     //   samples, sensors, soil, transects
 };
@@ -39,7 +40,7 @@ async fn main() {
         .nest("/api/projects", projects::views::router(db.clone()))
         // .nest("/v1/plot_samples", samples::views::router(db.clone()))
         // .nest("/v1/sensors", sensors::views::router(db.clone()))
-        // .nest("/v1/transects", transects::views::router(db.clone()))
+        .nest("/api/transects", transects::views::router(db.clone()))
         // .nest("/v1/soil_types", soil::types::views::router(db.clone()))
         // .nest(
         //     "/v1/soil_profiles",
