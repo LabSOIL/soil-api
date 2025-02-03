@@ -19,8 +19,6 @@ pub struct Model {
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     // #[sea_orm(column_type = "custom(\"geometry\")", nullable)]
     // pub geom: Option<String>,
