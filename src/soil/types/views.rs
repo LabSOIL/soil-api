@@ -1,23 +1,23 @@
-use crate::generate_router;
+use crate::common::crud::routes as crud;
+use crate::soil::types::models::SoilType;
+use axum::{
+    routing::{delete, get},
+    Router,
+};
+use sea_orm::DatabaseConnection;
 
-generate_router!(
-    resource_name: "soil_types",
-    db_entity: crate::soil::types::db::Entity,
-    db_model: crate::soil::types::db::Model,
-    active_model: crate::soil::types::db::ActiveModel,
-    db_columns: crate::soil::types::db::Column,
-    get_one_response_model: crate::soil::types::models::SoilType,
-    get_all_response_model: crate::soil::types::models::SoilTypeBasic,
-    create_one_request_model: crate::soil::types::models::SoilTypeCreate,
-    update_one_request_model: crate::soil::types::models::SoilTypeUpdate,
-    order_column_logic: [
-        ("id", crate::soil::types::db::Column::Id),
-        ("name", crate::soil::types::db::Column::Name),
-        ("description", crate::soil::types::db::Column::Description),
-        ("last_updated", crate::soil::types::db::Column::LastUpdated),
-    ],
-    searchable_columns: [
-        ("name", crate::soil::types::db::Column::Name),
-        ("description", crate::soil::types::db::Column::Description),
-    ]
-);
+pub fn router(db: DatabaseConnection) -> Router {
+    Router::new()
+        .route(
+            "/",
+            get(crud::get_all::<SoilType>).post(crud::create_one::<SoilType>),
+        )
+        .route(
+            "/{id}",
+            get(crud::get_one::<SoilType>)
+                .put(crud::update_one::<SoilType>)
+                .delete(crud::delete_one::<SoilType>),
+        )
+        .route("/batch", delete(crud::delete_many::<SoilType>))
+        .with_state(db)
+}

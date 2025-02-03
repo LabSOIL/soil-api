@@ -4,9 +4,10 @@ use soil_api_rust::common::views::{get_ui_config, healthz};
 use soil_api_rust::{
     areas,
     config,
+    plots,
     projects,
+    samples,
     soil,
-    // plots,
     //   samples, sensors, soil, transects
     transects,
 };
@@ -36,13 +37,13 @@ async fn main() {
         .route("/healthz", axum::routing::get(healthz))
         .route("/api/config", axum::routing::get(get_ui_config))
         .with_state(db.clone())
-        // .nest("/v1/plots", plots::views::router(db.clone()))
+        .nest("/api/plots", plots::views::router(db.clone()))
         .nest("/api/areas", areas::views::router(db.clone()))
         .nest("/api/projects", projects::views::router(db.clone()))
-        // .nest("/v1/plot_samples", samples::views::router(db.clone()))
+        .nest("/api/plot_samples", samples::views::router(db.clone()))
         // .nest("/v1/sensors", sensors::views::router(db.clone()))
         .nest("/api/transects", transects::views::router(db.clone()))
-        // .nest("/v1/soil_types", soil::types::views::router(db.clone()))
+        .nest("/api/soil_types", soil::types::views::router(db.clone()))
         .nest(
             "/api/soil_profiles",
             soil::profiles::views::router(db.clone()),
