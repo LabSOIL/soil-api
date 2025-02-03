@@ -1,7 +1,6 @@
 use super::db::{ActiveModel, Model};
-use crate::common::traits::ApiResource;
+use crate::common::traits::CRUDResource;
 use async_trait::async_trait;
-use axum::response::{IntoResponse, Response};
 use chrono::NaiveDateTime;
 use rand::Rng;
 use sea_orm::{
@@ -19,11 +18,6 @@ pub struct Project {
     id: Uuid,
     name: String,
 }
-impl IntoResponse for Project {
-    fn into_response(self) -> Response {
-        axum::Json(self).into_response()
-    }
-}
 
 impl From<Model> for Project {
     fn from(model: Model) -> Self {
@@ -38,7 +32,7 @@ impl From<Model> for Project {
 }
 
 #[async_trait]
-impl ApiResource for Project {
+impl CRUDResource for Project {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
     type ModelType = super::db::Model;
@@ -47,7 +41,8 @@ impl ApiResource for Project {
     type CreateModel = ProjectCreate;
     type UpdateModel = ProjectUpdate;
 
-    const RESOURCE_NAME: &'static str = "projects";
+    const RESOURCE_NAME_PLURAL: &'static str = "projects";
+    const RESOURCE_NAME_SINGULAR: &'static str = "project";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -68,10 +63,13 @@ impl ApiResource for Project {
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
-        let model = Self::EntityType::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
+        let model =
+            Self::EntityType::find_by_id(id)
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound(
+                    format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+                ))?;
         Ok(Self::ApiModel::from(model))
     }
 
@@ -83,7 +81,9 @@ impl ApiResource for Project {
         let inserted = active_model.insert(db).await?;
         Self::get_one(inserted.id, db)
             .await
-            .ok_or(DbErr::RecordNotFound("Project not found".into()))
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
+            ))
     }
 
     async fn update(
@@ -94,7 +94,9 @@ impl ApiResource for Project {
         let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Project not found".into()))?
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_PLURAL).into(),
+            ))?
             .into();
 
         let updated_model = update_model.merge_into_activemodel(existing);

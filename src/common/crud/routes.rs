@@ -2,7 +2,7 @@ use crate::common::crud::models::FilterOptions;
 use crate::common::filter::{apply_filters, parse_range};
 use crate::common::pagination::calculate_content_range;
 use crate::common::sort::generic_sort;
-use crate::common::traits::ApiResource;
+use crate::common::traits::CRUDResource;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -25,9 +25,9 @@ pub async fn get_all<T>(
     State(db): State<DatabaseConnection>,
 ) -> Result<(HeaderMap, Json<Vec<T::ApiModel>>), (StatusCode, String)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Getting all {}", T::RESOURCE_NAME);
+    println!("Getting all {}", T::RESOURCE_NAME_PLURAL);
     let (offset, limit) = parse_range(params.range.clone());
 
     let condition = apply_filters(params.filter.clone(), T::filterable_columns());
@@ -70,9 +70,9 @@ pub async fn get_one<T>(
     Path(id): Path<Uuid>,
 ) -> Result<Json<T::ApiModel>, (StatusCode, Json<String>)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Getting one {}", T::RESOURCE_NAME);
+    println!("Getting one {}", T::RESOURCE_NAME_PLURAL);
     match T::get_one(&db, id).await {
         Ok(item) => Ok(Json(item)),
         Err(DbErr::RecordNotFound(_)) => {
@@ -91,9 +91,9 @@ pub async fn create_one<T>(
     Json(payload): Json<T::CreateModel>,
 ) -> Result<(StatusCode, Json<T::ApiModel>), (StatusCode, Json<String>)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Creating one {}", T::RESOURCE_NAME);
+    println!("Creating one {}", T::RESOURCE_NAME_PLURAL);
     match T::create(&db, payload).await {
         Ok(created_item) => Ok((StatusCode::CREATED, Json(created_item))),
         Err(err) => match err.sql_err() {
@@ -119,9 +119,9 @@ pub async fn update_one<T>(
     Json(payload): Json<T::UpdateModel>,
 ) -> Result<Json<T::ApiModel>, (StatusCode, Json<String>)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Updating one {}", T::RESOURCE_NAME);
+    println!("Updating one {}", T::RESOURCE_NAME_PLURAL);
     match T::update(&db, id, payload).await {
         Ok(updated_item) => Ok(Json(updated_item)),
         Err(DbErr::RecordNotFound(_)) => {
@@ -140,9 +140,9 @@ pub async fn delete_one<T>(
     Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<Uuid>), (StatusCode, Json<String>)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Deleting one {}", T::RESOURCE_NAME);
+    println!("Deleting one {}", T::RESOURCE_NAME_PLURAL);
     match T::delete(&db, id).await {
         Ok(rows_affected) if rows_affected > 0 => Ok((StatusCode::NO_CONTENT, Json(id))),
         Ok(_) => Err((StatusCode::NOT_FOUND, Json("Not Found".to_string()))),
@@ -159,9 +159,9 @@ pub async fn delete_many<T>(
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<(StatusCode, Json<Vec<Uuid>>), (StatusCode, Json<String>)>
 where
-    T: ApiResource,
+    T: CRUDResource,
 {
-    println!("Deleting many {}", T::RESOURCE_NAME);
+    println!("Deleting many {}", T::RESOURCE_NAME_PLURAL);
     match T::delete_many(&db, ids.clone()).await {
         Ok(deleted_ids) => Ok((StatusCode::NO_CONTENT, Json(deleted_ids))),
         Err(_) => Err((
