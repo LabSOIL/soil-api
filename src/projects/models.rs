@@ -1,5 +1,5 @@
 use super::db::{ActiveModel, Model};
-use crate::common::traits::CRUDResource;
+use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use rand::Rng;

@@ -1,5 +1,5 @@
 use super::db::Model;
-use crate::common::traits::CRUDResource;
+use crate::common::crud::traits::CRUDResource;
 use crate::plots::models::PlotSimple;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;

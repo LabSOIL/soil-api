@@ -1,8 +1,8 @@
 use crate::common::crud::models::FilterOptions;
+use crate::common::crud::traits::CRUDResource;
 use crate::common::filter::{apply_filters, parse_range};
 use crate::common::pagination::calculate_content_range;
 use crate::common::sort::generic_sort;
-use crate::common::traits::CRUDResource;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
