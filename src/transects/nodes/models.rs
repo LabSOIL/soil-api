@@ -1,5 +1,5 @@
 use crate::plots::models::PlotSimple;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -10,7 +10,7 @@ pub struct TransectNode {
     pub plot: PlotSimple,
 }
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 pub struct TransectNodeAsPlotWithOrder {
     // A transect node is really a plot with an order value, this is similar to
     // the PlotSimple struct but with an additional order field

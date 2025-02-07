@@ -5,8 +5,12 @@ use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
-use crate::{areas::db::ActiveModel as AreaActiveModel, sensors::models::SensorSimple};
+use crate::{
+    areas::db::ActiveModel as AreaActiveModel,
+    // sensors::models::SensorSimple
+};
 use chrono::NaiveDateTime;
+use crudcrate::{ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
     EntityTrait, NotSet, Order, QueryOrder, Set,
@@ -24,11 +28,17 @@ pub struct Area {
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
+    // #[update = false]
     pub project: Option<Project>,
+    // #[update = false]
     pub soil_profiles: Vec<SoilProfile>,
+    // #[update = false]
     pub plots: Vec<PlotSimple>,
-    pub sensors: Vec<SensorSimple>,
+    // #[update = false]
+    // pub sensors: Vec<SensorSimple>,
+    // #[update = false]
     pub transects: Vec<Transect>,
+    // #[update = false]
     pub geom: Option<Value>,
 }
 
@@ -43,7 +53,7 @@ impl From<Model> for Area {
             project: None,
             soil_profiles: vec![],
             plots: vec![],
-            sensors: vec![],
+            // sensors: vec![],
             transects: vec![],
             geom: None,
         }
@@ -110,7 +120,7 @@ impl CRUDResource for Area {
                 description: model.description,
                 project: Some(project.into()),
                 plots: plots.into_iter().map(Into::into).collect(),
-                sensors: sensors.into_iter().map(Into::into).collect(),
+                // sensors: sensors.into_iter().map(Into::into).collect(),
                 soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
                 transects: transects.into_iter().map(Into::into).collect(),
             };
@@ -155,7 +165,7 @@ impl CRUDResource for Area {
             description: model.description,
             project: Some(project.into()),
             plots: plots.into_iter().map(Into::into).collect(),
-            sensors: sensors.into_iter().map(Into::into).collect(),
+            // sensors: sensors.into_iter().map(Into::into).collect(),
             soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
             transects: transects.into_iter().map(Into::into).collect(),
         };
@@ -280,7 +290,7 @@ impl Area {
             description: obj.description,
             project: Some(project.into()),
             plots: plots.into_iter().map(Into::into).collect(),
-            sensors: sensors.into_iter().map(Into::into).collect(),
+            // sensors: sensors.into_iter().map(Into::into).collect(),
             soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
             transects: transects.into_iter().map(Into::into).collect(),
         };
@@ -348,7 +358,7 @@ impl Area {
                 description: obj.description,
                 project: Some(project.into()),
                 plots: plots.into_iter().map(Into::into).collect(),
-                sensors: sensors.into_iter().map(Into::into).collect(),
+                // sensors: sensors.into_iter().map(Into::into).collect(),
                 soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
                 transects: transects.into_iter().map(Into::into).collect(),
             };
@@ -410,7 +420,7 @@ impl AreaUpdate {
     }
 }
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 pub struct AreaBasicWithProject {
     pub id: Uuid,
     pub name: Option<String>,

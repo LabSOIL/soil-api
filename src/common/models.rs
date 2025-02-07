@@ -11,7 +11,10 @@ pub struct Keycloak {
 
 #[derive(ToSchema, Deserialize, Serialize, Default)]
 pub struct UIConfiguration {
-    pub keycloak: Keycloak,
+    // pub keycloak: Keycloak, // DIsable for now (this is the structure of the BFF)
+    pub clientId: String,
+    pub realm: String,
+    pub url: String,
     pub deployment: String,
 }
 
@@ -19,11 +22,11 @@ impl UIConfiguration {
     pub fn new() -> Self {
         let config: Config = Config::from_env();
         Self {
-            keycloak: Keycloak {
-                client_id: config.keycloak_ui_id,
-                realm: config.keycloak_realm,
-                url: config.keycloak_url,
-            },
+            // keycloak: Keycloak {
+            clientId: config.keycloak_ui_id,
+            realm: config.keycloak_realm,
+            url: config.keycloak_url,
+            // },
             deployment: config.deployment,
         }
     }

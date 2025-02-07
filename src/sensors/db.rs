@@ -10,8 +10,6 @@ pub struct Model {
     pub description: Option<String>,
     pub comment: Option<String>,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     // #[sea_orm(column_type = "custom(\"geometry\")", nullable)]
     // pub geom: Option<String>,

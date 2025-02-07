@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, FromQueryResult)]
+#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
 pub struct PlotSimple {
     pub id: Uuid,
     pub name: String,
@@ -85,7 +85,7 @@ impl PlotSimple {
             .unwrap()
     }
 }
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 pub struct PlotBasicWithAreaAndProject {
     pub id: Uuid,
     pub name: String,
@@ -111,6 +111,7 @@ pub struct Plot {
     coord_y: Option<f64>,
     coord_z: Option<f64>,
     area: Area,
+    samples: Vec<crate::samples::models::PlotSampleBasic>,
 }
 
 #[derive(ToSchema, FromQueryResult, Serialize)]
@@ -175,20 +176,17 @@ impl From<super::db::Model> for Plot {
                 name: None,
                 description: None,
             },
+            samples: vec![],
         }
     }
 }
-
 impl From<(PlotWithCoords, Option<Area>)> for Plot {
     fn from((plot_db, area_db_vec): (PlotWithCoords, Option<Area>)) -> Self {
-        let area = area_db_vec.into_iter().next().map_or(
-            Area {
-                id: Uuid::nil(),
-                name: None,
-                description: None,
-            },
-            Area::from,
-        );
+        let area = area_db_vec.unwrap_or(Area {
+            id: Uuid::nil(),
+            name: None,
+            description: None,
+        });
 
         Plot {
             id: plot_db.id,
@@ -208,9 +206,11 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
             coord_y: plot_db.coord_y,
             coord_z: plot_db.coord_z,
             area,
+            samples: vec![],
         }
     }
 }
+
 #[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
 
 pub struct PlotCreate {
@@ -386,7 +386,7 @@ impl CRUDResource for Plot {
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
         // Call find_also_related BEFORE converting into our custom model.
-        let tuples = Self::EntityType::find()
+        let mut objs: Vec<Plot> = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
@@ -397,19 +397,27 @@ impl CRUDResource for Plot {
             .find_also_related(crate::areas::db::Entity)
             .into_model::<PlotWithCoords, Area>() // Two type parameters
             .all(db)
-            .await?;
-        // Map (PlotWithCoords, Vec<areas::db::Model>) into Plot.
-        let plots = tuples
+            .await
+            .unwrap()
             .into_iter()
-            .map(|(plot_with_coords, area_vec)| {
-                let area_opt = area_vec
-                    .into_iter()
-                    .next()
-                    .map(|area_db| Area::from(area_db));
-                Plot::from((plot_with_coords, area_opt))
-            })
+            .map(|(plot_with_coords, area_vec)| (plot_with_coords, area_vec.into_iter().next()))
+            .map(|(plot_with_coords, area_opt)| Plot::from((plot_with_coords, area_opt)))
             .collect();
-        Ok(plots)
+
+        // For each plot obj, query for the samples, build the model with the samples and area and return
+        // the vector of plots. We have to do this because in order to get the x/y/z coords we need
+        // to cast into a non-db model, and we cannot do two joins in the same query in sea-orm.
+        for plot in objs.iter_mut() {
+            let samples = crate::samples::db::Entity::find()
+                .filter(crate::samples::db::Column::PlotId.eq(plot.id))
+                .into_model::<crate::samples::models::PlotSampleBasic>()
+                .all(db)
+                .await
+                .unwrap();
+            plot.samples = samples;
+        }
+
+        Ok(objs)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {

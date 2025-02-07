@@ -18,7 +18,7 @@ use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
 // ==========================
 // API Model
 // ==========================
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 pub struct Transect {
     pub id: Uuid,
     pub name: Option<String>,

@@ -9,7 +9,7 @@ pub struct FilterOptions {
     pub sort: Option<String>,   // sort in the format '["id", "ASC"]'
 }
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 pub struct GenericNameAndID {
     pub id: Uuid,
     pub name: String,
