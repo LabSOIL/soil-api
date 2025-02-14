@@ -6,7 +6,7 @@ use crudcrate::{ToCreateModel, ToUpdateModel};
 use rand::Rng;
 use sea_orm::{
     entity::prelude::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
-    Order, PaginatorTrait, QueryOrder, QuerySelect,
+    Order, QueryOrder, QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
