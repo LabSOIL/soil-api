@@ -163,6 +163,7 @@ impl CRUDResource for PlotSample {
     type CreateModel = PlotSampleCreate;
     type UpdateModel = PlotSampleUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "plotsample";
     const RESOURCE_NAME_PLURAL: &'static str = "plotsamples";
 

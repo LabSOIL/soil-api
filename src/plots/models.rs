@@ -91,7 +91,6 @@ pub struct PlotBasicWithAreaAndProject {
 pub struct Plot {
     id: Uuid,
     name: String,
-    plot_iterator: i32,
     area_id: Uuid,
     gradient: Gradientchoices,
     vegetation_type: Option<String>,
@@ -116,7 +115,6 @@ pub struct PlotWithCoords {
     // coordinate fields
     id: Uuid,
     name: String,
-    plot_iterator: i32,
     area_id: Uuid,
     gradient: Gradientchoices,
     vegetation_type: Option<String>,
@@ -154,7 +152,6 @@ impl From<super::db::Model> for Plot {
         Plot {
             id: model.id,
             name: model.name,
-            plot_iterator: model.plot_iterator,
             area_id: model.area_id,
             gradient: model.gradient,
             vegetation_type: model.vegetation_type,
@@ -189,7 +186,6 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
         Plot {
             id: plot_db.id,
             name: plot_db.name,
-            plot_iterator: plot_db.plot_iterator,
             area_id: plot_db.area_id,
             gradient: plot_db.gradient,
             vegetation_type: plot_db.vegetation_type,
@@ -248,7 +244,6 @@ impl From<PlotCreate> for super::db::ActiveModel {
             coord_y: ActiveValue::Set(plot.coord_y),
             coord_z: ActiveValue::Set(plot.coord_z),
             coord_srid: ActiveValue::Set(config.srid),
-            plot_iterator: ActiveValue::NotSet,
         }
     }
 }
@@ -380,6 +375,7 @@ impl CRUDResource for Plot {
     type CreateModel = PlotCreate;
     type UpdateModel = PlotUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "plot";
     const RESOURCE_NAME_PLURAL: &'static str = "plots";
 

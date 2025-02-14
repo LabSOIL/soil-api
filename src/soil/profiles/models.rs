@@ -14,7 +14,6 @@ use uuid::Uuid;
 pub struct SoilProfile {
     pub id: Uuid,
     pub name: String,
-    pub profile_iterator: i32,
     pub gradient: String,
     pub description_horizon: Option<Value>,
     pub last_updated: chrono::NaiveDateTime,
@@ -42,7 +41,6 @@ impl From<Model> for SoilProfile {
         Self {
             id: model.id,
             name: model.name,
-            profile_iterator: model.profile_iterator,
             gradient: model.gradient,
             description_horizon: model.description_horizon,
             last_updated: model.last_updated,
@@ -142,7 +140,6 @@ impl SoilProfileBasic {
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct SoilProfileCreate {
     pub name: String,
-    pub profile_iterator: i32,
     pub gradient: String,
     pub description_horizon: Option<Value>,
     pub weather: Option<String>,
@@ -165,7 +162,6 @@ impl From<SoilProfileCreate> for crate::soil::profiles::db::ActiveModel {
             id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
             last_updated: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
             name: sea_orm::ActiveValue::Set(soil_profile.name),
-            profile_iterator: sea_orm::ActiveValue::Set(soil_profile.profile_iterator),
             gradient: sea_orm::ActiveValue::Set(soil_profile.gradient),
             description_horizon: sea_orm::ActiveValue::Set(soil_profile.description_horizon),
             weather: sea_orm::ActiveValue::Set(soil_profile.weather),
@@ -193,12 +189,6 @@ pub struct SoilProfileUpdate {
         with = "::serde_with::rust::double_option"
     )]
     pub name: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub profile_iterator: Option<Option<i32>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -270,9 +260,6 @@ impl SoilProfileUpdate {
         if let Some(opt) = self.name {
             model.name = ActiveValue::Set(opt.unwrap_or_default());
         }
-        if let Some(opt) = self.profile_iterator {
-            model.profile_iterator = ActiveValue::Set(opt.unwrap_or_default());
-        }
         if let Some(opt) = self.gradient {
             model.gradient = ActiveValue::Set(opt.unwrap_or_default());
         }
@@ -321,6 +308,7 @@ impl CRUDResource for SoilProfile {
     type CreateModel = SoilProfileCreate;
     type UpdateModel = SoilProfileUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "soilprofile";
     const RESOURCE_NAME_PLURAL: &'static str = "soilprofiles";
 

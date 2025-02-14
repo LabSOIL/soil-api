@@ -119,6 +119,7 @@ impl CRUDResource for Transect {
     type CreateModel = TransectCreate;
     type UpdateModel = TransectUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "transects";
     const RESOURCE_NAME_SINGULAR: &'static str = "transect";
 
@@ -147,9 +148,6 @@ impl CRUDResource for Transect {
                 // Fetch the plot details for each node
                 let plot: PlotSimple = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
-                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
                     .column_as(
                         Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
                         "longitude",
@@ -158,7 +156,6 @@ impl CRUDResource for Transect {
                         Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
                         "latitude",
                     )
-                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
                     .into_model::<PlotSimple>()
                     .one(db)
                     .await?

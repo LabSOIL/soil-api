@@ -45,6 +45,7 @@ impl CRUDResource for Project {
     type CreateModel = ProjectCreate;
     type UpdateModel = ProjectUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "projects";
     const RESOURCE_NAME_SINGULAR: &'static str = "project";
 

@@ -14,6 +14,7 @@ use uuid::Uuid;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, ToSchema,
 )]
+#[serde(rename_all = "lowercase")]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "gradientchoices")]
 pub enum Gradientchoices {
     #[sea_orm(string_value = "flat")]
@@ -27,7 +28,6 @@ pub enum Gradientchoices {
 pub struct Model {
     #[sea_orm(unique)]
     pub name: String,
-    pub plot_iterator: i32,
     pub area_id: Uuid,
     pub gradient: Gradientchoices,
     pub vegetation_type: Option<String>,
@@ -38,8 +38,6 @@ pub struct Model {
     pub lithology: Option<String>,
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    // pub geom: Option<String>,
-    // pub geom: PointZ,
     pub coord_x: f64,
     pub coord_y: f64,
     pub coord_z: f64,

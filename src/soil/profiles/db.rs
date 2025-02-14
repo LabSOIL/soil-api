@@ -7,7 +7,6 @@ use uuid::Uuid;
 #[sea_orm(table_name = "soilprofile")]
 pub struct Model {
     pub name: String,
-    pub profile_iterator: i32,
     pub gradient: String,
     pub description_horizon: Option<Json>,
     pub weather: Option<String>,

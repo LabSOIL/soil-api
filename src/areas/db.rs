@@ -14,8 +14,6 @@ pub struct Model {
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
-    // #[sea_orm(primary_key)]
-    // pub iterator: i32,
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub last_updated: NaiveDateTime,
