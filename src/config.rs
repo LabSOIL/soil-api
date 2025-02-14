@@ -10,12 +10,13 @@ pub struct Config {
     pub keycloak_url: String,
     pub keycloak_realm: String,
     pub deployment: String,
+    pub srid: i32,
 }
 
 impl Config {
     pub fn from_env() -> Self {
         dotenv().ok(); // Load from .env file if available
-
+        let srid: i32 = 2056;
         let db_url = env::var("DB_URL").ok().or_else(|| {
             Some(format!(
                 "{}://{}:{}@{}:{}/{}",
@@ -36,6 +37,7 @@ impl Config {
             deployment: env::var("DEPLOYMENT")
                 .expect("DEPLOYMENT must be set, this can be local, dev, stage, or prod"),
             db_url,
+            srid,
         };
 
         config

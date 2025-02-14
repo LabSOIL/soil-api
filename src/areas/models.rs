@@ -3,42 +3,41 @@ use crate::common::crud::traits::CRUDResource;
 use crate::plots::models::PlotSimple;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
+use crate::sensors::models::SensorSimple;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
-use crate::{
-    areas::db::ActiveModel as AreaActiveModel,
-    // sensors::models::SensorSimple
-};
 use chrono::NaiveDateTime;
 use crudcrate::{ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    EntityTrait, NotSet, Order, QueryOrder, Set,
+    EntityTrait, Order, QueryOrder,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize)]
-
+#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct Area {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
+    #[crudcrate(update_model = false, on_update = chrono::Utc::now().naive_utc())]
     pub last_updated: NaiveDateTime,
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
-    // #[update = false]
+    #[crudcrate(update_model = false, create_model = false)]
     pub project: Option<Project>,
-    // #[update = false]
+    #[crudcrate(update_model = false, create_model = false)]
     pub soil_profiles: Vec<SoilProfile>,
-    // #[update = false]
+    #[crudcrate(update_model = false, create_model = false)]
     pub plots: Vec<PlotSimple>,
-    // #[update = false]
-    // pub sensors: Vec<SensorSimple>,
-    // #[update = false]
+    #[crudcrate(update_model = false, create_model = false)]
+    pub sensors: Vec<SensorSimple>,
+    #[crudcrate(update_model = false, create_model = false)]
     pub transects: Vec<Transect>,
-    // #[update = false]
+    #[crudcrate(update_model = false, create_model = false)]
     pub geom: Option<Value>,
 }
 
@@ -53,7 +52,7 @@ impl From<Model> for Area {
             project: None,
             soil_profiles: vec![],
             plots: vec![],
-            // sensors: vec![],
+            sensors: vec![],
             transects: vec![],
             geom: None,
         }
@@ -120,7 +119,7 @@ impl CRUDResource for Area {
                 description: model.description,
                 project: Some(project.into()),
                 plots: plots.into_iter().map(Into::into).collect(),
-                // sensors: sensors.into_iter().map(Into::into).collect(),
+                sensors: sensors.into_iter().map(Into::into).collect(),
                 soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
                 transects: transects.into_iter().map(Into::into).collect(),
             };
@@ -165,7 +164,7 @@ impl CRUDResource for Area {
             description: model.description,
             project: Some(project.into()),
             plots: plots.into_iter().map(Into::into).collect(),
-            // sensors: sensors.into_iter().map(Into::into).collect(),
+            sensors: sensors.into_iter().map(Into::into).collect(),
             soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
             transects: transects.into_iter().map(Into::into).collect(),
         };
@@ -178,7 +177,7 @@ impl CRUDResource for Area {
     ) -> Result<Self::ApiModel, DbErr> {
         let active_model: Self::ActiveModelType = create_model.into();
         let inserted = active_model.insert(db).await?;
-        let area = Self::get_one(inserted.id, db.clone()).await;
+        let area = Self::get_one(&db, inserted.id).await.unwrap();
         Ok(area)
     }
 
@@ -195,7 +194,7 @@ impl CRUDResource for Area {
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let area = Self::get_one(response_obj.id, db.clone()).await;
+        let area = Self::get_one(&db, response_obj.id).await?;
         Ok(area)
     }
 
@@ -240,186 +239,6 @@ impl CRUDResource for Area {
     }
 }
 
-impl Area {
-    pub async fn get_one(area_id: Uuid, db: DatabaseConnection) -> Self {
-        let obj = super::db::Entity::find_by_id(area_id)
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        let project = obj
-            .find_related(crate::projects::db::Entity)
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        let plots = obj
-            .find_related(crate::plots::db::Entity)
-            .all(&db)
-            .await
-            .unwrap();
-
-        let sensors = obj
-            .find_related(crate::sensors::db::Entity)
-            .all(&db)
-            .await
-            .unwrap();
-
-        let soil_profiles = obj
-            .find_related(crate::soil::profiles::db::Entity)
-            .all(&db)
-            .await
-            .unwrap();
-
-        let transects = obj
-            .find_related(crate::transects::db::Entity)
-            .all(&db)
-            .await
-            .unwrap();
-
-        let convex_hull = super::services::get_convex_hull(&db, obj.id).await;
-
-        let area = super::models::Area {
-            geom: convex_hull,
-            last_updated: obj.last_updated,
-            project_id: obj.project_id,
-            id: obj.id,
-            name: obj.name,
-            description: obj.description,
-            project: Some(project.into()),
-            plots: plots.into_iter().map(Into::into).collect(),
-            // sensors: sensors.into_iter().map(Into::into).collect(),
-            soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
-            transects: transects.into_iter().map(Into::into).collect(),
-        };
-        area
-    }
-
-    pub async fn get_all(
-        db: DatabaseConnection,
-        condition: Condition,
-        order_column: super::db::Column,
-        order_direction: Order,
-        offset: u64,
-        limit: u64,
-    ) -> Vec<Self> {
-        // let objs = super::db::Entity::find().all(&db).await.unwrap();
-        let objs = super::db::Entity::find()
-            .filter(condition.clone())
-            .order_by(order_column, order_direction)
-            .offset(offset)
-            .limit(limit)
-            .all(&db)
-            .await
-            .unwrap();
-        let mut areas = Vec::new();
-        for obj in objs {
-            let project = obj
-                .find_related(crate::projects::db::Entity)
-                .one(&db)
-                .await
-                .unwrap()
-                .unwrap();
-
-            let plots = obj
-                .find_related(crate::plots::db::Entity)
-                .all(&db)
-                .await
-                .unwrap();
-
-            let sensors = obj
-                .find_related(crate::sensors::db::Entity)
-                .all(&db)
-                .await
-                .unwrap();
-
-            let soil_profiles = obj
-                .find_related(crate::soil::profiles::db::Entity)
-                .all(&db)
-                .await
-                .unwrap();
-
-            let transects = obj
-                .find_related(crate::transects::db::Entity)
-                .all(&db)
-                .await
-                .unwrap();
-
-            let convex_hull = super::services::get_convex_hull(&db, obj.id).await;
-
-            let area = super::models::Area {
-                geom: convex_hull,
-                last_updated: obj.last_updated,
-                project_id: obj.project_id,
-                id: obj.id,
-                name: obj.name,
-                description: obj.description,
-                project: Some(project.into()),
-                plots: plots.into_iter().map(Into::into).collect(),
-                // sensors: sensors.into_iter().map(Into::into).collect(),
-                soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
-                transects: transects.into_iter().map(Into::into).collect(),
-            };
-            areas.push(area);
-        }
-        areas
-    }
-}
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct AreaCreate {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub project_id: Uuid,
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct AreaUpdate {
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub name: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub description: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub project_id: Option<Option<Uuid>>,
-}
-
-impl AreaUpdate {
-    pub fn merge_into_activemodel(self, mut model: AreaActiveModel) -> AreaActiveModel {
-        model.name = match self.name {
-            Some(Some(value)) => Set(Some(value)),
-            Some(_) => NotSet,
-            _ => NotSet,
-        };
-
-        model.description = match self.description {
-            Some(Some(value)) => Set(Some(value)),
-            Some(_) => NotSet,
-            _ => NotSet,
-        };
-
-        model.project_id = match self.project_id {
-            Some(Some(value)) => Set(value),
-            Some(_) => NotSet,
-            _ => NotSet,
-        };
-
-        model
-    }
-}
-
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct AreaBasicWithProject {
     pub id: Uuid,
@@ -450,18 +269,6 @@ impl AreaBasicWithProject {
                 id: project.id,
                 name: project.name,
             },
-        }
-    }
-}
-
-impl From<AreaCreate> for AreaActiveModel {
-    fn from(area_create: AreaCreate) -> Self {
-        AreaActiveModel {
-            name: ActiveValue::Set(area_create.name),
-            description: ActiveValue::Set(area_create.description),
-            project_id: ActiveValue::Set(area_create.project_id),
-            id: ActiveValue::Set(Uuid::new_v4()),
-            last_updated: ActiveValue::NotSet,
         }
     }
 }

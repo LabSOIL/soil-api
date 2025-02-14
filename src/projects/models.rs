@@ -1,20 +1,24 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
+use crudcrate::{ToCreateModel, ToUpdateModel};
 use rand::Rng;
 use sea_orm::{
     entity::prelude::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
-    NotSet, Order, PaginatorTrait, QueryOrder, QuerySelect, Set,
+    Order, PaginatorTrait, QueryOrder, QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+#[derive(ToSchema, Serialize, Deserialize, FromQueryResult, ToUpdateModel, ToCreateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct Project {
     color: String,
+    #[crudcrate(update = false, create = false)]
     last_updated: NaiveDateTime,
     description: Option<String>,
+    #[crudcrate(update = false, create = false)]
     id: Uuid,
     name: String,
 }
@@ -180,54 +184,54 @@ impl Project {
             .collect()
     }
 }
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
-pub struct ProjectCreate {
-    pub color: Option<String>,
-    pub description: Option<String>,
-    pub name: String,
-}
+// #[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+// pub struct ProjectCreate {
+//     pub color: Option<String>,
+//     pub description: Option<String>,
+//     pub name: String,
+// }
 
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
-pub struct ProjectUpdate {
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub color: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub description: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub name: Option<Option<String>>,
-}
+// #[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+// pub struct ProjectUpdate {
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub color: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub description: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub name: Option<Option<String>>,
+// }
 
-impl ProjectUpdate {
-    pub fn merge_into_activemodel(self, mut model: ActiveModel) -> ActiveModel {
-        model.color = match self.color {
-            Some(Some(color)) => Set(color),
-            None => NotSet,
-            _ => NotSet,
-        };
-        model.description = match self.description {
-            Some(description) => Set(description),
-            None => NotSet,
-        };
-        model.name = match self.name {
-            Some(Some(name)) => Set(name),
-            None => NotSet,
-            _ => NotSet,
-        };
-        model
-    }
-}
+// impl ProjectUpdate {
+//     pub fn merge_into_activemodel(self, mut model: ActiveModel) -> ActiveModel {
+//         model.color = match self.color {
+//             Some(Some(color)) => Set(color),
+//             None => NotSet,
+//             _ => NotSet,
+//         };
+//         model.description = match self.description {
+//             Some(description) => Set(description),
+//             None => NotSet,
+//         };
+//         model.name = match self.name {
+//             Some(Some(name)) => Set(name),
+//             None => NotSet,
+//             _ => NotSet,
+//         };
+//         model
+//     }
+// }
 
 #[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
 pub struct ProjectBasic {
@@ -235,19 +239,19 @@ pub struct ProjectBasic {
     pub name: String,
 }
 
-impl From<ProjectCreate> for super::db::ActiveModel {
-    fn from(project: ProjectCreate) -> Self {
-        // If color is not provided, generate a random color
-        let color = project.color.unwrap_or_else(|| {
-            let mut rng = rand::rng();
-            format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
-        });
-        super::db::ActiveModel {
-            color: ActiveValue::set(color),
-            description: ActiveValue::set(project.description),
-            name: ActiveValue::set(project.name),
-            id: ActiveValue::set(Uuid::new_v4()),
-            last_updated: ActiveValue::set(chrono::Utc::now().naive_utc()),
-        }
-    }
-}
+// impl From<ProjectCreate> for super::db::ActiveModel {
+//     fn from(project: ProjectCreate) -> Self {
+//         // If color is not provided, generate a random color
+//         let color = project.color.unwrap_or_else(|| {
+//             let mut rng = rand::rng();
+//             format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
+//         });
+//         super::db::ActiveModel {
+//             color: ActiveValue::set(color),
+//             description: ActiveValue::set(project.description),
+//             name: ActiveValue::set(project.name),
+//             id: ActiveValue::set(Uuid::new_v4()),
+//             last_updated: ActiveValue::set(chrono::Utc::now().naive_utc()),
+//         }
+//     }
+// }

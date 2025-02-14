@@ -3,6 +3,7 @@ use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize)]
 #[sea_orm(table_name = "sensor")]
 pub struct Model {

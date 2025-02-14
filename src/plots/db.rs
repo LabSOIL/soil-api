@@ -40,6 +40,10 @@ pub struct Model {
     pub id: Uuid,
     // pub geom: Option<String>,
     // pub geom: PointZ,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
+    pub coord_srid: i32,
     pub last_updated: NaiveDateTime,
     pub image: Option<String>,
 }

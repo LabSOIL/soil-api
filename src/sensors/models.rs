@@ -1,19 +1,19 @@
-// use super::db::{ActiveModel, Model};
-// use async_trait::async_trait;
-// use sea_orm::sea_query::Expr;
-// use sea_orm::{
-//     entity::prelude::*, query::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition,
-//     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, Order,
-// };
-// use sea_orm::{NotSet, Set};
-// use serde::{Deserialize, Serialize};
-// use utoipa::ToSchema;
-// use uuid::Uuid;
+use super::db::{ActiveModel, Model};
+use crate::areas::models::AreaBasicWithProject;
+use crate::common::crud::traits::CRUDResource;
+use crate::sensors::data::models::SensorData;
+use crate::sensors::db;
+use async_trait::async_trait;
+use sea_orm::sea_query::Expr;
 
-// use crate::areas::models::AreaBasicWithProject;
-// use crate::common::crud::traits::CRUDResource;
-// use crate::sensors::data::models::SensorData;
-// use crate::sensors::db;
+use sea_orm::{
+    entity::prelude::*, query::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition,
+    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, Order,
+};
+use sea_orm::{NotSet, Set};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 // #[derive(ToSchema, Serialize)]
 // pub struct Sensor {
@@ -54,40 +54,40 @@
 //     }
 // }
 
-// #[derive(ToSchema, Serialize, FromQueryResult)]
-// pub struct SensorSimple {
-//     id: Uuid,
-//     name: Option<String>,
-//     serial_number: Option<String>,
-//     manufacturer: Option<String>,
-//     description: Option<String>,
-//     area_id: Uuid,
-//     latitude: Option<f64>,
-//     longitude: Option<f64>,
-//     coord_srid: Option<i32>,
-//     coord_x: Option<f64>,
-//     coord_y: Option<f64>,
-//     coord_z: Option<f64>,
-// }
+#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+pub struct SensorSimple {
+    id: Uuid,
+    name: Option<String>,
+    serial_number: Option<String>,
+    manufacturer: Option<String>,
+    description: Option<String>,
+    area_id: Uuid,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+    coord_srid: Option<i32>,
+    coord_x: Option<f64>,
+    coord_y: Option<f64>,
+    coord_z: Option<f64>,
+}
 
-// impl From<super::db::Model> for SensorSimple {
-//     fn from(model: super::db::Model) -> Self {
-//         Self {
-//             id: model.id,
-//             name: model.name,
-//             serial_number: model.serial_number,
-//             manufacturer: model.manufacturer,
-//             description: model.description,
-//             area_id: model.area_id,
-//             latitude: None,
-//             longitude: None,
-//             coord_srid: None,
-//             coord_x: None,
-//             coord_y: None,
-//             coord_z: None,
-//         }
-//     }
-// }
+impl From<super::db::Model> for SensorSimple {
+    fn from(model: super::db::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            serial_number: model.serial_number,
+            manufacturer: model.manufacturer,
+            description: model.description,
+            area_id: model.area_id,
+            latitude: None,
+            longitude: None,
+            coord_srid: None,
+            coord_x: None,
+            coord_y: None,
+            coord_z: None,
+        }
+    }
+}
 
 // impl SensorSimple {
 //     pub async fn from_area(area: &crate::areas::db::Model, db: &DatabaseConnection) -> Vec<Self> {

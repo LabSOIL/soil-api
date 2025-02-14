@@ -18,9 +18,9 @@ pub struct TransectNodeAsPlotWithOrder {
     pub name: String,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
-    pub coord_srid: Option<i32>,
-    pub coord_x: Option<f64>,
-    pub coord_y: Option<f64>,
-    pub coord_z: Option<f64>,
+    pub coord_srid: i32,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
     pub order: i32,
 }

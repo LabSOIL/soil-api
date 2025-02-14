@@ -54,7 +54,8 @@ axum-keycloak-auth = "0.7.0"
 itertools = "0.14.0"
 async-trait = "0.1.85"
 rand = "0.9.0"
-crudcrate = { path = "./crudcrate" }
+# crudcrate = "0.0.2"
+crudcrate = { path = "crudcrate" }
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }

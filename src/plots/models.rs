@@ -1,14 +1,17 @@
 use super::db::Model;
 use crate::areas;
 use crate::common::crud::traits::CRUDResource;
+use crate::config::Config;
 use crate::plots::db::Gradientchoices;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, FromQueryResult, Order, PaginatorTrait, QueryOrder, QuerySelect,
+    entity::prelude::*,
+    sea_query::{Func, Write},
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    FromQueryResult, Order, PaginatorTrait, QueryOrder, QuerySelect,
 };
 
 use serde::{Deserialize, Serialize};
@@ -21,10 +24,10 @@ pub struct PlotSimple {
     pub name: String,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
-    pub coord_srid: Option<i32>,
-    pub coord_x: Option<f64>,
-    pub coord_y: Option<f64>,
-    pub coord_z: Option<f64>,
+    pub coord_srid: i32,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
 }
 
 impl From<Model> for PlotSimple {
@@ -34,10 +37,10 @@ impl From<Model> for PlotSimple {
             name: model.name,
             latitude: None,
             longitude: None,
-            coord_srid: None,
-            coord_x: None,
-            coord_y: None,
-            coord_z: None,
+            coord_srid: model.coord_srid,
+            coord_x: model.coord_x,
+            coord_y: model.coord_y,
+            coord_z: model.coord_z,
         }
     }
 }
@@ -46,10 +49,6 @@ impl PlotSimple {
     pub async fn from_db(plot: super::db::Model, db: &DatabaseConnection) -> Self {
         let plot = super::db::Entity::find()
             .filter(super::db::Column::Id.eq(plot.id))
-            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
-            .column_as(Expr::cust("ST_SRID(geom)"), "coord_srid")
             .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
             .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
             .into_model::<PlotSimple>()
@@ -73,10 +72,6 @@ impl PlotSimple {
     pub async fn from_area(area: &crate::areas::db::Model, db: &DatabaseConnection) -> Vec<Self> {
         super::db::Entity::find()
             .filter(super::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
-            .column_as(Expr::cust("ST_SRID(geom)"), "coord_srid")
             .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
             .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
             .into_model::<PlotSimple>()
@@ -107,9 +102,10 @@ pub struct Plot {
     lithology: Option<String>,
     last_updated: NaiveDateTime,
     image: Option<String>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
+    coord_x: f64,
+    coord_y: f64,
+    coord_z: f64,
+    coord_srid: i32,
     area: Area,
     samples: Vec<crate::samples::models::PlotSampleBasic>,
 }
@@ -131,9 +127,10 @@ pub struct PlotWithCoords {
     lithology: Option<String>,
     last_updated: NaiveDateTime,
     image: Option<String>,
-    coord_x: Option<f64>,
-    coord_y: Option<f64>,
-    coord_z: Option<f64>,
+    coord_x: f64,
+    coord_y: f64,
+    coord_z: f64,
+    coord_srid: i32,
 }
 #[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct Area {
@@ -168,9 +165,10 @@ impl From<super::db::Model> for Plot {
             lithology: model.lithology,
             last_updated: model.last_updated,
             image: model.image,
-            coord_x: None,
-            coord_y: None,
-            coord_z: None,
+            coord_x: model.coord_x,
+            coord_y: model.coord_y,
+            coord_z: model.coord_z,
+            coord_srid: model.coord_srid,
             area: Area {
                 id: Uuid::nil(),
                 name: None,
@@ -205,6 +203,7 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
             coord_x: plot_db.coord_x,
             coord_y: plot_db.coord_y,
             coord_z: plot_db.coord_z,
+            coord_srid: plot_db.coord_srid,
             area,
             samples: vec![],
         }
@@ -223,10 +222,14 @@ pub struct PlotCreate {
     pub weather: Option<String>,
     pub lithology: Option<String>,
     pub image: Option<String>,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
 }
 
 impl From<PlotCreate> for super::db::ActiveModel {
     fn from(plot: PlotCreate) -> Self {
+        let config = Config::from_env();
         let now = chrono::Utc::now().naive_utc();
         super::db::ActiveModel {
             id: ActiveValue::Set(Uuid::new_v4()),
@@ -241,8 +244,11 @@ impl From<PlotCreate> for super::db::ActiveModel {
             image: ActiveValue::Set(plot.image),
             created_on: ActiveValue::Set(Some(chrono::Utc::now().date_naive())),
             last_updated: ActiveValue::Set(now),
+            coord_x: ActiveValue::Set(plot.coord_x),
+            coord_y: ActiveValue::Set(plot.coord_y),
+            coord_z: ActiveValue::Set(plot.coord_z),
+            coord_srid: ActiveValue::Set(config.srid),
             plot_iterator: ActiveValue::NotSet,
-            // Assuming geom is managed separately
         }
     }
 }
@@ -391,9 +397,6 @@ impl CRUDResource for Plot {
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
-            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
             .find_also_related(crate::areas::db::Entity)
             .into_model::<PlotWithCoords, Area>() // Two type parameters
             .all(db)
@@ -423,9 +426,6 @@ impl CRUDResource for Plot {
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let tuple_opt = Self::EntityType::find()
             .filter(super::db::Column::Id.eq(id))
-            .column_as(Expr::cust("ST_X(geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(geom)"), "coord_z")
             .find_also_related(crate::areas::db::Entity)
             .into_model::<PlotWithCoords, Area>() // Two type parameters
             .one(db)

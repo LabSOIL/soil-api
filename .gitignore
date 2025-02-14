@@ -39,3 +39,5 @@ release/
 
 # If using Clippy, ignore these files
 .clippy.json
+crudcrate
+expand.rs
