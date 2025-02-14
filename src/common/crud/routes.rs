@@ -29,7 +29,7 @@ where
     println!("Getting all {}", T::RESOURCE_NAME_PLURAL);
     let (offset, limit) = parse_range(params.range.clone());
 
-    let condition = apply_filters(params.filter.clone(), T::filterable_columns());
+    let condition = apply_filters(params.filter.clone(), &T::filterable_columns());
 
     let (order_column, order_direction) = generic_sort(
         params.sort.clone(),

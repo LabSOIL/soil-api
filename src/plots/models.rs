@@ -8,10 +8,8 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    entity::prelude::*,
-    sea_query::{Func, Write},
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
-    FromQueryResult, Order, PaginatorTrait, QueryOrder, QuerySelect,
+    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
+    DbErr, EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect,
 };
 
 use serde::{Deserialize, Serialize};
@@ -462,41 +460,16 @@ impl CRUDResource for Plot {
         Self::get_one(db, updated.id).await
     }
 
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
-        Ok(res.rows_affected as usize)
-    }
-
-    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
-        Self::EntityType::delete_many()
-            .filter(super::db::Column::Id.is_in(ids.clone()))
-            .exec(db)
-            .await?;
-        Ok(ids)
-    }
-
-    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-        Self::EntityType::find()
-            .filter(condition)
-            .count(db)
-            .await
-            .unwrap_or(0)
-    }
-
-    fn default_index_column() -> Self::ColumnType {
-        super::db::Column::Id
-    }
-
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
             ("last_updated", super::db::Column::LastUpdated),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
             ("area_id", super::db::Column::AreaId),

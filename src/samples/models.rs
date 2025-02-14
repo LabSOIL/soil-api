@@ -1,5 +1,4 @@
 use crate::common::crud::traits::CRUDResource;
-use crate::plots::models::PlotBasicWithAreaAndProject;
 use async_trait::async_trait;
 use crudcrate::{ToCreateModel, ToUpdateModel};
 use sea_orm::{
@@ -17,7 +16,11 @@ pub struct PlotSample {
     pub id: Uuid,
     #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
     pub created_on: Option<chrono::NaiveDate>,
-    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc(),on_update = chrono::Utc::now().naive_utc())]
+    #[crudcrate(
+        update_model = false, create_model = false,
+        on_create = chrono::Utc::now().naive_utc(),
+        on_update = chrono::Utc::now().naive_utc()
+    )]
     pub last_updated: chrono::NaiveDateTime,
     pub name: String,
     pub upper_depth_cm: f64,
@@ -380,15 +383,15 @@ impl CRUDResource for PlotSample {
         crate::samples::db::Column::Id
     }
 
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", crate::samples::db::Column::Id),
             ("name", crate::samples::db::Column::Name),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", crate::samples::db::Column::Id),
             ("name", crate::samples::db::Column::Name),
             ("plot_id", crate::samples::db::Column::PlotId),

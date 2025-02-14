@@ -325,9 +325,6 @@ impl CRUDResource for SoilProfile {
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
-            .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
             .column_as(
                 Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
                 "longitude",
@@ -346,9 +343,6 @@ impl CRUDResource for SoilProfile {
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let profile = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
-            .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
             .column_as(
                 Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
                 "longitude",
@@ -390,41 +384,16 @@ impl CRUDResource for SoilProfile {
         Self::get_one(db, updated.id).await
     }
 
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
-        Ok(res.rows_affected as usize)
-    }
-
-    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
-        Self::EntityType::delete_many()
-            .filter(Self::ColumnType::Id.is_in(ids.clone()))
-            .exec(db)
-            .await?;
-        Ok(ids)
-    }
-
-    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-        Self::EntityType::find()
-            .filter(condition)
-            .count(db)
-            .await
-            .unwrap_or(0)
-    }
-
-    fn default_index_column() -> Self::ColumnType {
-        Self::ColumnType::Id
-    }
-
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("area_id", Self::ColumnType::AreaId),

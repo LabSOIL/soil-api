@@ -286,16 +286,16 @@ impl CRUDResource for Transect {
         Self::ColumnType::Id
     }
 
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("area_id", Self::ColumnType::AreaId),

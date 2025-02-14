@@ -183,41 +183,16 @@ impl CRUDResource for SoilType {
         Self::get_one(db, updated.id).await
     }
 
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
-        Ok(res.rows_affected as usize)
-    }
-
-    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
-        Self::EntityType::delete_many()
-            .filter(Self::ColumnType::Id.is_in(ids.clone()))
-            .exec(db)
-            .await?;
-        Ok(ids)
-    }
-
-    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-        Self::EntityType::find()
-            .filter(condition)
-            .count(db)
-            .await
-            .unwrap_or(0)
-    }
-
-    fn default_index_column() -> Self::ColumnType {
-        Self::ColumnType::Id
-    }
-
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
         ]

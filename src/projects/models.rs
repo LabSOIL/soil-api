@@ -14,11 +14,17 @@ use uuid::Uuid;
 #[derive(ToSchema, Serialize, Deserialize, FromQueryResult, ToUpdateModel, ToCreateModel)]
 #[active_model = "super::db::ActiveModel"]
 pub struct Project {
+    #[crudcrate(on_create = generate_random_color())]
     color: String,
-    #[crudcrate(update = false, create = false)]
+    #[crudcrate(
+        create_model = false,
+        update_model = false,
+        on_create = chrono::Utc::now().naive_utc(),
+        on_update = chrono::Utc::now().naive_utc()
+    )]
     last_updated: NaiveDateTime,
     description: Option<String>,
-    #[crudcrate(update = false, create = false)]
+    #[crudcrate(update_model = false, update_model = false, on_create = Uuid::new_v4())]
     id: Uuid,
     name: String,
 }
@@ -135,8 +141,8 @@ impl CRUDResource for Project {
         Self::ColumnType::Id
     }
 
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
@@ -145,8 +151,8 @@ impl CRUDResource for Project {
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
@@ -240,13 +246,13 @@ pub struct ProjectBasic {
     pub name: String,
 }
 
+fn generate_random_color() -> String {
+    let mut rng = rand::rng();
+    format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
+}
 // impl From<ProjectCreate> for super::db::ActiveModel {
 //     fn from(project: ProjectCreate) -> Self {
 //         // If color is not provided, generate a random color
-//         let color = project.color.unwrap_or_else(|| {
-//             let mut rng = rand::rng();
-//             format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
-//         });
 //         super::db::ActiveModel {
 //             color: ActiveValue::set(color),
 //             description: ActiveValue::set(project.description),

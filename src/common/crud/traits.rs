@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use sea_orm::{
     entity::prelude::*, Condition, DatabaseConnection, EntityTrait, Order, PaginatorTrait,
-    QuerySelect, QueryTrait,
 };
 use uuid::Uuid;
 
@@ -45,9 +44,6 @@ where
         update_model: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr>;
 
-    // async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr>;
-    // async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr>;
-
     async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
         let res = <Self::EntityType as EntityTrait>::delete_by_id(id)
             .exec(db)
@@ -63,34 +59,22 @@ where
         Ok(ids)
     }
 
-    // async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64;
-    // async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-    //     Self::EntityType::find()
-    //         .filter(condition)
-    //         .count(db)
-    //         .await
-    //         .unwrap()
-    // }
     async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
         let query = <Self::EntityType as EntityTrait>::find().filter(condition);
-        // .into();
         PaginatorTrait::count(query, db).await.unwrap()
-        // <Self::EntityType as PaginatorTrait>::count(query, db)
-        // .await
-        // .unwrap()
     }
 
-    // async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-    //     // Explicitly annotate the query type so that the compiler knows which method to use.
-    //     let query: sea_orm::Select<Self::EntityType> =
-    //         <Self::EntityType as EntityTrait>::find().filter(condition);
-    //     // Fully qualify the call to use QuerySelect::count (which consumes `query`)
-    //     <sea_orm::Select<Self::EntityType> as PaginatorTrait<Self::EntityType>>::count(query, db)
-    //         .await
-    //         .unwrap()
-    // }
+    fn default_index_column() -> Self::ColumnType {
+        // Default to the ID column
+        Self::ID_COLUMN
+    }
 
-    fn default_index_column() -> Self::ColumnType;
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)];
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)];
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        // Default sort at least for the ID column
+        vec![("id", Self::ID_COLUMN)]
+    }
+
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![("id", Self::ID_COLUMN)]
+    }
 }

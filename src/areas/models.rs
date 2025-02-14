@@ -63,13 +63,13 @@ impl From<Model> for Area {
 impl CRUDResource for Area {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
     type ApiModel = Area;
     type CreateModel = AreaCreate;
     type UpdateModel = AreaUpdate;
 
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "areas";
     const RESOURCE_NAME_SINGULAR: &'static str = "area";
 
@@ -204,35 +204,19 @@ impl CRUDResource for Area {
         Ok(res.rows_affected as usize)
     }
 
-    // async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
-    //     Self::EntityType::delete_many()
-    //         .filter(Self::ColumnType::Id.is_in(ids.clone()))
-    //         .exec(db)
-    //         .await?;
-    //     Ok(ids)
-    // }
-
-    // async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-    //     Self::EntityType::find()
-    //         .filter(condition)
-    //         .count(db)
-    //         .await
-    //         .unwrap()
-    // }
-
     fn default_index_column() -> Self::ColumnType {
         super::db::Column::Id
     }
 
-    fn sortable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
         ]
     }
 
-    fn filterable_columns<'a>() -> &'a [(&'a str, Self::ColumnType)] {
-        &[
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
             ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
             ("project_id", super::db::Column::ProjectId),
