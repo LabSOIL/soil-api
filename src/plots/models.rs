@@ -6,7 +6,8 @@ use crate::plots::db::Gradientchoices;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use sea_orm::sea_query::Expr;
+use crudcrate::ToCreateModel;
+use crudcrate::ToUpdateModel;
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
     DbErr, EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect,
@@ -43,41 +44,6 @@ impl From<Model> for PlotSimple {
     }
 }
 
-impl PlotSimple {
-    pub async fn from_db(plot: super::db::Model, db: &DatabaseConnection) -> Self {
-        let plot = super::db::Entity::find()
-            .filter(super::db::Column::Id.eq(plot.id))
-            .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
-            .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
-            .into_model::<PlotSimple>()
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        PlotSimple {
-            id: plot.id,
-            name: plot.name,
-            latitude: plot.latitude,
-            longitude: plot.longitude,
-            coord_srid: plot.coord_srid,
-            coord_x: plot.coord_x,
-            coord_y: plot.coord_y,
-            coord_z: plot.coord_z,
-        }
-    }
-
-    pub async fn from_area(area: &crate::areas::db::Model, db: &DatabaseConnection) -> Vec<Self> {
-        super::db::Entity::find()
-            .filter(super::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(st_transform(geom, 4326))"), "longitude")
-            .column_as(Expr::cust("ST_Y(st_transform(geom, 4326))"), "latitude")
-            .into_model::<PlotSimple>()
-            .all(db)
-            .await
-            .unwrap()
-    }
-}
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct PlotBasicWithAreaAndProject {
     pub id: Uuid,
@@ -85,8 +51,11 @@ pub struct PlotBasicWithAreaAndProject {
     pub area: crate::areas::models::AreaBasicWithProject,
 }
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel)]
+#[active_model = "super::db::ActiveModel"]
+
 pub struct Plot {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     id: Uuid,
     name: String,
     area_id: Uuid,
@@ -97,13 +66,17 @@ pub struct Plot {
     created_on: Option<NaiveDate>,
     weather: Option<String>,
     lithology: Option<String>,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     last_updated: NaiveDateTime,
     image: Option<String>,
     coord_x: f64,
     coord_y: f64,
     coord_z: f64,
+    #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     coord_srid: i32,
+    #[crudcrate(update_model = false, create_model = false)]
     area: Area,
+    #[crudcrate(update_model = false, create_model = false)]
     samples: Vec<crate::samples::models::PlotSampleBasic>,
 }
 
@@ -204,165 +177,6 @@ impl From<(PlotWithCoords, Option<Area>)> for Plot {
     }
 }
 
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
-
-pub struct PlotCreate {
-    pub name: String,
-    pub area_id: Uuid,
-    pub gradient: Gradientchoices,
-    pub vegetation_type: Option<String>,
-    pub topography: Option<String>,
-    pub aspect: Option<String>,
-    pub weather: Option<String>,
-    pub lithology: Option<String>,
-    pub image: Option<String>,
-    pub coord_x: f64,
-    pub coord_y: f64,
-    pub coord_z: f64,
-}
-
-impl From<PlotCreate> for super::db::ActiveModel {
-    fn from(plot: PlotCreate) -> Self {
-        let config = Config::from_env();
-        let now = chrono::Utc::now().naive_utc();
-        super::db::ActiveModel {
-            id: ActiveValue::Set(Uuid::new_v4()),
-            name: ActiveValue::Set(plot.name),
-            area_id: ActiveValue::Set(plot.area_id),
-            gradient: ActiveValue::Set(plot.gradient),
-            vegetation_type: ActiveValue::Set(plot.vegetation_type),
-            topography: ActiveValue::Set(plot.topography),
-            aspect: ActiveValue::Set(plot.aspect),
-            weather: ActiveValue::Set(plot.weather),
-            lithology: ActiveValue::Set(plot.lithology),
-            image: ActiveValue::Set(plot.image),
-            created_on: ActiveValue::Set(Some(chrono::Utc::now().date_naive())),
-            last_updated: ActiveValue::Set(now),
-            coord_x: ActiveValue::Set(plot.coord_x),
-            coord_y: ActiveValue::Set(plot.coord_y),
-            coord_z: ActiveValue::Set(plot.coord_z),
-            coord_srid: ActiveValue::Set(config.srid),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
-pub struct PlotUpdate {
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub name: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub area_id: Option<Option<Uuid>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub gradient: Option<Option<Gradientchoices>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub vegetation_type: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub topography: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub aspect: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub weather: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub lithology: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub image: Option<Option<String>>,
-}
-
-impl PlotUpdate {
-    pub fn merge_into_activemodel(
-        self,
-        mut model: super::db::ActiveModel,
-    ) -> super::db::ActiveModel {
-        model.name = match self.name {
-            Some(Some(name)) => ActiveValue::Set(name),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.area_id = match self.area_id {
-            Some(Some(area_id)) => ActiveValue::Set(area_id),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.gradient = match self.gradient {
-            Some(Some(gradient)) => ActiveValue::Set(gradient),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.vegetation_type = match self.vegetation_type {
-            Some(Some(vegetation_type)) => ActiveValue::Set(Some(vegetation_type)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.topography = match self.topography {
-            Some(Some(topography)) => ActiveValue::Set(Some(topography)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.aspect = match self.aspect {
-            Some(Some(aspect)) => ActiveValue::Set(Some(aspect)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.weather = match self.weather {
-            Some(Some(weather)) => ActiveValue::Set(Some(weather)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.lithology = match self.lithology {
-            Some(Some(lithology)) => ActiveValue::Set(Some(lithology)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.image = match self.image {
-            Some(Some(image)) => ActiveValue::Set(Some(image)),
-            None => ActiveValue::NotSet,
-            _ => ActiveValue::NotSet,
-        };
-        model.last_updated = ActiveValue::Set(chrono::Utc::now().naive_utc());
-
-        model
-    }
-}
-
-// ---------------------------------------------------------------------------
-// CRUDResource Implementation for Plot
-// ---------------------------------------------------------------------------
 #[async_trait]
 impl CRUDResource for Plot {
     type EntityType = super::db::Entity;
@@ -433,15 +247,6 @@ impl CRUDResource for Plot {
         } else {
             Err(DbErr::RecordNotFound("Plot not found".into()))
         }
-    }
-
-    async fn create(
-        db: &DatabaseConnection,
-        create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
-        let active_model: Self::ActiveModelType = create_model.into();
-        let inserted = active_model.insert(db).await?;
-        Self::get_one(db, inserted.id).await
     }
 
     async fn update(

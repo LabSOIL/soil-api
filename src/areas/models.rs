@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub struct Area {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, on_update = chrono::Utc::now().naive_utc())]
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: NaiveDateTime,
     pub name: Option<String>,
     pub description: Option<String>,
