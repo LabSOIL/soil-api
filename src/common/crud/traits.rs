@@ -1,21 +1,28 @@
 use async_trait::async_trait;
 use sea_orm::{
-    entity::prelude::*, Condition, DatabaseConnection, EntityTrait, Order, PaginatorTrait,
+    entity::prelude::*, Condition, DatabaseConnection, EntityTrait, IntoActiveModel, Order,
+    PaginatorTrait,
 };
 use uuid::Uuid;
 
 #[async_trait]
 pub trait CRUDResource: Sized + Send + Sync
 where
+    Self::EntityType: EntityTrait + Sync,
+    Self::ActiveModelType: ActiveModelTrait + ActiveModelBehavior + Send + Sync,
     <Self::EntityType as EntityTrait>::Model: Sync,
     <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: From<uuid::Uuid>,
+    <<Self::ActiveModelType as ActiveModelTrait>::Entity as EntityTrait>::Model:
+        IntoActiveModel<Self::ActiveModelType> + Send + Sync,
+    <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: Into<Uuid>,
+    <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: Into<Uuid>,
 {
     type EntityType: EntityTrait + Sync;
     type ColumnType: ColumnTrait + std::fmt::Debug;
     type ModelType: ModelTrait;
-    type ActiveModelType: sea_orm::ActiveModelTrait;
+    type ActiveModelType: sea_orm::ActiveModelTrait<Entity = Self::EntityType>;
     type ApiModel: From<Self::ModelType>;
-    type CreateModel: Into<Self::ActiveModelType>;
+    type CreateModel: Into<Self::ActiveModelType> + Send;
     type UpdateModel: Send + Sync;
 
     const ID_COLUMN: Self::ColumnType;
@@ -33,11 +40,32 @@ where
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr>;
 
+    // async fn create(
+    //     db: &DatabaseConnection,
+    //     create_model: Self::CreateModel,
+    // ) -> Result<Self::ApiModel, DbErr>;
+
+    // async fn create(
+    //     db: &DatabaseConnection,
+    //     create_model: Self::CreateModel,
+    // ) -> Result<Self::ApiModel, DbErr> {
+    //     let active_model: Self::ActiveModelType = create_model.into();
+    //     let inserted = active_model.insert(db).await?;
+    //     let new_id: Uuid = inserted.id;
+    //     let obj = Self::get_one(&db, new_id).await.unwrap();
+    //     Ok(obj)
+    // }
     async fn create(
         db: &DatabaseConnection,
         create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr>;
-
+    ) -> Result<Self::ApiModel, DbErr> {
+        let active_model: Self::ActiveModelType = create_model.into();
+        let result = Self::EntityType::insert(active_model).exec(db).await?;
+        // Convert the last_insert_id into a Uuid:
+        let new_id: Uuid = result.last_insert_id.into();
+        let obj = Self::get_one(db, new_id).await.unwrap();
+        Ok(obj)
+    }
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
