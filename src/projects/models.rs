@@ -84,19 +84,6 @@ impl CRUDResource for Project {
         Ok(Self::ApiModel::from(model))
     }
 
-    async fn create(
-        db: &DatabaseConnection,
-        create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
-        let active_model: Self::ActiveModelType = create_model.into();
-        let inserted = active_model.insert(db).await?;
-        Self::get_one(inserted.id, db)
-            .await
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))
-    }
-
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
@@ -113,32 +100,6 @@ impl CRUDResource for Project {
         let updated_model = update_model.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
         Ok(Self::ApiModel::from(updated))
-    }
-
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
-        Ok(res.rows_affected as usize)
-    }
-
-    async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
-        Self::EntityType::delete_many()
-            .filter(Self::ColumnType::Id.is_in(ids.clone()))
-            .exec(db)
-            .await?;
-        Ok(ids)
-    }
-
-    async fn total_count(db: &DatabaseConnection, condition: Condition) -> u64 {
-        Self::EntityType::find()
-            .filter(condition)
-            .select_only()
-            .count(db)
-            .await
-            .unwrap_or(0)
-    }
-
-    fn default_index_column() -> Self::ColumnType {
-        Self::ColumnType::Id
     }
 
     fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {

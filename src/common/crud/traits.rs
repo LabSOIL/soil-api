@@ -12,8 +12,8 @@ where
     Self::ActiveModelType: ActiveModelTrait + ActiveModelBehavior + Send + Sync,
     <Self::EntityType as EntityTrait>::Model: Sync,
     <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: From<uuid::Uuid>,
-    <<Self::ActiveModelType as ActiveModelTrait>::Entity as EntityTrait>::Model:
-        IntoActiveModel<Self::ActiveModelType> + Send + Sync,
+    // <<Self::ActiveModelType as ActiveModelTrait>::Entity as EntityTrait>::Model:
+    //     IntoActiveModel<Self::ActiveModelType> + Send + Sync,
     <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: Into<Uuid>,
     <<Self::EntityType as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType: Into<Uuid>,
 {
@@ -40,31 +40,18 @@ where
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr>;
 
-    // async fn create(
-    //     db: &DatabaseConnection,
-    //     create_model: Self::CreateModel,
-    // ) -> Result<Self::ApiModel, DbErr>;
-
-    // async fn create(
-    //     db: &DatabaseConnection,
-    //     create_model: Self::CreateModel,
-    // ) -> Result<Self::ApiModel, DbErr> {
-    //     let active_model: Self::ActiveModelType = create_model.into();
-    //     let inserted = active_model.insert(db).await?;
-    //     let new_id: Uuid = inserted.id;
-    //     let obj = Self::get_one(&db, new_id).await.unwrap();
-    //     Ok(obj)
-    // }
     async fn create(
         db: &DatabaseConnection,
         create_model: Self::CreateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         let active_model: Self::ActiveModelType = create_model.into();
         let result = Self::EntityType::insert(active_model).exec(db).await?;
-        // Convert the last_insert_id into a Uuid:
-        let new_id: Uuid = result.last_insert_id.into();
-        let obj = Self::get_one(db, new_id).await.unwrap();
-        Ok(obj)
+        match Self::get_one(db, result.last_insert_id.into()).await {
+            Ok(obj) => Ok(obj),
+            Err(_) => Err(DbErr::RecordNotFound(
+                format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
+            )),
+        }
     }
     async fn update(
         db: &DatabaseConnection,
