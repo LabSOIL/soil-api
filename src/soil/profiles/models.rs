@@ -34,10 +34,8 @@ pub struct SoilProfile {
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
     pub parent_material: Option<f64>,
-    #[crudcrate(update_model = false, create_model = false)]
-    pub latitude: Option<f64>,
-    #[crudcrate(update_model = false, create_model = false)]
-    pub longitude: Option<f64>,
+    pub latitude: f64,
+    pub longitude: f64,
     pub coord_srid: i32,
     pub coord_x: f64,
     pub coord_y: f64,
@@ -63,8 +61,8 @@ impl From<Model> for SoilProfile {
             soil_diagram: model.soil_diagram,
             photo: model.photo,
             parent_material: model.parent_material,
-            latitude: None,
-            longitude: None,
+            latitude: model.latitude,
+            longitude: model.longitude,
             coord_srid: model.coord_srid,
             coord_x: model.coord_x,
             coord_y: model.coord_y,
@@ -73,43 +71,43 @@ impl From<Model> for SoilProfile {
     }
 }
 
-impl SoilProfile {
-    pub async fn from_area(
-        area: &crate::areas::db::Model,
-        db: &DatabaseConnection,
-    ) -> Vec<SoilProfile> {
-        super::db::Entity::find()
-            .filter(super::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
-            .column_as(
-                Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<SoilProfile>()
-            .all(db)
-            .await
-            .unwrap()
-    }
-    pub async fn from_db(
-        soil_profile: crate::soil::profiles::db::Model,
-        db: &DatabaseConnection,
-    ) -> Self {
-        crate::soil::profiles::db::Entity::find()
-            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
-            .into_model::<SoilProfile>()
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap()
-    }
-}
+// impl SoilProfile {
+//     pub async fn from_area(
+//         area: &crate::areas::db::Model,
+//         db: &DatabaseConnection,
+//     ) -> Vec<SoilProfile> {
+//         super::db::Entity::find()
+//             .filter(super::db::Column::AreaId.eq(area.id))
+//             .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
+//             .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
+//             .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
+//             .column_as(
+//                 Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
+//                 "longitude",
+//             )
+//             .column_as(
+//                 Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
+//                 "latitude",
+//             )
+//             .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
+//             .into_model::<SoilProfile>()
+//             .all(db)
+//             .await
+//             .unwrap()
+//     }
+//     pub async fn from_db(
+//         soil_profile: crate::soil::profiles::db::Model,
+//         db: &DatabaseConnection,
+//     ) -> Self {
+//         crate::soil::profiles::db::Entity::find()
+//             .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
+//             .into_model::<SoilProfile>()
+//             .one(db)
+//             .await
+//             .unwrap()
+//             .unwrap()
+//     }
+// }
 
 // #[derive(ToSchema, Serialize, Deserialize)]
 // pub struct SoilProfileBasic {
@@ -328,42 +326,26 @@ impl CRUDResource for SoilProfile {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
-        let profiles = Self::EntityType::find()
+        let profiles: Vec<SoilProfile> = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
-            .column_as(
-                Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<SoilProfile>()
             .all(db)
-            .await?;
+            .await?
+            .into_iter()
+            .map(|model| model.into())
+            .collect();
         Ok(profiles)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
-        let profile = Self::EntityType::find()
+        let profile: SoilProfile = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
-            .column_as(
-                Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<SoilProfile>()
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?;
+            .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?
+            .into();
         Ok(profile)
     }
 
