@@ -1,6 +1,7 @@
 use super::db::Model;
 use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
+use crudcrate::{ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
     DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
@@ -9,11 +10,14 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct SoilType {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
-    pub name: Option<String>,
+    pub name: String,
     pub description: String,
     pub image: Option<String>,
 }
@@ -23,86 +27,11 @@ impl From<Model> for SoilType {
         Self {
             id: model.id,
             last_updated: model.last_updated,
-            name: Some(model.name),
+            name: model.name,
             description: model.description,
             image: model.image,
         }
     }
-}
-
-impl From<Model> for SoilTypeBasic {
-    fn from(model: Model) -> Self {
-        Self {
-            id: model.id,
-            last_updated: model.last_updated,
-            name: Some(model.name),
-            description: model.description,
-        }
-    }
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilTypeBasic {
-    pub id: Uuid,
-    pub last_updated: chrono::NaiveDateTime,
-    pub name: Option<String>,
-    pub description: String,
-}
-
-impl SoilType {
-    pub async fn from_db(
-        soil_type: crate::soil::types::db::Model,
-        db: &DatabaseConnection,
-    ) -> Self {
-        let soil_type = crate::soil::types::db::Entity::find()
-            .filter(crate::soil::types::db::Column::Id.eq(soil_type.id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
-        SoilType::from(soil_type)
-    }
-}
-
-impl SoilTypeBasic {
-    pub async fn from_db(
-        soil_type: crate::soil::types::db::Model,
-        db: &DatabaseConnection,
-    ) -> Self {
-        let soil_type = crate::soil::types::db::Entity::find()
-            .filter(crate::soil::types::db::Column::Id.eq(soil_type.id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
-        SoilTypeBasic::from(soil_type)
-    }
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilTypeCreate {
-    pub name: String,
-    pub description: String,
-    pub image: Option<String>,
-}
-
-impl From<SoilTypeCreate> for crate::soil::types::db::ActiveModel {
-    fn from(soil_type: SoilTypeCreate) -> Self {
-        crate::soil::types::db::ActiveModel {
-            id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
-            last_updated: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
-            name: sea_orm::ActiveValue::Set(soil_type.name),
-            description: sea_orm::ActiveValue::Set(soil_type.description),
-            image: sea_orm::ActiveValue::Set(soil_type.image),
-        }
-    }
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilTypeUpdate {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub image: Option<String>,
 }
 
 #[async_trait]
@@ -146,41 +75,23 @@ impl CRUDResource for SoilType {
         Ok(SoilType::from(model))
     }
 
-    async fn create(
-        db: &DatabaseConnection,
-        create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
-        let active_model: Self::ActiveModelType = create_model.into();
-        let inserted = active_model.insert(db).await?;
-        Self::get_one(db, inserted.id).await
-    }
-
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
-        // Find the existing model
-        let existing: Self::ActiveModelType = Self::EntityType::find()
-            .filter(Self::ColumnType::Id.eq(id))
+        let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Soil type not found".into()))?
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+            ))?
             .into();
-        // Merge update fields (only update if provided)
-        let mut active: Self::ActiveModelType = existing;
-        if let Some(name) = update_model.name {
-            active.name = ActiveValue::Set(name);
-        }
-        if let Some(description) = update_model.description {
-            active.description = ActiveValue::Set(description);
-        }
-        if let Some(image) = update_model.image {
-            active.image = ActiveValue::Set(Some(image));
-        }
-        active.last_updated = ActiveValue::Set(chrono::Utc::now().naive_utc());
-        let updated = active.update(db).await?;
-        Self::get_one(db, updated.id).await
+
+        let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
+        let response_obj = updated_obj.update(db).await?;
+        let obj = Self::get_one(&db, response_obj.id).await?;
+        Ok(obj)
     }
 
     fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
