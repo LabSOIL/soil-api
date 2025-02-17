@@ -1,4 +1,5 @@
 use axum::Router;
+use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use soil_api_rust::common::views::{get_ui_config, healthz};
 use soil_api_rust::{
@@ -31,6 +32,11 @@ async fn main() {
     } else {
         println!("Could not connect to the database");
     }
+
+    // Run migrations
+    Migrator::up(&db, None)
+        .await
+        .expect("Failed to run migrations");
 
     // Build the router with routes from the plots module
     let app = Router::new()

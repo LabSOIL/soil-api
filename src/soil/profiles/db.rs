@@ -23,8 +23,6 @@ pub struct Model {
     pub coord_x: f64,
     pub coord_y: f64,
     pub coord_z: f64,
-    pub latitude: f64,
-    pub longitude: f64,
     pub last_updated: NaiveDateTime,
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
