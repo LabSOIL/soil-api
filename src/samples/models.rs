@@ -57,7 +57,7 @@ pub struct PlotSample {
     pub methanotrophs_per_g: Option<f64>,
     pub replicate: i32,
     #[crudcrate(update_model = false, create_model = false)]
-    pub plot: crate::plots::models::PlotBasicWithAreaAndProject,
+    pub plot: Option<crate::plots::models::PlotBasicWithAreaAndProject>,
 }
 #[derive(ToSchema, Serialize, FromQueryResult)]
 pub struct PlotSampleBasic {
@@ -100,19 +100,6 @@ pub struct PlotSampleBasic {
 
 impl From<crate::samples::db::Model> for PlotSample {
     fn from(sample: crate::samples::db::Model) -> Self {
-        let plot = crate::plots::models::PlotBasicWithAreaAndProject {
-            id: sample.plot_id,
-            name: String::new(), // Placeholder, should be fetched from DB
-            area: crate::areas::models::AreaBasicWithProject {
-                id: Uuid::new_v4(),        // Placeholder, should be fetched from DB
-                name: Some(String::new()), // Placeholder, should be fetched from DB
-                project: crate::common::crud::models::GenericNameAndID {
-                    id: Uuid::new_v4(),  // Placeholder, should be fetched from DB
-                    name: String::new(), // Placeholder, should be fetched from DB
-                },
-            },
-        };
-
         PlotSample {
             id: sample.id,
             name: sample.name,
@@ -151,7 +138,7 @@ impl From<crate::samples::db::Model> for PlotSample {
             replicate: sample.replicate,
             last_updated: sample.last_updated,
             created_on: sample.created_on,
-            plot,
+            plot: None,
         }
     }
 }
@@ -252,7 +239,7 @@ impl CRUDResource for PlotSample {
                 replicate: sample.replicate,
                 created_on: sample.created_on,
                 last_updated: sample.last_updated,
-                plot,
+                plot: Some(plot),
             });
         }
         Ok(plot_samples)
@@ -329,7 +316,7 @@ impl CRUDResource for PlotSample {
             replicate: sample.replicate,
             created_on: sample.created_on,
             last_updated: sample.last_updated,
-            plot,
+            plot: Some(plot),
         })
     }
 
