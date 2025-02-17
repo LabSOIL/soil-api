@@ -77,7 +77,7 @@ pub struct Plot {
     #[crudcrate(update_model = false, create_model = false)]
     area: Area,
     #[crudcrate(update_model = false, create_model = false)]
-    samples: Vec<crate::samples::models::PlotSampleBasic>,
+    samples: Vec<crate::samples::models::PlotSample>,
 }
 
 #[derive(ToSchema, FromQueryResult, Serialize)]
@@ -219,12 +219,15 @@ impl CRUDResource for Plot {
         // the vector of plots. We have to do this because in order to get the x/y/z coords we need
         // to cast into a non-db model, and we cannot do two joins in the same query in sea-orm.
         for plot in objs.iter_mut() {
-            let samples = crate::samples::db::Entity::find()
-                .filter(crate::samples::db::Column::PlotId.eq(plot.id))
-                .into_model::<crate::samples::models::PlotSampleBasic>()
-                .all(db)
-                .await
-                .unwrap();
+            let samples: Vec<crate::samples::models::PlotSample> =
+                crate::samples::db::Entity::find()
+                    .filter(crate::samples::db::Column::PlotId.eq(plot.id))
+                    .all(db)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|sample| crate::samples::models::PlotSample::from(sample))
+                    .collect();
             plot.samples = samples;
         }
 

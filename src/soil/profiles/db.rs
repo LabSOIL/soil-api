@@ -6,6 +6,8 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "soilprofile")]
 pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: Uuid,
     pub name: String,
     pub gradient: String,
     pub description_horizon: Option<Json>,
@@ -17,10 +19,12 @@ pub struct Model {
     pub created_on: Option<NaiveDateTime>,
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
-    #[sea_orm(primary_key)]
-    pub id: Uuid,
     // #[sea_orm(column_type = "custom(\"geometry\")", nullable)]
     // pub geom: Option<String>,
+    pub coord_srid: i32,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
     pub last_updated: NaiveDateTime,
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,

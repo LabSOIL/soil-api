@@ -2,38 +2,46 @@ use super::db::Model;
 use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
+use crudcrate::{ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    entity::prelude::*, query::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+#[derive(ToSchema, Serialize, Deserialize, FromQueryResult, ToCreateModel, ToUpdateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct SoilProfile {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
     pub name: String,
     pub gradient: String,
     pub description_horizon: Option<Value>,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
     pub weather: Option<String>,
     pub topography: Option<String>,
     pub vegetation_type: Option<String>,
     pub aspect: Option<String>,
     pub lythology_surficial_deposit: Option<String>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
     pub created_on: Option<NaiveDateTime>,
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
     pub parent_material: Option<f64>,
+    #[crudcrate(update_model = false, create_model = false)]
     pub latitude: Option<f64>,
+    #[crudcrate(update_model = false, create_model = false)]
     pub longitude: Option<f64>,
-    pub coord_srid: Option<i32>,
-    pub coord_x: Option<f64>,
-    pub coord_y: Option<f64>,
-    pub coord_z: Option<f64>,
+    pub coord_srid: i32,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
 }
 
 impl From<Model> for SoilProfile {
@@ -57,10 +65,10 @@ impl From<Model> for SoilProfile {
             parent_material: model.parent_material,
             latitude: None,
             longitude: None,
-            coord_srid: None,
-            coord_x: None,
-            coord_y: None,
-            coord_z: None,
+            coord_srid: model.coord_srid,
+            coord_x: model.coord_x,
+            coord_y: model.coord_y,
+            coord_z: model.coord_z,
         }
     }
 }
@@ -103,201 +111,201 @@ impl SoilProfile {
     }
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilProfileBasic {
-    pub id: Uuid,
-    pub last_updated: chrono::NaiveDateTime,
-    pub name: Option<String>,
-    pub description_horizon: Option<Value>,
-}
+// #[derive(ToSchema, Serialize, Deserialize)]
+// pub struct SoilProfileBasic {
+//     pub id: Uuid,
+//     pub last_updated: chrono::NaiveDateTime,
+//     pub name: Option<String>,
+//     pub description_horizon: Option<Value>,
+// }
 
-impl From<crate::soil::profiles::db::Model> for SoilProfileBasic {
-    fn from(soil_profile: crate::soil::profiles::db::Model) -> Self {
-        SoilProfileBasic {
-            id: soil_profile.id,
-            last_updated: soil_profile.last_updated,
-            name: Some(soil_profile.name),
-            description_horizon: soil_profile.description_horizon,
-        }
-    }
-}
+// impl From<crate::soil::profiles::db::Model> for SoilProfileBasic {
+//     fn from(soil_profile: crate::soil::profiles::db::Model) -> Self {
+//         SoilProfileBasic {
+//             id: soil_profile.id,
+//             last_updated: soil_profile.last_updated,
+//             name: Some(soil_profile.name),
+//             description_horizon: soil_profile.description_horizon,
+//         }
+//     }
+// }
 
-impl SoilProfileBasic {
-    pub async fn from_db(
-        soil_profile: crate::soil::profiles::db::Model,
-        db: &DatabaseConnection,
-    ) -> Self {
-        let soil_profile = crate::soil::profiles::db::Entity::find()
-            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
-            .one(db)
-            .await
-            .unwrap()
-            .unwrap();
-        SoilProfileBasic::from(soil_profile)
-    }
-}
+// impl SoilProfileBasic {
+//     pub async fn from_db(
+//         soil_profile: crate::soil::profiles::db::Model,
+//         db: &DatabaseConnection,
+//     ) -> Self {
+//         let soil_profile = crate::soil::profiles::db::Entity::find()
+//             .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
+//             .one(db)
+//             .await
+//             .unwrap()
+//             .unwrap();
+//         SoilProfileBasic::from(soil_profile)
+//     }
+// }
 
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilProfileCreate {
-    pub name: String,
-    pub gradient: String,
-    pub description_horizon: Option<Value>,
-    pub weather: Option<String>,
-    pub topography: Option<String>,
-    pub vegetation_type: Option<String>,
-    pub aspect: Option<String>,
-    pub lythology_surficial_deposit: Option<String>,
-    pub soil_type_id: Uuid,
-    pub area_id: Uuid,
-    pub soil_diagram: Option<String>,
-    pub photo: Option<String>,
-    pub parent_material: Option<f64>,
-}
+// #[derive(ToSchema, Serialize, Deserialize)]
+// pub struct SoilProfileCreate {
+//     pub name: String,
+//     pub gradient: String,
+//     pub description_horizon: Option<Value>,
+//     pub weather: Option<String>,
+//     pub topography: Option<String>,
+//     pub vegetation_type: Option<String>,
+//     pub aspect: Option<String>,
+//     pub lythology_surficial_deposit: Option<String>,
+//     pub soil_type_id: Uuid,
+//     pub area_id: Uuid,
+//     pub soil_diagram: Option<String>,
+//     pub photo: Option<String>,
+//     pub parent_material: Option<f64>,
+// }
 
-impl From<SoilProfileCreate> for crate::soil::profiles::db::ActiveModel {
-    fn from(soil_profile: SoilProfileCreate) -> Self {
-        let now = chrono::Utc::now().naive_utc();
+// impl From<SoilProfileCreate> for crate::soil::profiles::db::ActiveModel {
+//     fn from(soil_profile: SoilProfileCreate) -> Self {
+//         let now = chrono::Utc::now().naive_utc();
 
-        crate::soil::profiles::db::ActiveModel {
-            id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
-            last_updated: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
-            name: sea_orm::ActiveValue::Set(soil_profile.name),
-            gradient: sea_orm::ActiveValue::Set(soil_profile.gradient),
-            description_horizon: sea_orm::ActiveValue::Set(soil_profile.description_horizon),
-            weather: sea_orm::ActiveValue::Set(soil_profile.weather),
-            topography: sea_orm::ActiveValue::Set(soil_profile.topography),
-            vegetation_type: sea_orm::ActiveValue::Set(soil_profile.vegetation_type),
-            aspect: sea_orm::ActiveValue::Set(soil_profile.aspect),
-            lythology_surficial_deposit: sea_orm::ActiveValue::Set(
-                soil_profile.lythology_surficial_deposit,
-            ),
-            created_on: sea_orm::ActiveValue::Set(Some(now)),
-            soil_type_id: sea_orm::ActiveValue::Set(soil_profile.soil_type_id),
-            area_id: sea_orm::ActiveValue::Set(soil_profile.area_id),
-            soil_diagram: sea_orm::ActiveValue::Set(soil_profile.soil_diagram),
-            photo: sea_orm::ActiveValue::Set(soil_profile.photo),
-            parent_material: sea_orm::ActiveValue::Set(soil_profile.parent_material),
-        }
-    }
-}
+//         crate::soil::profiles::db::ActiveModel {
+//             id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
+//             last_updated: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
+//             name: sea_orm::ActiveValue::Set(soil_profile.name),
+//             gradient: sea_orm::ActiveValue::Set(soil_profile.gradient),
+//             description_horizon: sea_orm::ActiveValue::Set(soil_profile.description_horizon),
+//             weather: sea_orm::ActiveValue::Set(soil_profile.weather),
+//             topography: sea_orm::ActiveValue::Set(soil_profile.topography),
+//             vegetation_type: sea_orm::ActiveValue::Set(soil_profile.vegetation_type),
+//             aspect: sea_orm::ActiveValue::Set(soil_profile.aspect),
+//             lythology_surficial_deposit: sea_orm::ActiveValue::Set(
+//                 soil_profile.lythology_surficial_deposit,
+//             ),
+//             created_on: sea_orm::ActiveValue::Set(Some(now)),
+//             soil_type_id: sea_orm::ActiveValue::Set(soil_profile.soil_type_id),
+//             area_id: sea_orm::ActiveValue::Set(soil_profile.area_id),
+//             soil_diagram: sea_orm::ActiveValue::Set(soil_profile.soil_diagram),
+//             photo: sea_orm::ActiveValue::Set(soil_profile.photo),
+//             parent_material: sea_orm::ActiveValue::Set(soil_profile.parent_material),
+//         }
+//     }
+// }
 
-#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
-pub struct SoilProfileUpdate {
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub name: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub gradient: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub description_horizon: Option<Option<serde_json::Value>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub weather: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub topography: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub vegetation_type: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub aspect: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub lythology_surficial_deposit: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub soil_diagram: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub photo: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    pub parent_material: Option<Option<f64>>,
-}
+// #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+// pub struct SoilProfileUpdate {
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub name: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub gradient: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub description_horizon: Option<Option<serde_json::Value>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub weather: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub topography: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub vegetation_type: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub aspect: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub lythology_surficial_deposit: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub soil_diagram: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub photo: Option<Option<String>>,
+//     #[serde(
+//         default,
+//         skip_serializing_if = "Option::is_none",
+//         with = "::serde_with::rust::double_option"
+//     )]
+//     pub parent_material: Option<Option<f64>>,
+// }
 
-impl SoilProfileUpdate {
-    pub fn merge_into_activemodel(
-        self,
-        mut model: crate::soil::profiles::db::ActiveModel,
-    ) -> crate::soil::profiles::db::ActiveModel {
-        use sea_orm::ActiveValue;
-        if let Some(opt) = self.name {
-            model.name = ActiveValue::Set(opt.unwrap_or_default());
-        }
-        if let Some(opt) = self.gradient {
-            model.gradient = ActiveValue::Set(opt.unwrap_or_default());
-        }
-        if let Some(opt) = self.description_horizon {
-            model.description_horizon = ActiveValue::Set(opt);
-        }
-        if let Some(opt) = self.weather {
-            model.weather = ActiveValue::Set(Some(opt.unwrap_or_default()));
-        }
-        if let Some(opt) = self.topography {
-            model.topography = ActiveValue::Set(Some(opt.unwrap_or_default()));
-        }
-        if let Some(opt) = self.vegetation_type {
-            model.vegetation_type = ActiveValue::Set(Some(opt.unwrap_or_default()));
-        }
-        if let Some(opt) = self.aspect {
-            model.aspect = ActiveValue::Set(Some(opt.unwrap_or_default()));
-        }
-        if let Some(opt) = self.lythology_surficial_deposit {
-            model.lythology_surficial_deposit = ActiveValue::Set(Some(opt.unwrap_or_default()));
-        }
-        if let Some(opt) = self.soil_diagram {
-            model.soil_diagram = ActiveValue::Set(opt);
-        }
-        if let Some(opt) = self.photo {
-            model.photo = ActiveValue::Set(opt);
-        }
-        if let Some(opt) = self.parent_material {
-            model.parent_material = ActiveValue::Set(opt);
-        }
-        // Update the timestamp on every update.
-        model.last_updated = ActiveValue::Set(chrono::Utc::now().naive_utc());
-        model
-    }
-}
+// impl SoilProfileUpdate {
+//     pub fn merge_into_activemodel(
+//         self,
+//         mut model: crate::soil::profiles::db::ActiveModel,
+//     ) -> crate::soil::profiles::db::ActiveModel {
+//         use sea_orm::ActiveValue;
+//         if let Some(opt) = self.name {
+//             model.name = ActiveValue::Set(opt.unwrap_or_default());
+//         }
+//         if let Some(opt) = self.gradient {
+//             model.gradient = ActiveValue::Set(opt.unwrap_or_default());
+//         }
+//         if let Some(opt) = self.description_horizon {
+//             model.description_horizon = ActiveValue::Set(opt);
+//         }
+//         if let Some(opt) = self.weather {
+//             model.weather = ActiveValue::Set(Some(opt.unwrap_or_default()));
+//         }
+//         if let Some(opt) = self.topography {
+//             model.topography = ActiveValue::Set(Some(opt.unwrap_or_default()));
+//         }
+//         if let Some(opt) = self.vegetation_type {
+//             model.vegetation_type = ActiveValue::Set(Some(opt.unwrap_or_default()));
+//         }
+//         if let Some(opt) = self.aspect {
+//             model.aspect = ActiveValue::Set(Some(opt.unwrap_or_default()));
+//         }
+//         if let Some(opt) = self.lythology_surficial_deposit {
+//             model.lythology_surficial_deposit = ActiveValue::Set(Some(opt.unwrap_or_default()));
+//         }
+//         if let Some(opt) = self.soil_diagram {
+//             model.soil_diagram = ActiveValue::Set(opt);
+//         }
+//         if let Some(opt) = self.photo {
+//             model.photo = ActiveValue::Set(opt);
+//         }
+//         if let Some(opt) = self.parent_material {
+//             model.parent_material = ActiveValue::Set(opt);
+//         }
+//         // Update the timestamp on every update.
+//         model.last_updated = ActiveValue::Set(chrono::Utc::now().naive_utc());
+//         model
+//     }
+// }
 
-// ----------------------------------------------------------------------------
-// Implement CRUDResource for SoilProfile
+// // ----------------------------------------------------------------------------
+// // Implement CRUDResource for SoilProfile
 #[async_trait]
 impl CRUDResource for SoilProfile {
     type EntityType = crate::soil::profiles::db::Entity;
@@ -357,15 +365,6 @@ impl CRUDResource for SoilProfile {
             .await?
             .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?;
         Ok(profile)
-    }
-
-    async fn create(
-        db: &DatabaseConnection,
-        create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
-        let active_model: Self::ActiveModelType = create_model.into();
-        let inserted = active_model.insert(db).await?;
-        Self::get_one(db, inserted.id).await
     }
 
     async fn update(
