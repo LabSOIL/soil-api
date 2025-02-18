@@ -137,9 +137,16 @@ impl CRUDResource for SoilProfile {
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
-            ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
-            ("area_id", Self::ColumnType::AreaId),
+            ("gradient", Self::ColumnType::Gradient),
+            ("weather", Self::ColumnType::Weather),
+            ("topography", Self::ColumnType::Topography),
+            ("vegetation_type", Self::ColumnType::VegetationType),
+            ("aspect", Self::ColumnType::Aspect),
+            (
+                "lythology_surficial_deposit",
+                Self::ColumnType::LythologySurficialDeposit,
+            ),
         ]
     }
 }

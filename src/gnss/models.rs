@@ -11,41 +11,60 @@ use uuid::Uuid;
 
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
 #[active_model = "super::db::ActiveModel"]
-pub struct SoilType {
+pub struct GNSS {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
+    #[crudcrate(
+        update_model = false,
+        create_model = false,
+        on_update = chrono::Utc::now().naive_utc(),
+        on_create = chrono::Utc::now().naive_utc()
+    )]
     pub last_updated: chrono::NaiveDateTime,
-    pub name: String,
-    pub description: String,
-    pub image: Option<String>,
+    pub time: Option<chrono::NaiveDateTime>,
+    pub name: Option<String>,
+    pub comment: Option<String>,
+    pub original_filename: Option<String>,
+    pub elevation_gps: Option<f64>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub coord_x: Option<f64>,
+    pub coord_y: Option<f64>,
+    pub coord_srid: Option<i32>,
 }
 
-impl From<Model> for SoilType {
+impl From<Model> for GNSS {
     fn from(model: Model) -> Self {
         Self {
             id: model.id,
             last_updated: model.last_updated,
             name: model.name,
-            description: model.description,
-            image: model.image,
+            time: model.time,
+            comment: model.comment,
+            original_filename: model.original_filename,
+            elevation_gps: model.elevation_gps,
+            latitude: model.latitude,
+            longitude: model.longitude,
+            coord_x: model.coord_x,
+            coord_y: model.coord_y,
+            coord_srid: model.coord_srid,
         }
     }
 }
 
 #[async_trait]
-impl CRUDResource for SoilType {
-    type EntityType = crate::soil::types::db::Entity;
-    type ColumnType = crate::soil::types::db::Column;
-    type ModelType = crate::soil::types::db::Model;
-    type ActiveModelType = crate::soil::types::db::ActiveModel;
-    type ApiModel = SoilType;
-    type CreateModel = SoilTypeCreate;
-    type UpdateModel = SoilTypeUpdate;
+impl CRUDResource for GNSS {
+    type EntityType = crate::gnss::db::Entity;
+    type ColumnType = crate::gnss::db::Column;
+    type ModelType = crate::gnss::db::Model;
+    type ActiveModelType = crate::gnss::db::ActiveModel;
+    type ApiModel = GNSS;
+    type CreateModel = GNSSCreate;
+    type UpdateModel = GNSSUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "soiltype";
-    const RESOURCE_NAME_PLURAL: &'static str = "soiltypes";
+    const RESOURCE_NAME_SINGULAR: &'static str = "gnss";
+    const RESOURCE_NAME_PLURAL: &'static str = "gnss";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -62,7 +81,7 @@ impl CRUDResource for SoilType {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(SoilType::from).collect())
+        Ok(models.into_iter().map(GNSS::from).collect())
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
@@ -70,8 +89,10 @@ impl CRUDResource for SoilType {
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Soil type not found".into()))?;
-        Ok(SoilType::from(model))
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+            ))?;
+        Ok(GNSS::from(model))
     }
 
     async fn update(
@@ -98,13 +119,22 @@ impl CRUDResource for SoilType {
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
+            ("coord_x", Self::ColumnType::CoordX),
+            ("coord_y", Self::ColumnType::CoordY),
+            ("coord_srid", Self::ColumnType::CoordSrid),
+            ("elevation_gps", Self::ColumnType::ElevationGps),
+            ("latitude", Self::ColumnType::Latitude),
+            ("longitude", Self::ColumnType::Longitude),
+            ("original_filename", Self::ColumnType::OriginalFilename),
+            ("time", Self::ColumnType::Time),
         ]
     }
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
             ("name", Self::ColumnType::Name),
-            ("description", Self::ColumnType::Description),
+            ("original_filename", Self::ColumnType::OriginalFilename),
+            ("comment", Self::ColumnType::Comment),
         ]
     }
 }

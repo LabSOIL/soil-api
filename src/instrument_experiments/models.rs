@@ -11,41 +11,66 @@ use uuid::Uuid;
 
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
 #[active_model = "super::db::ActiveModel"]
-pub struct SoilType {
+pub struct InstrumentExperiment {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
-    pub name: String,
-    pub description: String,
-    pub image: Option<String>,
+    pub name: Option<String>,
+    pub date: Option<chrono::NaiveDateTime>,
+    pub description: Option<String>,
+    pub filename: Option<String>,
+    pub device_filename: Option<String>,
+    pub data_source: Option<String>,
+    pub instrument_model: Option<String>,
+    pub init_e: Option<f64>,
+    pub sample_interval: Option<f64>,
+    pub run_time: Option<f64>,
+    pub quiet_time: Option<f64>,
+    pub sensitivity: Option<f64>,
+    pub samples: Option<i32>,
+    pub project_id: Option<Uuid>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub channels: Vec<super::channels::models::InstrumentExperimentChannel>,
 }
 
-impl From<Model> for SoilType {
+impl From<Model> for InstrumentExperiment {
     fn from(model: Model) -> Self {
         Self {
+            name: model.name,
+            date: model.date,
+            description: model.description,
+            filename: model.filename,
+            device_filename: model.device_filename,
+            data_source: model.data_source,
+            instrument_model: model.instrument_model,
+            init_e: model.init_e,
+            sample_interval: model.sample_interval,
+            run_time: model.run_time,
+            quiet_time: model.quiet_time,
+            sensitivity: model.sensitivity,
+            samples: model.samples,
             id: model.id,
             last_updated: model.last_updated,
-            name: model.name,
-            description: model.description,
-            image: model.image,
+            project_id: model.project_id,
+            channels: vec![],
         }
     }
 }
 
 #[async_trait]
-impl CRUDResource for SoilType {
-    type EntityType = crate::soil::types::db::Entity;
-    type ColumnType = crate::soil::types::db::Column;
-    type ModelType = crate::soil::types::db::Model;
-    type ActiveModelType = crate::soil::types::db::ActiveModel;
-    type ApiModel = SoilType;
-    type CreateModel = SoilTypeCreate;
-    type UpdateModel = SoilTypeUpdate;
+impl CRUDResource for InstrumentExperiment {
+    type EntityType = super::db::Entity;
+    type ColumnType = super::db::Column;
+    type ModelType = super::db::Model;
+    type ActiveModelType = super::db::ActiveModel;
+    type ApiModel = InstrumentExperiment;
+    type CreateModel = InstrumentExperimentCreate;
+    type UpdateModel = InstrumentExperimentUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "soiltype";
-    const RESOURCE_NAME_PLURAL: &'static str = "soiltypes";
+    const RESOURCE_NAME_SINGULAR: &'static str = "instrumentexperiment";
+    const RESOURCE_NAME_PLURAL: &'static str = "instrumentexperiments";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -62,7 +87,7 @@ impl CRUDResource for SoilType {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(SoilType::from).collect())
+        Ok(models.into_iter().map(InstrumentExperiment::from).collect())
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
@@ -70,8 +95,10 @@ impl CRUDResource for SoilType {
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Soil type not found".into()))?;
-        Ok(SoilType::from(model))
+            .ok_or(DbErr::RecordNotFound(
+                "Instrument experiment not found".into(),
+            ))?;
+        Ok(InstrumentExperiment::from(model))
     }
 
     async fn update(

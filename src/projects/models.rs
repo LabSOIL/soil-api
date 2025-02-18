@@ -113,11 +113,9 @@ impl CRUDResource for Project {
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
-            ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
             ("color", Self::ColumnType::Color),
-            ("last_updated", Self::ColumnType::LastUpdated),
         ]
     }
 }

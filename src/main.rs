@@ -5,6 +5,8 @@ use soil_api_rust::common::views::{get_ui_config, healthz};
 use soil_api_rust::{
     areas,
     config,
+    gnss,
+    instrument_experiments,
     plots,
     projects,
     samples,
@@ -46,9 +48,15 @@ async fn main() {
         .nest("/api/plots", plots::views::router(db.clone()))
         .nest("/api/areas", areas::views::router(db.clone()))
         .nest("/api/projects", projects::views::router(db.clone()))
+        .nest("/api/gnss", gnss::views::router(db.clone()))
         .nest("/api/plot_samples", samples::views::router(db.clone()))
         // .nest("/v1/sensors", sensors::views::router(db.clone()))
         .nest("/api/transects", transects::views::router(db.clone()))
+        .nest(
+            "/api/instruments",
+            instrument_experiments::views::router(db.clone()),
+        )
+        // .nest("/api/instrument_channels", instrument_experiments::channels::views::router(db.clone()))
         .nest("/api/soil_types", soil::types::views::router(db.clone()))
         .nest(
             "/api/soil_profiles",

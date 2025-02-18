@@ -216,9 +216,8 @@ impl CRUDResource for Area {
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
-            ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
-            ("project_id", super::db::Column::ProjectId),
+            ("description", super::db::Column::Description),
         ]
     }
 }

@@ -185,9 +185,8 @@ impl CRUDResource for Transect {
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
-            ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
-            ("area_id", Self::ColumnType::AreaId),
+            ("description", Self::ColumnType::Description),
         ]
     }
 }

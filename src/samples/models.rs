@@ -196,10 +196,6 @@ impl CRUDResource for PlotSample {
     }
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
-        vec![
-            ("id", crate::samples::db::Column::Id),
-            ("name", crate::samples::db::Column::Name),
-            ("plot_id", crate::samples::db::Column::PlotId),
-        ]
+        vec![("name", crate::samples::db::Column::Name)]
     }
 }
