@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel)]
+#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize)]
 #[active_model = "super::db::ActiveModel"]
 pub struct PlotSample {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]

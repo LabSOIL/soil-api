@@ -1,4 +1,3 @@
-use crate::areas::models::AreaBasicWithProject;
 use crate::plots::models::Plot;
 use crate::transects::db;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
@@ -26,7 +25,7 @@ pub struct Transect {
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: NaiveDateTime,
     #[crudcrate(update_model = false, create_model = false)]
-    pub area: Option<AreaBasicWithProject>,
+    pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]
     pub nodes: Vec<TransectNodeAsPlotWithOrder>,
 }
@@ -100,7 +99,13 @@ impl CRUDResource for Transect {
                 });
             }
             // Load the associated area (with project info)
-            let area = AreaBasicWithProject::from(transect_model.area_id, db.clone()).await;
+            let area: crate::areas::models::Area = crate::areas::db::Entity::find()
+                .filter(crate::areas::db::Column::Id.eq(transect_model.area_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Area not found".into()))?
+                .into();
+
             let mut transect_api: Transect = transect_model.into();
             transect_api.nodes = transect_nodes;
             transect_api.area = Some(area);
@@ -135,7 +140,13 @@ impl CRUDResource for Transect {
                     coord_z: plot.coord_z,
                 });
             }
-            let area = AreaBasicWithProject::from(transect_model.area_id, db.clone()).await;
+            let area: crate::areas::models::Area = crate::areas::db::Entity::find()
+                .filter(crate::areas::db::Column::Id.eq(transect_model.area_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Area not found".into()))?
+                .into();
+
             let mut transect_api: Transect = transect_model.into();
             transect_api.nodes = transect_nodes;
             transect_api.area = Some(area);

@@ -8,15 +8,15 @@ use crate::transects::models::Transect;
 use chrono::NaiveDateTime;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    EntityTrait, Order, QueryOrder,
+    entity::prelude::*, query::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, Order,
+    QueryOrder,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel)]
+#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize)]
 #[active_model = "super::db::ActiveModel"]
 pub struct Area {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
@@ -220,39 +220,5 @@ impl CRUDResource for Area {
             ("name", super::db::Column::Name),
             ("project_id", super::db::Column::ProjectId),
         ]
-    }
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct AreaBasicWithProject {
-    pub id: Uuid,
-    pub name: Option<String>,
-    pub project: crudcrate::models::GenericNameAndID,
-}
-
-impl AreaBasicWithProject {
-    pub async fn from(area_id: Uuid, db: DatabaseConnection) -> Self {
-        let area = super::db::Entity::find()
-            .filter(crate::areas::db::Column::Id.eq(area_id))
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        let project = ProjectDB::find()
-            .filter(crate::projects::db::Column::Id.eq(area.project_id))
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        AreaBasicWithProject {
-            id: area_id,
-            name: area.name,
-            project: crudcrate::models::GenericNameAndID {
-                id: project.id,
-                name: project.name,
-            },
-        }
     }
 }

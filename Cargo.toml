@@ -12,7 +12,8 @@ axum = { version = "0.8.1", features = ["macros"] }
 axum-keycloak-auth = "0.7.0"
 byteorder = "1.5.0"
 chrono = { version = "0.4.39", features = ["serde"] }
-crudcrate = { path = "crudcrate" }
+crudcrate = "0.1.0"
+# crudcrate = { path = "crudcrate" }
 dotenvy = "0.15.7"
 futures = "0.3.31"
 hyper = "1.5.2"

@@ -5,8 +5,6 @@ WORKDIR /app
 
 COPY Cargo.lock Cargo.toml bacon.toml /app/
 COPY ./migration/ /app/migration/
-COPY ./crudcrate/ /app/crudcrate/
-COPY ./crudcrate-derive/ /app/crudcrate-derive/
 COPY ./src/ /app/src/
 
 ENTRYPOINT ["bacon", "--headless", "run"]
