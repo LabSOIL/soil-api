@@ -723,9 +723,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crudcrate"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b733c61e36b9819b489605c024b837c82dd9a13a748008a788c2191aed9c9b21"
+checksum = "ee63c1b9f15a2f8ece3b9a08224ee25c0f89ea15a62830baffd8d4b07c8d337b"
 dependencies = [
  "async-trait",
  "axum",
@@ -740,9 +740,9 @@ dependencies = [
 
 [[package]]
 name = "crudcrate-derive"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0490a38b2be20996e6cbf656459a112e9ceb8a561c77598a60a403729ba9a05d"
+checksum = "9b02bcd4ab76d7cdf796e0363c57245c089668f2beac1d4f567e7b775dd84bc0"
 dependencies = [
  "proc-macro2",
  "quote",

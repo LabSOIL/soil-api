@@ -56,7 +56,7 @@ async fn main() {
             "/api/instruments",
             instrument_experiments::views::router(db.clone()),
         )
-        // .nest("/api/instrument_channels", instrument_experiments::channels::views::router(db.clone()))
+        .nest("/api/instrument_channels", instrument_experiments::channels::views::router(db.clone()))
         .nest("/api/soil_types", soil::types::views::router(db.clone()))
         .nest(
             "/api/soil_profiles",

@@ -80,25 +80,46 @@ impl CRUDResource for InstrumentExperiment {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
-        let models = Self::EntityType::find()
+        let objs = Self::EntityType::find()
+            .find_with_related(super::channels::db::Entity)
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
             .all(db)
-            .await?;
-        Ok(models.into_iter().map(InstrumentExperiment::from).collect())
+            .await?
+            .into_iter()
+            .map(|(model, channels)| {
+                let mut obj = InstrumentExperiment::from(model);
+                obj.channels = channels
+                    .into_iter()
+                    .map(super::channels::models::InstrumentExperimentChannel::from)
+                    .collect();
+                obj
+            })
+            .collect();
+        Ok(objs)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let model = Self::EntityType::find()
+            .find_with_related(super::channels::db::Entity)
             .filter(Self::ColumnType::Id.eq(id))
-            .one(db)
+            .all(db)
             .await?
+            .into_iter()
+            .next()
             .ok_or(DbErr::RecordNotFound(
-                "Instrument experiment not found".into(),
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
             ))?;
-        Ok(InstrumentExperiment::from(model))
+
+        let (model, channels) = model;
+        let mut obj = InstrumentExperiment::from(model);
+        obj.channels = channels
+            .into_iter()
+            .map(super::channels::models::InstrumentExperimentChannel::from)
+            .collect();
+        Ok(obj)
     }
 
     async fn update(
