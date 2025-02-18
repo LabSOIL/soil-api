@@ -1,8 +1,7 @@
 use super::db::Model;
-use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use crudcrate::{ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
     FromQueryResult,

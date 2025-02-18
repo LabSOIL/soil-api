@@ -1,9 +1,9 @@
-use crate::common::crud::routes as crud;
 use crate::soil::types::models::SoilType;
 use axum::{
     routing::{delete, get},
     Router,
 };
+use crudcrate::routes as crud;
 use sea_orm::DatabaseConnection;
 
 pub fn router(db: DatabaseConnection) -> Router {

@@ -1,9 +1,10 @@
-use crate::common::crud::routes as crud;
+// use crate::common::crud::routes as crud;
 use crate::plots::models::Plot;
 use axum::{
     routing::{delete, get},
     Router,
 };
+use crudcrate::routes as crud;
 use sea_orm::DatabaseConnection;
 
 pub fn router(db: DatabaseConnection) -> Router {

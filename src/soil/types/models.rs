@@ -1,7 +1,6 @@
 use super::db::Model;
-use crate::common::crud::traits::CRUDResource;
 use async_trait::async_trait;
-use crudcrate::{ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
     DbErr, EntityTrait, Order, QueryOrder, QuerySelect,

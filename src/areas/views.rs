@@ -1,9 +1,9 @@
 use crate::areas::models::Area;
-use crate::common::crud::routes as crud;
 use axum::{
     routing::{delete, get},
     Router,
 };
+use crudcrate::routes as crud;
 use sea_orm::DatabaseConnection;
 
 pub fn router(db: DatabaseConnection) -> Router {

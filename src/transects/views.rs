@@ -1,8 +1,8 @@
-use crate::common::crud::routes as crud;
 use axum::{
     routing::{delete, get},
     Router,
 };
+use crudcrate::routes as crud;
 use sea_orm::DatabaseConnection;
 
 use super::models::Transect;

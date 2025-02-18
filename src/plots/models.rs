@@ -1,121 +1,44 @@
-use super::db::Model;
-use crate::areas;
-use crate::common::crud::traits::CRUDResource;
 use crate::config::Config;
 use crate::plots::db::Gradientchoices;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use crudcrate::ToCreateModel;
-use crudcrate::ToUpdateModel;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect,
+    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
 };
-
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
-pub struct PlotSimple {
-    pub id: Uuid,
-    pub name: String,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub coord_srid: i32,
-    pub coord_x: f64,
-    pub coord_y: f64,
-    pub coord_z: f64,
-}
-
-impl From<Model> for PlotSimple {
-    fn from(model: Model) -> Self {
-        Self {
-            id: model.id,
-            name: model.name,
-            latitude: None,
-            longitude: None,
-            coord_srid: model.coord_srid,
-            coord_x: model.coord_x,
-            coord_y: model.coord_y,
-            coord_z: model.coord_z,
-        }
-    }
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct PlotBasicWithAreaAndProject {
-    pub id: Uuid,
-    pub name: String,
-    pub area: crate::areas::models::AreaBasicWithProject,
-}
 
 #[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel)]
 #[active_model = "super::db::ActiveModel"]
 
 pub struct Plot {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
-    id: Uuid,
-    name: String,
-    area_id: Uuid,
-    gradient: Gradientchoices,
-    vegetation_type: Option<String>,
-    topography: Option<String>,
-    aspect: Option<String>,
-    created_on: Option<NaiveDate>,
-    weather: Option<String>,
-    lithology: Option<String>,
+    pub id: Uuid,
+    pub name: String,
+    pub area_id: Uuid,
+    pub gradient: Gradientchoices,
+    pub vegetation_type: Option<String>,
+    pub topography: Option<String>,
+    pub aspect: Option<String>,
+    pub created_on: Option<NaiveDate>,
+    pub weather: Option<String>,
+    pub lithology: Option<String>,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    last_updated: NaiveDateTime,
-    image: Option<String>,
-    coord_x: f64,
-    coord_y: f64,
-    coord_z: f64,
+    pub last_updated: NaiveDateTime,
+    pub image: Option<String>,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
     #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
-    coord_srid: i32,
+    pub coord_srid: i32,
     #[crudcrate(update_model = false, create_model = false)]
-    area: Area,
+    pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]
-    samples: Vec<crate::samples::models::PlotSample>,
-}
-
-#[derive(ToSchema, FromQueryResult, Serialize)]
-pub struct PlotWithCoords {
-    // Represents the model of the query for get all plots with the extra
-    // coordinate fields
-    id: Uuid,
-    name: String,
-    area_id: Uuid,
-    gradient: Gradientchoices,
-    vegetation_type: Option<String>,
-    topography: Option<String>,
-    aspect: Option<String>,
-    created_on: Option<NaiveDate>,
-    weather: Option<String>,
-    lithology: Option<String>,
-    last_updated: NaiveDateTime,
-    image: Option<String>,
-    coord_x: f64,
-    coord_y: f64,
-    coord_z: f64,
-    coord_srid: i32,
-}
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct Area {
-    id: Uuid,
-    name: Option<String>,
-    description: Option<String>,
-}
-
-impl From<areas::db::Model> for Area {
-    fn from(area_db: areas::db::Model) -> Self {
-        Area {
-            id: area_db.id,
-            name: area_db.name,
-            description: area_db.description,
-        }
-    }
+    pub samples: Vec<crate::samples::models::PlotSample>,
 }
 
 impl From<super::db::Model> for Plot {
@@ -137,43 +60,35 @@ impl From<super::db::Model> for Plot {
             coord_y: model.coord_y,
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
-            area: Area {
-                id: Uuid::nil(),
-                name: None,
-                description: None,
-            },
+            area: None,
             samples: vec![],
         }
     }
 }
-impl From<(PlotWithCoords, Option<Area>)> for Plot {
-    fn from((plot_db, area_db_vec): (PlotWithCoords, Option<Area>)) -> Self {
-        let area = area_db_vec.unwrap_or(Area {
-            id: Uuid::nil(),
-            name: None,
-            description: None,
-        });
+impl
+    From<(
+        super::db::Model,
+        crate::areas::db::Model,
+        Vec<crate::samples::db::Model>,
+    )> for Plot
+{
+    fn from(
+        (plot_db, area_db, samples_db): (
+            super::db::Model,
+            crate::areas::db::Model,
+            Vec<crate::samples::db::Model>,
+        ),
+    ) -> Self {
+        let area: crate::areas::models::Area = area_db.into();
+        let samples: Vec<crate::samples::models::PlotSample> = samples_db
+            .into_iter()
+            .map(|sample| crate::samples::models::PlotSample::from(sample))
+            .collect();
+        let mut plot: Plot = plot_db.into();
 
-        Plot {
-            id: plot_db.id,
-            name: plot_db.name,
-            area_id: plot_db.area_id,
-            gradient: plot_db.gradient,
-            vegetation_type: plot_db.vegetation_type,
-            topography: plot_db.topography,
-            aspect: plot_db.aspect,
-            created_on: plot_db.created_on,
-            weather: plot_db.weather,
-            lithology: plot_db.lithology,
-            last_updated: plot_db.last_updated,
-            image: plot_db.image,
-            coord_x: plot_db.coord_x,
-            coord_y: plot_db.coord_y,
-            coord_z: plot_db.coord_z,
-            coord_srid: plot_db.coord_srid,
-            area,
-            samples: vec![],
-        }
+        plot.area = Some(area);
+        plot.samples = samples;
+        plot
     }
 }
 
@@ -199,57 +114,59 @@ impl CRUDResource for Plot {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
-        // Call find_also_related BEFORE converting into our custom model.
-        let mut objs: Vec<Plot> = Self::EntityType::find()
+        let objs = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
-            .find_also_related(crate::areas::db::Entity)
-            .into_model::<PlotWithCoords, Area>() // Two type parameters
+            // .find_also_related(crate::areas::db::Entity)
             .all(db)
             .await
-            .unwrap()
-            .into_iter()
-            .map(|(plot_with_coords, area_vec)| (plot_with_coords, area_vec.into_iter().next()))
-            .map(|(plot_with_coords, area_opt)| Plot::from((plot_with_coords, area_opt)))
-            .collect();
+            .unwrap();
 
-        // For each plot obj, query for the samples, build the model with the samples and area and return
-        // the vector of plots. We have to do this because in order to get the x/y/z coords we need
-        // to cast into a non-db model, and we cannot do two joins in the same query in sea-orm.
-        for plot in objs.iter_mut() {
-            let samples: Vec<crate::samples::models::PlotSample> =
-                crate::samples::db::Entity::find()
-                    .filter(crate::samples::db::Column::PlotId.eq(plot.id))
-                    .all(db)
-                    .await
-                    .unwrap()
-                    .into_iter()
-                    .map(|sample| crate::samples::models::PlotSample::from(sample))
-                    .collect();
-            plot.samples = samples;
+        let mut plots = Vec::new();
+        for obj in objs {
+            let area = obj
+                .find_related(crate::areas::db::Entity)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+
+            let samples = obj
+                .find_related(crate::samples::db::Entity)
+                .all(db)
+                .await
+                .unwrap();
+
+            plots.push(Plot::from((obj, area, samples)));
         }
 
-        Ok(objs)
+        Ok(plots)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
-        let tuple_opt = Self::EntityType::find()
+        let plot = Self::EntityType::find()
             .filter(super::db::Column::Id.eq(id))
-            .find_also_related(crate::areas::db::Entity)
-            .into_model::<PlotWithCoords, Area>() // Two type parameters
             .one(db)
-            .await?;
-        if let Some((plot_with_coords, area_vec)) = tuple_opt {
-            let area_opt = area_vec
-                .into_iter()
-                .next()
-                .map(|area_db| Area::from(area_db));
-            Ok(Plot::from((plot_with_coords, area_opt)))
-        } else {
-            Err(DbErr::RecordNotFound("Plot not found".into()))
-        }
+            .await
+            .unwrap()
+            .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
+
+        let area = plot
+            .find_related(crate::areas::db::Entity)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let samples = plot
+            .find_related(crate::samples::db::Entity)
+            .all(db)
+            .await
+            .unwrap();
+
+        Ok(Plot::from((plot, area, samples)))
     }
 
     async fn update(

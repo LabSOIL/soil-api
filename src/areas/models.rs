@@ -1,13 +1,12 @@
 use super::db::Model;
-use crate::common::crud::traits::CRUDResource;
-use crate::plots::models::PlotSimple;
+use crate::plots::models::Plot;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
 use crate::sensors::models::SensorSimple;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
 use chrono::NaiveDateTime;
-use crudcrate::{ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
     EntityTrait, Order, QueryOrder,
@@ -32,7 +31,7 @@ pub struct Area {
     #[crudcrate(update_model = false, create_model = false)]
     pub soil_profiles: Vec<SoilProfile>,
     #[crudcrate(update_model = false, create_model = false)]
-    pub plots: Vec<PlotSimple>,
+    pub plots: Vec<Plot>,
     #[crudcrate(update_model = false, create_model = false)]
     pub sensors: Vec<SensorSimple>,
     #[crudcrate(update_model = false, create_model = false)]
@@ -228,7 +227,7 @@ impl CRUDResource for Area {
 pub struct AreaBasicWithProject {
     pub id: Uuid,
     pub name: Option<String>,
-    pub project: crate::common::crud::models::GenericNameAndID,
+    pub project: crudcrate::models::GenericNameAndID,
 }
 
 impl AreaBasicWithProject {
@@ -250,7 +249,7 @@ impl AreaBasicWithProject {
         AreaBasicWithProject {
             id: area_id,
             name: area.name,
-            project: crate::common::crud::models::GenericNameAndID {
+            project: crudcrate::models::GenericNameAndID {
                 id: project.id,
                 name: project.name,
             },

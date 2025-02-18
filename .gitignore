@@ -41,3 +41,4 @@ release/
 .clippy.json
 crudcrate
 expand.rs
+crudcrate-derive
