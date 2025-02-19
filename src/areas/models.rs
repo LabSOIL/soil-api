@@ -2,7 +2,7 @@ use super::db::Model;
 use crate::plots::models::Plot;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
-use crate::sensors::models::SensorSimple;
+use crate::sensors::models::Sensor;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
 use chrono::NaiveDateTime;
@@ -33,7 +33,7 @@ pub struct Area {
     #[crudcrate(update_model = false, create_model = false)]
     pub plots: Vec<Plot>,
     #[crudcrate(update_model = false, create_model = false)]
-    pub sensors: Vec<SensorSimple>,
+    pub sensors: Vec<Sensor>,
     #[crudcrate(update_model = false, create_model = false)]
     pub transects: Vec<Transect>,
     #[crudcrate(update_model = false, create_model = false)]

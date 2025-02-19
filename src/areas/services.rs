@@ -18,9 +18,9 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
         JOIN soilprofile ON area.id = soilprofile.area_id
         UNION ALL
         SELECT area.id AS id,
-               ST_Transform(sensor.geom, $5) AS geom
+               ST_Transform(sensorprofile.geom, $5) AS geom
         FROM area
-        JOIN sensor ON area.id = sensor.area_id
+        JOIN sensorprofile ON area.id = sensorprofile.area_id
     ) AS area
     WHERE area.id = $6
     GROUP BY area.id
@@ -36,7 +36,7 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
                 4326.into(),    // ST_Transform value
                 2056.into(),    // ST_Transform value for plot.geom
                 2056.into(),    // ST_Transform value for soilprofile.geom
-                2056.into(),    // ST_Transform value for sensor.geom
+                2056.into(),    // ST_Transform value for sensorprofile.geom
                 area_id.into(), // The ID of the area
             ],
         ))

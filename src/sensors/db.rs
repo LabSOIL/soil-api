@@ -7,13 +7,11 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize)]
 #[sea_orm(table_name = "sensor")]
 pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
     pub comment: Option<String>,
-    #[sea_orm(primary_key)]
-    pub id: Uuid,
-    // #[sea_orm(column_type = "custom(\"geometry\")", nullable)]
-    // pub geom: Option<String>,
     pub area_id: Uuid,
     pub last_updated: NaiveDateTime,
     pub serial_number: Option<String>,
