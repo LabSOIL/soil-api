@@ -51,6 +51,10 @@ async fn main() {
             "/api/sensor_profiles",
             sensors::profile::views::router(db.clone()),
         )
+        .nest(
+            "/api/sensor_profile_assignments",
+            sensors::profile::assignment::views::router(db.clone()),
+        )
         .nest("/api/transects", transects::views::router(db.clone()))
         .nest(
             "/api/instruments",

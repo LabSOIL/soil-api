@@ -147,7 +147,5 @@ enum Sensordata {
     Table,
     Id,
     TimeZone,
-    TimeUtc,
-    SensorId,
     SoilMoistureCount,
 }

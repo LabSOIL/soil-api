@@ -77,68 +77,6 @@ pub fn filter_baseline(y: &[f64], spline: &[f64]) -> Vec<f64> {
     y.iter().zip(spline.iter()).map(|(a, b)| a - b).collect()
 }
 
-/// Downsample data using the Largest Triangle Three Buckets (LTTB) algorithm.
-///
-/// # Arguments
-/// - `x`: Slice of x values.
-/// - `y`: Slice of y values.
-/// - `threshold`: The desired number of points after downsampling.
-///
-/// # Returns
-/// A tuple `(Vec<f64>, Vec<f64>)` containing the downsampled x and y values.
-pub fn largest_triangle_three_buckets(
-    x: &[f64],
-    y: &[f64],
-    threshold: usize,
-) -> (Vec<f64>, Vec<f64>) {
-    let n = x.len();
-    if n <= threshold || threshold == 0 {
-        return (x.to_vec(), y.to_vec());
-    }
-    let bucket_size = (n - 2) as f64 / (threshold - 2) as f64;
-    let mut sampled_x = Vec::with_capacity(threshold);
-    let mut sampled_y = Vec::with_capacity(threshold);
-    sampled_x.push(x[0]);
-    sampled_y.push(y[0]);
-
-    let mut a = 0; // Index of previously selected point.
-    for i in 1..(threshold - 1) {
-        let bucket_start = ((i - 1) as f64 * bucket_size + 1.0).floor() as usize;
-        let bucket_end = ((i as f64 * bucket_size + 1.0).floor() as usize).min(n);
-        let next_bucket_start = (i as f64 * bucket_size + 1.0).floor() as usize;
-        let next_bucket_end = (((i + 1) as f64 * bucket_size + 1.0).floor() as usize).min(n);
-
-        let (avg_x, avg_y) = if next_bucket_end > next_bucket_start {
-            let count = (next_bucket_end - next_bucket_start) as f64;
-            let sum_x: f64 = x[next_bucket_start..next_bucket_end].iter().sum();
-            let sum_y: f64 = y[next_bucket_start..next_bucket_end].iter().sum();
-            (sum_x / count, sum_y / count)
-        } else {
-            (x[next_bucket_start], y[next_bucket_start])
-        };
-
-        let mut max_area = -1.0;
-        let mut max_index = bucket_start;
-        let point_a_x = x[a];
-        let point_a_y = y[a];
-        for j in bucket_start..bucket_end {
-            let area = ((point_a_x - avg_x) * (y[j] - point_a_y)
-                - (point_a_x - x[j]) * (avg_y - point_a_y))
-                .abs();
-            if area > max_area {
-                max_area = area;
-                max_index = j;
-            }
-        }
-        sampled_x.push(x[max_index]);
-        sampled_y.push(y[max_index]);
-        a = max_index;
-    }
-    sampled_x.push(x[n - 1]);
-    sampled_y.push(y[n - 1]);
-    (sampled_x, sampled_y)
-}
-
 /// Integrate the given data using the trapezoidal rule.
 ///
 /// # Arguments

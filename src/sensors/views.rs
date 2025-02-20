@@ -1,8 +1,4 @@
 use super::models::Sensor;
-// use crate::filter::{apply_filters, parse_range};
-// use crate::models::FilterOptions;
-// use crate::pagination::calculate_content_range;
-// use crate::sort::generic_sort;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -14,8 +10,7 @@ use axum::{
 };
 use crudcrate::routes as crud;
 use crudcrate::CRUDResource;
-use hyper::HeaderMap;
-use sea_orm::{DatabaseConnection, DbErr, SqlErr};
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::Deserialize;
 use uuid::Uuid;
 

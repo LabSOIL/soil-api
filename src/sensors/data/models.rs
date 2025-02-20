@@ -1,7 +1,7 @@
 use super::db::{ActiveModel, Model};
 use chrono::NaiveDateTime;
 use crudcrate::{ToCreateModel, ToUpdateModel};
-use sea_orm::{ActiveModelTrait, ActiveValue, DeriveIntoActiveModel};
+use sea_orm::{ActiveValue, DeriveIntoActiveModel};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
