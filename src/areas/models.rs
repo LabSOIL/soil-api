@@ -106,6 +106,46 @@ impl CRUDResource for Area {
                 .find_related(crate::transects::db::Entity)
                 .all(db)
                 .await?;
+            let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
+
+            for transect in transects.iter() {
+                let node_objs = transect
+                    .find_related(crate::transects::nodes::db::Entity)
+                    .all(db)
+                    .await?;
+                let mut nodes = vec![];
+
+                for node in node_objs {
+                    let plot: Plot = crate::plots::db::Entity::find()
+                        .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                        .one(db)
+                        .await?
+                        .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                        .into();
+                    let transect_node =
+                        crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
+                            id: plot.id,
+                            name: plot.name.clone(),
+                            coord_srid: plot.coord_srid,
+                            coord_x: plot.coord_x,
+                            coord_y: plot.coord_y,
+                            coord_z: plot.coord_z,
+                            order: node.order,
+                        };
+                    nodes.push(transect_node);
+                }
+
+                transect_objs.push(crate::transects::models::Transect {
+                    id: transect.id,
+                    name: transect.name.clone(),
+                    description: transect.description.clone(),
+                    date_created: transect.date_created,
+                    last_updated: transect.last_updated,
+                    area: None,
+                    area_id: transect.area_id,
+                    nodes,
+                });
+            }
 
             let convex_hull = super::services::get_convex_hull(db, model.id).await;
 
@@ -120,7 +160,7 @@ impl CRUDResource for Area {
                 plots: plots.into_iter().map(Into::into).collect(),
                 sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
                 soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
-                transects: transects.into_iter().map(Into::into).collect(),
+                transects: transect_objs,
             };
             areas.push(area);
         }
@@ -151,6 +191,45 @@ impl CRUDResource for Area {
             .find_related(crate::transects::db::Entity)
             .all(db)
             .await?;
+        let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
+
+        for transect in transects.iter() {
+            let node_objs = transect
+                .find_related(crate::transects::nodes::db::Entity)
+                .all(db)
+                .await?;
+            let mut nodes = vec![];
+
+            for node in node_objs {
+                let plot: Plot = crate::plots::db::Entity::find()
+                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                    .one(db)
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                    .into();
+                let transect_node = crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
+                    id: plot.id,
+                    name: plot.name.clone(),
+                    coord_srid: plot.coord_srid,
+                    coord_x: plot.coord_x,
+                    coord_y: plot.coord_y,
+                    coord_z: plot.coord_z,
+                    order: node.order,
+                };
+                nodes.push(transect_node);
+            }
+
+            transect_objs.push(crate::transects::models::Transect {
+                id: transect.id,
+                name: transect.name.clone(),
+                description: transect.description.clone(),
+                date_created: transect.date_created,
+                last_updated: transect.last_updated,
+                area: None,
+                area_id: transect.area_id,
+                nodes,
+            });
+        }
 
         let convex_hull = super::services::get_convex_hull(db, model.id).await;
 
@@ -165,7 +244,7 @@ impl CRUDResource for Area {
             plots: plots.into_iter().map(Into::into).collect(),
             sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
             soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
-            transects: transects.into_iter().map(Into::into).collect(),
+            transects: transect_objs,
         };
         Ok(area)
     }
