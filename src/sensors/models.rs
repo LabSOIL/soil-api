@@ -5,15 +5,14 @@ use crate::areas::models::Area;
 use crate::sensors::data::models::SensorData;
 use crate::sensors::db;
 use async_trait::async_trait;
-use sea_orm::{sea_query::Expr, IntoActiveModel};
-use serde::{Deserialize, Serialize};
-
-use sea_orm::{
-    entity::prelude::*, query::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition,
-    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, Order,
-};
-// use sea_orm::{NotSet, Set};
+use chrono::NaiveDateTime;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use sea_orm::{
+    entity::prelude::*, query::*, sea_query::Expr, ActiveModelTrait, ActiveValue, ColumnTrait,
+    Condition, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, IntoActiveModel, Order,
+    Statement,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -87,7 +86,6 @@ impl CRUDResource for Sensor {
             .await?;
         Ok(models.into_iter().map(Self::ApiModel::from).collect())
     }
-
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let (sensor, data) = Self::EntityType::find()
             .find_with_related(super::data::db::Entity)
@@ -220,5 +218,98 @@ impl CRUDResource for Sensor {
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
         ]
+    }
+}
+
+impl Sensor {
+    pub async fn get_one_low_resolution(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<Sensor, DbErr> {
+        // Fetch the sensor record from the sensor table.
+        let sensor_model = super::db::Entity::find()
+            .filter(super::db::Column::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+            ))?;
+        let mut sensor: super::models::Sensor = sensor_model.into();
+
+        // Construct the raw SQL query using the provided script.
+        // (Here the bucket interval is set to 24hr.)
+        let sql = format!(
+            "WITH buckets AS (
+                SELECT
+                  sensor_id,
+                  to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24)) AT TIME ZONE 'UTC' AS bucket,
+                  temperature_1,
+                  temperature_2,
+                  temperature_3,
+                  temperature_average,
+                  soil_moisture_count
+                FROM sensordata
+                WHERE sensor_id = '{}'
+              )
+              SELECT
+                sensor_id,
+                bucket,
+                min(temperature_1) AS min_temp_1,
+                max(temperature_1) AS max_temp_1,
+                avg(temperature_1) AS avg_temp_1,
+                min(temperature_2) AS min_temp_2,
+                max(temperature_2) AS max_temp_2,
+                avg(temperature_2) AS avg_temp_2,
+                min(temperature_3) AS min_temp_3,
+                max(temperature_3) AS max_temp_3,
+                avg(temperature_3) AS avg_temp_3,
+                min(temperature_average) AS min_temp_avg,
+                max(temperature_average) AS max_temp_avg,
+                avg(temperature_average) AS avg_temp_avg,
+                round(avg(soil_moisture_count))::integer AS avg_soil_moisture_count,
+                count(*) AS record_count
+              FROM buckets
+              GROUP BY sensor_id, bucket
+              ORDER BY bucket",
+            id
+        );
+
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
+
+        // Execute the raw SQL query.
+        let rows = db.query_all(stmt).await?;
+
+        // Map each row into a SensorData object.
+        let mut aggregated_data = Vec::new();
+        for row in rows {
+            let sensor_id: Uuid = row.try_get("", "sensor_id")?;
+            let bucket: NaiveDateTime = row.try_get("", "bucket")?;
+            let avg_temp_1: f64 = row.try_get("", "avg_temp_1")?;
+            let avg_temp_2: f64 = row.try_get("", "avg_temp_2")?;
+            let avg_temp_3: f64 = row.try_get("", "avg_temp_3")?;
+            let avg_temp_avg: f64 = row.try_get("", "avg_temp_avg")?;
+            let avg_soil_moisture_count: i32 = row.try_get("", "avg_soil_moisture_count")?;
+
+            // Create an aggregated SensorData instance.
+            // Adjust defaults (e.g., instrument_seq, shake, error_flat) as needed.
+            let sensor_data = crate::sensors::data::models::SensorData {
+                instrument_seq: 0,
+                time_utc: bucket,
+                temperature_1: avg_temp_1,
+                temperature_2: avg_temp_2,
+                temperature_3: avg_temp_3,
+                temperature_average: avg_temp_avg,
+                soil_moisture_count: avg_soil_moisture_count,
+                shake: 0,
+                error_flat: 0,
+                sensor_id,
+                last_updated: bucket, // Or use chrono::Utc::now().naive_utc() if preferred.
+            };
+            aggregated_data.push(sensor_data);
+        }
+
+        // Convert the raw SensorData objects to your API model.
+        sensor.data = aggregated_data.into_iter().map(|d| d.into()).collect();
+        Ok(Sensor::from(sensor))
     }
 }
