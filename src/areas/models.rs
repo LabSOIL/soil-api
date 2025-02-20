@@ -1,10 +1,9 @@
 use super::db::Model;
-use crate::plots::models::Plot;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
-use crate::sensors::models::Sensor;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
+use crate::{plots::models::Plot, sensors::profile::models::SensorProfile};
 use chrono::NaiveDateTime;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
@@ -33,7 +32,7 @@ pub struct Area {
     #[crudcrate(update_model = false, create_model = false)]
     pub plots: Vec<Plot>,
     #[crudcrate(update_model = false, create_model = false)]
-    pub sensors: Vec<Sensor>,
+    pub sensor_profiles: Vec<SensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]
     pub transects: Vec<Transect>,
     #[crudcrate(update_model = false, create_model = false)]
@@ -51,7 +50,7 @@ impl From<Model> for Area {
             project: None,
             soil_profiles: vec![],
             plots: vec![],
-            sensors: vec![],
+            sensor_profiles: vec![],
             transects: vec![],
             geom: None,
         }
@@ -93,8 +92,8 @@ impl CRUDResource for Area {
 
             let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
 
-            let sensors = model
-                .find_related(crate::sensors::db::Entity)
+            let sensor_profiles = model
+                .find_related(crate::sensors::profile::db::Entity)
                 .all(db)
                 .await?;
 
@@ -119,7 +118,7 @@ impl CRUDResource for Area {
                 description: model.description,
                 project: Some(project.into()),
                 plots: plots.into_iter().map(Into::into).collect(),
-                sensors: sensors.into_iter().map(Into::into).collect(),
+                sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
                 soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
                 transects: transects.into_iter().map(Into::into).collect(),
             };
@@ -138,8 +137,8 @@ impl CRUDResource for Area {
 
         let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
 
-        let sensors = model
-            .find_related(crate::sensors::db::Entity)
+        let sensor_profiles = model
+            .find_related(crate::sensors::profile::db::Entity)
             .all(db)
             .await?;
 
@@ -164,7 +163,7 @@ impl CRUDResource for Area {
             description: model.description,
             project: Some(project.into()),
             plots: plots.into_iter().map(Into::into).collect(),
-            sensors: sensors.into_iter().map(Into::into).collect(),
+            sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
             soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
             transects: transects.into_iter().map(Into::into).collect(),
         };

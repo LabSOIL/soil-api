@@ -1,6 +1,6 @@
 use crate::plots::db::Entity as Plot;
 use crate::projects::db::Entity as Project;
-use crate::sensors::db::Entity as Sensor;
+use crate::sensors::profile::db::Entity as SensorProfile;
 use crate::soil::profiles::db::Entity as SoilProfile;
 use crate::transects::db::Entity as Transect;
 
@@ -31,8 +31,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Project,
-    #[sea_orm(has_many = "Sensor")]
-    Sensor,
+    #[sea_orm(has_many = "SensorProfile")]
+    SensorProfile,
     #[sea_orm(has_many = "SoilProfile")]
     Soilprofile,
     #[sea_orm(has_many = "Transect")]
@@ -51,9 +51,9 @@ impl Related<Project> for Entity {
     }
 }
 
-impl Related<Sensor> for Entity {
+impl Related<SensorProfile> for Entity {
     fn to() -> RelationDef {
-        Relation::Sensor.def()
+        Relation::SensorProfile.def()
     }
 }
 

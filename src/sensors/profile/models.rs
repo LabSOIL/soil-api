@@ -1,4 +1,5 @@
 use super::db::Model;
+use crate::config::Config;
 use async_trait::async_trait;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
@@ -22,6 +23,7 @@ pub struct SensorProfile {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+    #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: Option<i32>,
 }
 
