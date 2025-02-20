@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
+#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel, Clone)]
 #[active_model = "super::db::ActiveModel"]
 pub struct SensorProfile {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
+#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel, Clone)]
 #[active_model = "super::db::ActiveModel"]
 pub struct SensorProfileAssignment {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
@@ -20,6 +20,10 @@ pub struct SensorProfileAssignment {
     pub date_to: chrono::NaiveDateTime,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub sensor_profile: Option<crate::sensors::profile::models::SensorProfile>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub sensor: Option<crate::sensors::models::Sensor>,
 }
 
 impl From<Model> for SensorProfileAssignment {
@@ -31,6 +35,8 @@ impl From<Model> for SensorProfileAssignment {
             date_from: model.date_from,
             date_to: model.date_to,
             last_updated: model.last_updated,
+            sensor_profile: None,
+            sensor: None,
         }
     }
 }
@@ -64,16 +70,69 @@ impl CRUDResource for SensorProfileAssignment {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(Self::ApiModel::from).collect())
+
+        let sensor_profile: crate::sensors::profile::models::SensorProfile = models
+            .load_one(crate::sensors::profile::db::Entity, db)
+            .await?
+            .pop()
+            .unwrap()
+            .unwrap()
+            .into();
+
+        let sensor: crate::sensors::models::Sensor = models
+            .load_one(crate::sensors::db::Entity, db)
+            .await?
+            .pop()
+            .unwrap()
+            .unwrap()
+            .into();
+        let models: Vec<Self::ApiModel> = models
+            .into_iter()
+            .map(|model| {
+                let mut model: SensorProfileAssignment = model.into();
+                model.sensor_profile = Some(sensor_profile.clone());
+                model.sensor = Some(sensor.clone());
+                model
+            })
+            .collect();
+        Ok(models)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let model = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
-            .one(db)
+            .all(db)
+            .await?;
+
+        let sensor_profile: crate::sensors::profile::models::SensorProfile = model
+            .clone()
+            .load_one(crate::sensors::profile::db::Entity, db)
             .await?
-            .ok_or(DbErr::RecordNotFound("Assignment not found".into()))?;
-        Ok(Self::ApiModel::from(model))
+            .pop()
+            .unwrap()
+            .unwrap()
+            .into();
+
+        let sensor: crate::sensors::models::Sensor = model
+            .clone()
+            .load_one(crate::sensors::db::Entity, db)
+            .await?
+            .pop()
+            .unwrap()
+            .unwrap()
+            .into();
+        let model: Self::ApiModel = model
+            .into_iter()
+            .map(|model| {
+                let mut model: SensorProfileAssignment = model.into();
+                model.sensor_profile = Some(sensor_profile.clone());
+                model.sensor = Some(sensor.clone());
+                model
+            })
+            .collect::<Vec<Self::ApiModel>>()
+            .pop()
+            .ok_or(DbErr::RecordNotFound("Record not found".into()))?;
+        Ok(model)
     }
 
     async fn update(
