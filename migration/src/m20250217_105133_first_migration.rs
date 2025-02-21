@@ -368,7 +368,6 @@ impl MigrationTrait for Migration {
             CREATE INDEX IF NOT EXISTS idx_plot_weather ON public.plot(weather);
             CREATE INDEX IF NOT EXISTS idx_plot_lithology ON public.plot(lithology);
             CREATE INDEX IF NOT EXISTS idx_plot_last_updated ON public.plot(last_updated);
-            CREATE INDEX IF NOT EXISTS idx_plot_image ON public.plot(image);
             CREATE INDEX IF NOT EXISTS idx_plot_coord_x ON public.plot(coord_x);
             CREATE INDEX IF NOT EXISTS idx_plot_coord_y ON public.plot(coord_y);
             CREATE INDEX IF NOT EXISTS idx_plot_coord_z ON public.plot(coord_z);
