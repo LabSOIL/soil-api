@@ -1,5 +1,4 @@
-// instrument_experiments/views.rs
-
+use crate::common::auth::Role;
 use crate::instrument_experiments::channels::db as channel_db;
 use crate::instrument_experiments::db;
 use crate::instrument_experiments::models::InstrumentExperiment;
@@ -10,13 +9,23 @@ use axum::{
     routing::{delete, get},
     Json, Router,
 };
-use crudcrate::routes as crud;
+use axum_keycloak_auth::{
+    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+};
+use crudcrate::{routes as crud, CRUDResource};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde_json::{json, Value as JsonValue};
+use std::sync::Arc;
 use uuid::Uuid;
 
-pub fn router(db: DatabaseConnection) -> Router {
-    Router::new()
+pub fn router(
+    db: DatabaseConnection,
+    keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
+) -> Router
+where
+    InstrumentExperiment: CRUDResource,
+{
+    let mut mutating_router = Router::new()
         .route(
             "/",
             get(crud::get_all::<InstrumentExperiment>)
@@ -33,7 +42,26 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/{id}/filtered", get(get_filtered_data))
         .route("/{id}/summary", get(get_summary_data))
         .route("/batch", delete(crud::delete_many::<InstrumentExperiment>))
-        .with_state(db)
+        .with_state(db.clone());
+
+    if let Some(instance) = keycloak_auth_instance {
+        mutating_router = mutating_router.layer(
+            KeycloakAuthLayer::<Role>::builder()
+                .instance(instance)
+                .passthrough_mode(PassthroughMode::Block)
+                .persist_raw_claims(false)
+                .expected_audiences(vec![String::from("account")])
+                .required_roles(vec![Role::Administrator])
+                .build(),
+        );
+    } else {
+        println!(
+            "Warning: Mutating routes of {} router are not protected",
+            InstrumentExperiment::RESOURCE_NAME_PLURAL
+        );
+    }
+
+    mutating_router
 }
 
 /// Returns CSV data (as JSON) built from the raw time and raw_values of each channel.
