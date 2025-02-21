@@ -1,50 +1,10 @@
 use base64::{engine::general_purpose, Engine as _};
 use chrono::NaiveDateTime;
-use lttb::lttb;
-use lttb::DataPoint;
 use std::str;
 use uuid::Uuid;
 
-pub fn simplify_sensor_data_lttb(
-    data: Vec<crate::sensors::data::db::Model>,
-    target_points: usize,
-) -> Vec<crate::sensors::data::db::Model> {
-    let len = data.len();
-
-    if len <= target_points {
-        return data;
-    }
-
-    // Convert the sensor data timestamps and temperature_1 values to DataPoint structs
-    let timestamps: Vec<DataPoint> = data
-        .iter()
-        .enumerate()
-        .map(|(i, d)| DataPoint {
-            x: i as f64, // or use d.time_utc.and_utc().timestamp() as f64
-            y: d.temperature_1,
-        })
-        .collect();
-
-    // Downsample the data using the LTTB algorithm
-    let downsampled_points = lttb(timestamps, target_points);
-
-    // Now map the downsampled points back to your original data
-    let mut downsampled_data = vec![];
-
-    for point in downsampled_points {
-        let original = &data[point.x as usize]; // Map x value back to original index
-        let simplified = crate::sensors::data::db::Model {
-            temperature_1: point.y,
-            ..original.clone()
-        };
-        downsampled_data.push(simplified);
-    }
-
-    downsampled_data
-}
-
-// Helper function: decode base64 and return (raw_bytes, file_type)
 fn decode_base64(value: &str) -> Result<(Vec<u8>, String), String> {
+    // Helper function: decode base64 and return (raw_bytes, file_type)
     let parts: Vec<&str> = value.split(',').collect();
     if parts.len() < 2 {
         return Err("Invalid base64 format".into());
@@ -66,11 +26,11 @@ fn decode_base64(value: &str) -> Result<(Vec<u8>, String), String> {
     Ok((decoded, file_type))
 }
 
-// Helper function: ingest CSV sensor data and create SensorData objects
 fn ingest_csv_data(
     sensor_data: &[u8],
     sensor_id: Uuid,
 ) -> Result<Vec<crate::sensors::data::models::SensorData>, String> {
+    // Helper function: ingest CSV sensor data and create SensorData objects
     let data_str = str::from_utf8(sensor_data).map_err(|_| "Invalid UTF-8 sequence")?;
     let mut objs = Vec::new();
     for line in data_str.lines() {

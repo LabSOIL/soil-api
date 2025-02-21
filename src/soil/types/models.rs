@@ -55,13 +55,19 @@ impl CRUDResource for SoilType {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
-        let models = Self::EntityType::find()
+        let mut models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
             .all(db)
             .await?;
+
+        // For get all, don't return the image attribute
+        for model in models.iter_mut() {
+            model.image = None;
+        }
+
         Ok(models.into_iter().map(SoilType::from).collect())
     }
 

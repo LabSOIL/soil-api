@@ -1,12 +1,21 @@
+mod areas;
+mod common;
+mod config;
+mod gnss;
+mod instrument_experiments;
+mod plots;
+mod projects;
+mod samples;
+mod sensors;
+mod soil;
+mod transects;
+
+use crate::common::views::{get_ui_config, healthz};
 use axum::extract::DefaultBodyLimit;
 use axum::Router;
 use axum_keycloak_auth::{instance::KeycloakAuthInstance, instance::KeycloakConfig, Url};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
-use soil_api_rust::common::views::{get_ui_config, healthz};
-use soil_api_rust::{
-    areas, config, gnss, instrument_experiments, plots, projects, samples, sensors, soil, transects,
-};
 use std::sync::Arc;
 use tracing_subscriber;
 
