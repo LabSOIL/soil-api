@@ -1,8 +1,7 @@
-# soil-api-rust
-A rewrite of [soil-api](https://github.com/LabSOIL/soil-api) in Rust. It is
+# soil-api
+A rewrite of [soil-api-python](https://github.com/LabSOIL/soil-api-python) in Rust. It is
 a component of the [Sensor Map project](https://github.com/LabSOIL/sensormap-ui).
 
-This project is a work in progress, and is a piecemeal rewrite of the original project. The goal is to have a more efficient and maintainable codebase. It is not yet feature complete, and is not recommended for production use.
 
 ## Building
 
