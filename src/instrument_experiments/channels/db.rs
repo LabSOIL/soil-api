@@ -4,12 +4,10 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "instrumentexperimentchannel")]
 pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: Uuid,
     pub channel_name: String,
     pub experiment_id: Uuid,
-    #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
-    pub id: Uuid,
     pub baseline_spline: Option<Json>,
     pub time_values: Option<Json>,
     pub raw_values: Option<Json>,

@@ -1,154 +1,152 @@
+use super::db::Model;
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    entity::prelude::*, query::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult)]
+#[derive(ToSchema, Serialize, Deserialize, FromQueryResult, ToCreateModel, ToUpdateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct SoilProfile {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
     pub name: String,
-    pub profile_iterator: i32,
     pub gradient: String,
     pub description_horizon: Option<Value>,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
     pub weather: Option<String>,
     pub topography: Option<String>,
     pub vegetation_type: Option<String>,
     pub aspect: Option<String>,
     pub lythology_surficial_deposit: Option<String>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
     pub created_on: Option<NaiveDateTime>,
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
     pub parent_material: Option<f64>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub coord_srid: Option<i32>,
-    pub coord_x: Option<f64>,
-    pub coord_y: Option<f64>,
-    pub coord_z: Option<f64>,
+    pub coord_srid: i32,
+    pub coord_x: f64,
+    pub coord_y: f64,
+    pub coord_z: f64,
 }
 
-impl SoilProfile {
-    pub async fn from_area(
-        area: &crate::areas::db::Model,
+impl From<Model> for SoilProfile {
+    fn from(model: Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            gradient: model.gradient,
+            description_horizon: model.description_horizon,
+            last_updated: model.last_updated,
+            weather: model.weather,
+            topography: model.topography,
+            vegetation_type: model.vegetation_type,
+            aspect: model.aspect,
+            lythology_surficial_deposit: model.lythology_surficial_deposit,
+            created_on: model.created_on,
+            soil_type_id: model.soil_type_id,
+            area_id: model.area_id,
+            soil_diagram: model.soil_diagram,
+            photo: model.photo,
+            parent_material: model.parent_material,
+            coord_srid: model.coord_srid,
+            coord_x: model.coord_x,
+            coord_y: model.coord_y,
+            coord_z: model.coord_z,
+        }
+    }
+}
+
+#[async_trait]
+impl CRUDResource for SoilProfile {
+    type EntityType = crate::soil::profiles::db::Entity;
+    type ColumnType = crate::soil::profiles::db::Column;
+    type ModelType = crate::soil::profiles::db::Model;
+    type ActiveModelType = crate::soil::profiles::db::ActiveModel;
+    type ApiModel = SoilProfile;
+    type CreateModel = SoilProfileCreate;
+    type UpdateModel = SoilProfileUpdate;
+
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
+    const RESOURCE_NAME_SINGULAR: &'static str = "soilprofile";
+    const RESOURCE_NAME_PLURAL: &'static str = "soilprofiles";
+
+    async fn get_all(
         db: &DatabaseConnection,
-    ) -> Vec<SoilProfile> {
-        super::db::Entity::find()
-            .filter(super::db::Column::AreaId.eq(area.id))
-            .column_as(Expr::cust("ST_X(soilprofile.geom)"), "coord_x")
-            .column_as(Expr::cust("ST_Y(soilprofile.geom)"), "coord_y")
-            .column_as(Expr::cust("ST_Z(soilprofile.geom)"), "coord_z")
-            .column_as(
-                Expr::cust("ST_X(st_transform(soilprofile.geom, 4326))"),
-                "longitude",
-            )
-            .column_as(
-                Expr::cust("ST_Y(st_transform(soilprofile.geom, 4326))"),
-                "latitude",
-            )
-            .column_as(Expr::cust("st_srid(soilprofile.geom)"), "coord_srid")
-            .into_model::<SoilProfile>()
+        condition: Condition,
+        order_column: Self::ColumnType,
+        order_direction: Order,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+        let profiles: Vec<SoilProfile> = Self::EntityType::find()
+            .filter(condition)
+            .order_by(order_column, order_direction)
+            .offset(offset)
+            .limit(limit)
             .all(db)
-            .await
-            .unwrap()
+            .await?
+            .into_iter()
+            .map(|model| model.into())
+            .collect();
+        Ok(profiles)
     }
-    pub async fn from_db(
-        soil_profile: crate::soil::profiles::db::Model,
-        db: &DatabaseConnection,
-    ) -> Self {
-        crate::soil::profiles::db::Entity::find()
-            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
-            .into_model::<SoilProfile>()
+
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+        let profile: SoilProfile = Self::EntityType::find()
+            .filter(Self::ColumnType::Id.eq(id))
             .one(db)
-            .await
-            .unwrap()
-            .unwrap()
+            .await?
+            .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?
+            .into();
+        Ok(profile)
     }
-}
 
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilProfileBasic {
-    pub id: Uuid,
-    pub last_updated: chrono::NaiveDateTime,
-    pub name: Option<String>,
-    pub description_horizon: Option<Value>,
-}
-
-impl From<crate::soil::profiles::db::Model> for SoilProfileBasic {
-    fn from(soil_profile: crate::soil::profiles::db::Model) -> Self {
-        SoilProfileBasic {
-            id: soil_profile.id,
-            last_updated: soil_profile.last_updated,
-            name: Some(soil_profile.name),
-            description_horizon: soil_profile.description_horizon,
-        }
-    }
-}
-
-impl SoilProfileBasic {
-    pub async fn from_db(
-        soil_profile: crate::soil::profiles::db::Model,
+    async fn update(
         db: &DatabaseConnection,
-    ) -> Self {
-        let soil_profile = crate::soil::profiles::db::Entity::find()
-            .filter(crate::soil::profiles::db::Column::Id.eq(soil_profile.id))
+        id: Uuid,
+        update_model: Self::UpdateModel,
+    ) -> Result<Self::ApiModel, DbErr> {
+        let existing: Self::ActiveModelType = Self::EntityType::find()
+            .filter(Self::ColumnType::Id.eq(id))
             .one(db)
-            .await
-            .unwrap()
-            .unwrap();
-        SoilProfileBasic::from(soil_profile)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?
+            .into();
+        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated = updated_model.update(db).await?;
+        Self::get_one(db, updated.id).await
     }
-}
 
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct SoilProfileCreate {
-    pub name: String,
-    pub profile_iterator: i32,
-    pub gradient: String,
-    pub description_horizon: Option<Value>,
-    pub weather: Option<String>,
-    pub topography: Option<String>,
-    pub vegetation_type: Option<String>,
-    pub aspect: Option<String>,
-    pub lythology_surficial_deposit: Option<String>,
-    pub soil_type_id: Uuid,
-    pub area_id: Uuid,
-    pub soil_diagram: Option<String>,
-    pub photo: Option<String>,
-    pub parent_material: Option<f64>,
-}
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("id", Self::ColumnType::Id),
+            ("name", Self::ColumnType::Name),
+            ("last_updated", Self::ColumnType::LastUpdated),
+        ]
+    }
 
-impl From<SoilProfileCreate> for crate::soil::profiles::db::ActiveModel {
-    fn from(soil_profile: SoilProfileCreate) -> Self {
-        let now = chrono::Utc::now().naive_utc();
-
-        crate::soil::profiles::db::ActiveModel {
-            id: sea_orm::ActiveValue::Set(Uuid::new_v4()),
-            last_updated: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
-            name: sea_orm::ActiveValue::Set(soil_profile.name),
-            profile_iterator: sea_orm::ActiveValue::Set(soil_profile.profile_iterator),
-            gradient: sea_orm::ActiveValue::Set(soil_profile.gradient),
-            description_horizon: sea_orm::ActiveValue::Set(soil_profile.description_horizon),
-            weather: sea_orm::ActiveValue::Set(soil_profile.weather),
-            topography: sea_orm::ActiveValue::Set(soil_profile.topography),
-            vegetation_type: sea_orm::ActiveValue::Set(soil_profile.vegetation_type),
-            aspect: sea_orm::ActiveValue::Set(soil_profile.aspect),
-            lythology_surficial_deposit: sea_orm::ActiveValue::Set(
-                soil_profile.lythology_surficial_deposit,
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("name", Self::ColumnType::Name),
+            ("gradient", Self::ColumnType::Gradient),
+            ("weather", Self::ColumnType::Weather),
+            ("topography", Self::ColumnType::Topography),
+            ("vegetation_type", Self::ColumnType::VegetationType),
+            ("aspect", Self::ColumnType::Aspect),
+            (
+                "lythology_surficial_deposit",
+                Self::ColumnType::LythologySurficialDeposit,
             ),
-            created_on: sea_orm::ActiveValue::Set(Some(now)),
-            soil_type_id: sea_orm::ActiveValue::Set(soil_profile.soil_type_id),
-            area_id: sea_orm::ActiveValue::Set(soil_profile.area_id),
-            soil_diagram: sea_orm::ActiveValue::Set(soil_profile.soil_diagram),
-            photo: sea_orm::ActiveValue::Set(soil_profile.photo),
-            parent_material: sea_orm::ActiveValue::Set(soil_profile.parent_material),
-            iterator: sea_orm::ActiveValue::NotSet,
-        }
+        ]
     }
 }

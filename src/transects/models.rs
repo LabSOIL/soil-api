@@ -1,238 +1,192 @@
-use crate::areas::models::AreaBasicWithProject;
-use crate::plots::db::Entity as PlotDB;
-use crate::plots::models::PlotSimple;
-use crate::transects::db::Entity as TransectDB;
-use crate::transects::nodes::db::Entity as TransectNodeDB;
+use crate::plots::models::Plot;
+use crate::transects::db;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
-
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
-use sea_query::Expr;
-use sea_query::{Condition, Order};
-use serde::Serialize;
+use async_trait::async_trait;
+use chrono::NaiveDateTime;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    Order, QueryFilter, QueryOrder, QuerySelect,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
+#[active_model = "super::db::ActiveModel"]
 pub struct Transect {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
     pub name: Option<String>,
-    pub nodes: Vec<TransectNodeAsPlotWithOrder>,
+    pub description: Option<String>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
+    pub date_created: Option<NaiveDateTime>,
     pub area_id: Uuid,
-    pub last_updated: chrono::NaiveDateTime,
-    pub area: Option<crate::areas::models::AreaBasicWithProject>,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
+    pub last_updated: NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub area: Option<crate::areas::models::Area>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub nodes: Vec<TransectNodeAsPlotWithOrder>,
 }
 
-impl Transect {
-    pub async fn from_area(
-        area: &crate::areas::db::Model,
-        db: &DatabaseConnection,
-    ) -> Vec<Transect> {
-        let transects: Vec<(
-            crate::transects::db::Model,
-            Vec<crate::transects::nodes::db::Model>,
-        )> = TransectDB::find()
-            .filter(crate::transects::db::Column::AreaId.eq(area.id))
-            .find_with_related(TransectNodeDB)
-            .all(db)
-            .await
-            .unwrap();
-
-        let mut transects_with_nodes: Vec<Transect> = Vec::new();
-        for (transect, nodes) in transects {
-            let mut transect_nodes: Vec<TransectNodeAsPlotWithOrder> = Vec::new();
-
-            for node in nodes {
-                let plot: PlotSimple = PlotDB::find()
-                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
-                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-                    .column_as(
-                        Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
-                        "longitude",
-                    )
-                    .column_as(
-                        Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
-                        "latitude",
-                    )
-                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-                    .into_model::<PlotSimple>()
-                    .one(db)
-                    .await
-                    .unwrap()
-                    .unwrap();
-
-                transect_nodes.push(TransectNodeAsPlotWithOrder {
-                    id: plot.id,
-                    order: node.order,
-                    name: plot.name,
-                    latitude: plot.latitude,
-                    longitude: plot.longitude,
-                    coord_srid: plot.coord_srid,
-                    coord_x: plot.coord_x,
-                    coord_y: plot.coord_y,
-                    coord_z: plot.coord_z,
-                });
-            }
-            let area_with_project = AreaBasicWithProject::from(area.id, db.clone()).await;
-            transects_with_nodes.push(Transect {
-                id: transect.id,
-                name: transect.name.clone(),
-                nodes: transect_nodes,
-                area_id: transect.area_id,
-                last_updated: transect.last_updated,
-                area: Some(area_with_project),
-            });
+impl From<db::Model> for Transect {
+    fn from(model: db::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            date_created: model.date_created,
+            nodes: Vec::new(),
+            area_id: model.area_id,
+            last_updated: model.last_updated,
+            area: None,
         }
-
-        transects_with_nodes
     }
+}
 
-    pub async fn get_all(
+#[async_trait]
+impl CRUDResource for Transect {
+    type EntityType = db::Entity;
+    type ColumnType = db::Column;
+    type ModelType = db::Model;
+    type ActiveModelType = db::ActiveModel;
+    type ApiModel = Transect;
+    type CreateModel = TransectCreate;
+    type UpdateModel = TransectUpdate;
+
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
+    const RESOURCE_NAME_PLURAL: &'static str = "transects";
+    const RESOURCE_NAME_SINGULAR: &'static str = "transect";
+
+    async fn get_all(
         db: &DatabaseConnection,
         condition: Condition,
-        order_column: crate::transects::db::Column,
+        order_column: Self::ColumnType,
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Vec<Self> {
-        let transects: Vec<(
-            crate::transects::db::Model,
-            Vec<crate::transects::nodes::db::Model>,
-        )> = crate::transects::db::Entity::find()
-            .filter(condition)
-            .order_by(order_column, order_direction)
-            .offset(offset)
-            .limit(limit)
-            .find_with_related(crate::transects::nodes::db::Entity)
-            .all(db)
-            .await
-            .unwrap();
-
-        let mut transects_with_nodes: Vec<Transect> = Vec::new();
-        for (transect, nodes) in transects {
-            let mut transect_nodes: Vec<TransectNodeAsPlotWithOrder> = Vec::new();
-
+    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+        // Fetch transects along with their related transect nodes.
+        let results: Vec<(db::Model, Vec<crate::transects::nodes::db::Model>)> =
+            Self::EntityType::find()
+                .filter(condition)
+                .order_by(order_column, order_direction)
+                .offset(offset)
+                .limit(limit)
+                .find_with_related(crate::transects::nodes::db::Entity)
+                .all(db)
+                .await?;
+        let mut transects = Vec::new();
+        for (transect_model, nodes) in results {
+            let mut transect_nodes = Vec::new();
             for node in nodes {
-                let plot: PlotSimple = crate::plots::db::Entity::find()
+                // Fetch the plot details for each node
+                let plot: Plot = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
-                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-                    .column_as(
-                        Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
-                        "longitude",
-                    )
-                    .column_as(
-                        Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
-                        "latitude",
-                    )
-                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-                    .into_model::<PlotSimple>()
                     .one(db)
-                    .await
-                    .unwrap()
-                    .unwrap();
-
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                    .into();
                 transect_nodes.push(TransectNodeAsPlotWithOrder {
                     id: plot.id,
                     order: node.order,
                     name: plot.name,
-                    latitude: plot.latitude,
-                    longitude: plot.longitude,
                     coord_srid: plot.coord_srid,
                     coord_x: plot.coord_x,
                     coord_y: plot.coord_y,
                     coord_z: plot.coord_z,
                 });
             }
+            // Load the associated area (with project info)
+            let area: crate::areas::models::Area = crate::areas::db::Entity::find()
+                .filter(crate::areas::db::Column::Id.eq(transect_model.area_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Area not found".into()))?
+                .into();
 
-            let area =
-                crate::areas::models::AreaBasicWithProject::from(transect.area_id, db.clone())
-                    .await;
-
-            transects_with_nodes.push(Transect {
-                id: transect.id,
-                name: transect.name.clone(),
-                nodes: transect_nodes,
-                area_id: transect.area_id,
-                last_updated: transect.last_updated,
-                area: Some(area),
-            });
+            let mut transect_api: Transect = transect_model.into();
+            transect_api.nodes = transect_nodes;
+            transect_api.area = Some(area);
+            transects.push(transect_api);
         }
-
-        transects_with_nodes
+        Ok(transects)
     }
 
-    pub async fn get_one(transect_id: Uuid, db: &DatabaseConnection) -> Option<Self> {
-        // Query for the single transect with the provided id and its related transect nodes
-        let transect_tuple: Option<(
-            crate::transects::db::Model,
-            Vec<crate::transects::nodes::db::Model>,
-        )> = TransectDB::find()
-            .filter(crate::transects::db::Column::Id.eq(transect_id))
-            .find_with_related(TransectNodeDB)
-            .all(db)
-            .await
-            .unwrap()
-            .into_iter()
-            .next(); // Retrieve the first result, if any
-
-        // If a transect is found, process it, otherwise return None
-        if let Some((transect, nodes)) = transect_tuple {
-            let mut transect_nodes: Vec<TransectNodeAsPlotWithOrder> = Vec::new();
-
-            // Iterate over nodes and fetch the associated plot for each node
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+        let results: Vec<(db::Model, Vec<crate::transects::nodes::db::Model>)> =
+            Self::EntityType::find()
+                .filter(db::Column::Id.eq(id))
+                .find_with_related(crate::transects::nodes::db::Entity)
+                .all(db)
+                .await?;
+        if let Some((transect_model, nodes)) = results.into_iter().next() {
+            let mut transect_nodes = Vec::new();
             for node in nodes {
-                let plot: PlotSimple = PlotDB::find()
+                let plot: Plot = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
-                    .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-                    .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-                    .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-                    .column_as(
-                        Expr::cust("ST_X(st_transform(plot.geom, 4326))"),
-                        "longitude",
-                    )
-                    .column_as(
-                        Expr::cust("ST_Y(st_transform(plot.geom, 4326))"),
-                        "latitude",
-                    )
-                    .column_as(Expr::cust("st_srid(plot.geom)"), "coord_srid")
-                    .into_model::<PlotSimple>()
                     .one(db)
-                    .await
-                    .unwrap()
-                    .unwrap(); // Assuming plot always exists
-
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                    .into();
                 transect_nodes.push(TransectNodeAsPlotWithOrder {
                     id: plot.id,
                     order: node.order,
                     name: plot.name,
-                    latitude: plot.latitude,
-                    longitude: plot.longitude,
                     coord_srid: plot.coord_srid,
                     coord_x: plot.coord_x,
                     coord_y: plot.coord_y,
                     coord_z: plot.coord_z,
                 });
             }
+            let area: crate::areas::models::Area = crate::areas::db::Entity::find()
+                .filter(crate::areas::db::Column::Id.eq(transect_model.area_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Area not found".into()))?
+                .into();
 
-            let area =
-                crate::areas::models::AreaBasicWithProject::from(transect.area_id, db.clone())
-                    .await;
-
-            // Return the constructed Transect
-            Some(Transect {
-                id: transect.id,
-                name: transect.name,
-                nodes: transect_nodes,
-                area_id: transect.area_id,
-                last_updated: transect.last_updated,
-                area: Some(area),
-            })
+            let mut transect_api: Transect = transect_model.into();
+            transect_api.nodes = transect_nodes;
+            transect_api.area = Some(area);
+            Ok(transect_api)
         } else {
-            // Return None if no transect is found
-            None
+            Err(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+            ))
         }
+    }
+
+    async fn update(
+        db: &DatabaseConnection,
+        id: Uuid,
+        update_model: Self::UpdateModel,
+    ) -> Result<Self::ApiModel, DbErr> {
+        let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound(
+                format!("{} not found", Self::RESOURCE_NAME_PLURAL).into(),
+            ))?
+            .into();
+        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated = updated_model.update(db).await?;
+        Self::get_one(db, updated.id).await
+    }
+
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("id", Self::ColumnType::Id),
+            ("name", Self::ColumnType::Name),
+            ("last_updated", Self::ColumnType::LastUpdated),
+        ]
+    }
+
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("name", Self::ColumnType::Name),
+            ("description", Self::ColumnType::Description),
+        ]
     }
 }

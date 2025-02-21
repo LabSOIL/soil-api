@@ -1,156 +1,53 @@
-use crate::areas::db::Entity as AreaDB;
-use crate::common::models::FilterOptions;
-use crate::plots::db::Entity as PlotDB;
-use crate::plots::db::Gradientchoices;
-use crate::plots::models::{Area, Plot, PlotWithCoords};
-use axum::response::IntoResponse;
+use super::models::Plot;
+use crate::common::auth::Role;
 use axum::{
-    extract::{Query, State},
-    http::header::HeaderMap,
-    routing, Json, Router,
+    routing::{delete, get},
+    Router,
 };
-use sea_orm::sqlx::Result;
-use sea_orm::Condition;
-use sea_orm::EntityTrait;
-use sea_orm::{query::*, DatabaseConnection};
-use sea_query::{Alias, Expr};
-use serde::Serialize;
-use serde_json::json;
-use std::collections::HashMap;
-use uuid::Uuid;
+use axum_keycloak_auth::{
+    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+};
+use crudcrate::{routes as crud, CRUDResource};
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 
-impl Serialize for Gradientchoices {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let gradient = match self {
-            Gradientchoices::Flat => "Flat",
-            Gradientchoices::Slope => "Slope",
-        };
-        serializer.serialize_str(gradient)
-    }
-}
-
-pub fn router(db: DatabaseConnection) -> Router {
-    Router::new()
-        .route("/", routing::get(get_all))
-        .with_state(db)
-}
-
-#[utoipa::path(get, path = "/api/plots", responses((status = OK, body = PlotWithCoords)))]
-pub async fn get_all(
-    Query(params): Query<FilterOptions>,
-    State(db): State<DatabaseConnection>,
-) -> impl IntoResponse {
-    // Default values for range and sorting
-    let default_sort_column = "id";
-    let default_sort_order = "ASC";
-
-    // 1. Parse the filter, range, and sort parameters
-    let filters: HashMap<String, String> = if let Some(filter) = params.filter {
-        serde_json::from_str(&filter).unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
-
-    let (offset, limit) = if let Some(range) = params.range {
-        let range_vec: Vec<u64> = serde_json::from_str(&range).unwrap_or(vec![0, 24]); // Default to [0, 24]
-        let start = range_vec.get(0).copied().unwrap_or(0);
-        let end = range_vec.get(1).copied().unwrap_or(24);
-        let limit = end - start + 1;
-        (start, limit) // Offset is `start`, limit is the number of documents to fetch
-    } else {
-        (0, 25) // Default to 25 documents starting at 0
-    };
-
-    let (sort_column, sort_order) = if let Some(sort) = params.sort {
-        let sort_vec: Vec<String> = serde_json::from_str(&sort).unwrap_or(vec![
-            default_sort_column.to_string(),
-            default_sort_order.to_string(),
-        ]);
-        (
-            sort_vec
-                .get(0)
-                .cloned()
-                .unwrap_or(default_sort_column.to_string()),
-            sort_vec
-                .get(1)
-                .cloned()
-                .unwrap_or(default_sort_order.to_string()),
+pub fn router(
+    db: DatabaseConnection,
+    keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
+) -> Router
+where
+    Plot: CRUDResource,
+{
+    let mut mutating_router = Router::new()
+        .route(
+            "/",
+            get(crud::get_all::<Plot>).post(crud::create_one::<Plot>),
         )
-    } else {
-        (
-            default_sort_column.to_string(),
-            default_sort_order.to_string(),
+        .route(
+            "/{id}",
+            get(crud::get_one::<Plot>)
+                .put(crud::update_one::<Plot>)
+                .delete(crud::delete_one::<Plot>),
         )
-    };
+        .route("/batch", delete(crud::delete_many::<Plot>))
+        .with_state(db.clone());
 
-    // Apply filters
-    let mut condition = Condition::all();
-    for (key, mut value) in filters {
-        value = value.trim().to_string();
-
-        // Check if the value is a valid UUID
-        if let Ok(uuid) = Uuid::parse_str(&value) {
-            // If the value is a valid UUID, filter it as a UUID
-            condition = condition.add(Expr::col(Alias::new(&key)).eq(uuid));
-        } else {
-            // Otherwise, treat it as a regular string filter
-            condition = condition.add(Expr::col(Alias::new(&key)).eq(value));
-        }
+    if let Some(instance) = keycloak_auth_instance {
+        mutating_router = mutating_router.layer(
+            KeycloakAuthLayer::<Role>::builder()
+                .instance(instance)
+                .passthrough_mode(PassthroughMode::Block)
+                .persist_raw_claims(false)
+                .expected_audiences(vec![String::from("account")])
+                .required_roles(vec![Role::Administrator])
+                .build(),
+        );
+    } else {
+        println!(
+            "Warning: Mutating routes of {} router are not protected",
+            Plot::RESOURCE_NAME_PLURAL
+        );
     }
 
-    // Query with filtering, sorting, and pagination
-    let order_direction = if sort_order == "ASC" {
-        Order::Asc
-    } else {
-        Order::Desc
-    };
-    let order_column = match sort_column.as_str() {
-        "id" => <PlotDB as sea_orm::EntityTrait>::Column::Id,
-        "name" => <PlotDB as sea_orm::EntityTrait>::Column::Name,
-        "plot_iterator" => <PlotDB as sea_orm::EntityTrait>::Column::PlotIterator,
-        "area_id" => <PlotDB as sea_orm::EntityTrait>::Column::AreaId,
-        "gradient" => <PlotDB as sea_orm::EntityTrait>::Column::Gradient,
-        "vegetation_type" => <PlotDB as sea_orm::EntityTrait>::Column::VegetationType,
-        "topography" => <PlotDB as sea_orm::EntityTrait>::Column::Topography,
-        "aspect" => <PlotDB as sea_orm::EntityTrait>::Column::Aspect,
-        "created_on" => <PlotDB as sea_orm::EntityTrait>::Column::CreatedOn,
-        "weather" => <PlotDB as sea_orm::EntityTrait>::Column::Weather,
-        "lithology" => <PlotDB as sea_orm::EntityTrait>::Column::Lithology,
-        "iterator" => <PlotDB as sea_orm::EntityTrait>::Column::Iterator,
-        "last_updated" => <PlotDB as sea_orm::EntityTrait>::Column::LastUpdated,
-        "image" => <PlotDB as sea_orm::EntityTrait>::Column::Image,
-        _ => <PlotDB as sea_orm::EntityTrait>::Column::Id,
-    };
-
-    let objs = PlotDB::find()
-        .filter(condition)
-        .order_by(order_column, order_direction)
-        .offset(offset)
-        .limit(limit)
-        .column_as(Expr::cust("ST_X(plot.geom)"), "coord_x")
-        .column_as(Expr::cust("ST_Y(plot.geom)"), "coord_y")
-        .column_as(Expr::cust("ST_Z(plot.geom)"), "coord_z")
-        .find_also_related(AreaDB)
-        .into_model::<PlotWithCoords, Area>()
-        .all(&db)
-        .await
-        .unwrap();
-
-    // Map the results from the database models to the Plot struct
-    let plots: Vec<Plot> = objs
-        .into_iter()
-        .map(|(plot, area)| Plot::from((plot, area)))
-        .collect();
-
-    let total_plots: u64 = PlotDB::find().count(&db).await.unwrap();
-    let max_offset_limit = (offset + limit).min(total_plots);
-    let content_range = format!("plots {}-{}/{}", offset, max_offset_limit - 1, total_plots);
-
-    // Return the Content-Range as a header
-    let mut headers = HeaderMap::new();
-    headers.insert("Content-Range", content_range.parse().unwrap());
-    (headers, Json(json!(plots)))
+    mutating_router
 }

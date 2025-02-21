@@ -1,150 +1,301 @@
-use crate::plots::models::PlotSimple;
+use super::db::Model;
 use crate::projects::db::Entity as ProjectDB;
 use crate::projects::models::Project;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
-use crate::{areas::db::ActiveModel as AreaActiveModel, sensors::models::SensorSimple};
+use crate::{plots::models::Plot, sensors::profile::models::SensorProfile};
 use chrono::NaiveDateTime;
-use sea_orm::{entity::prelude::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use sea_orm::{
+    entity::prelude::*, query::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, Order,
+    QueryOrder,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize)]
-pub struct AreaRead {
-    id: Uuid,
-    last_updated: NaiveDateTime,
-    name: Option<String>,
-    description: Option<String>,
-    project_id: Uuid,
-    project: Project,
-    soil_profiles: Vec<SoilProfile>,
-    plots: Vec<PlotSimple>,
-    sensors: Vec<SensorSimple>,
-    transects: Vec<Transect>,
-    geom: Option<Value>,
-}
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct AreaCreate {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub project_id: Uuid,
-}
-
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct AreaUpdate {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub project_id: Uuid,
-}
-
-#[derive(ToSchema, Serialize)]
-pub struct AreaBasicWithProject {
+#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize)]
+#[active_model = "super::db::ActiveModel"]
+pub struct Area {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
+    pub last_updated: NaiveDateTime,
     pub name: Option<String>,
-    pub project: crate::common::models::GenericNameAndID,
+    pub description: Option<String>,
+    pub project_id: Uuid,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub project: Option<Project>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub soil_profiles: Vec<SoilProfile>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub plots: Vec<Plot>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub sensor_profiles: Vec<SensorProfile>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub transects: Vec<Transect>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub geom: Option<Value>,
 }
 
-impl AreaBasicWithProject {
-    pub async fn from(area_id: Uuid, db: DatabaseConnection) -> Self {
-        let area = super::db::Entity::find()
-            .filter(crate::areas::db::Column::Id.eq(area_id))
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        let project = ProjectDB::find()
-            .filter(crate::projects::db::Column::Id.eq(area.project_id))
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
-
-        AreaBasicWithProject {
-            id: area_id,
-            name: area.name,
-            project: crate::common::models::GenericNameAndID {
-                id: project.id,
-                name: project.name,
-            },
+impl From<Model> for Area {
+    fn from(model: Model) -> Self {
+        Area {
+            id: model.id,
+            last_updated: model.last_updated,
+            name: model.name,
+            description: model.description,
+            project_id: model.project_id,
+            project: None,
+            soil_profiles: vec![],
+            plots: vec![],
+            sensor_profiles: vec![],
+            transects: vec![],
+            geom: None,
         }
     }
 }
 
-impl From<AreaCreate> for AreaActiveModel {
-    fn from(area_create: AreaCreate) -> Self {
-        AreaActiveModel {
-            name: ActiveValue::Set(area_create.name),
-            description: ActiveValue::Set(area_create.description),
-            project_id: ActiveValue::Set(area_create.project_id),
-            iterator: ActiveValue::NotSet,
-            id: ActiveValue::Set(Uuid::new_v4()),
-            last_updated: ActiveValue::NotSet,
+#[async_trait::async_trait]
+impl CRUDResource for Area {
+    type EntityType = super::db::Entity;
+    type ColumnType = super::db::Column;
+    type ModelType = super::db::Model;
+    type ActiveModelType = super::db::ActiveModel;
+    type ApiModel = Area;
+    type CreateModel = AreaCreate;
+    type UpdateModel = AreaUpdate;
+
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
+    const RESOURCE_NAME_PLURAL: &'static str = "areas";
+    const RESOURCE_NAME_SINGULAR: &'static str = "area";
+
+    async fn get_all(
+        db: &DatabaseConnection,
+        condition: Condition,
+        order_column: Self::ColumnType,
+        order_direction: Order,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+        let models = Self::EntityType::find()
+            .filter(condition)
+            .order_by(order_column, order_direction)
+            .offset(offset)
+            .limit(limit)
+            .all(db)
+            .await?;
+        let mut areas = Vec::new();
+        for model in models {
+            let project = model.find_related(ProjectDB).one(db).await?.unwrap();
+
+            let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+
+            let sensor_profiles = model
+                .find_related(crate::sensors::profile::db::Entity)
+                .all(db)
+                .await?;
+
+            let soil_profiles = model
+                .find_related(crate::soil::profiles::db::Entity)
+                .all(db)
+                .await?;
+
+            let transects = model
+                .find_related(crate::transects::db::Entity)
+                .all(db)
+                .await?;
+            let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
+
+            for transect in transects.iter() {
+                let node_objs = transect
+                    .find_related(crate::transects::nodes::db::Entity)
+                    .all(db)
+                    .await?;
+                let mut nodes = vec![];
+
+                for node in node_objs {
+                    let plot: Plot = crate::plots::db::Entity::find()
+                        .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                        .one(db)
+                        .await?
+                        .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                        .into();
+                    let transect_node =
+                        crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
+                            id: plot.id,
+                            name: plot.name.clone(),
+                            coord_srid: plot.coord_srid,
+                            coord_x: plot.coord_x,
+                            coord_y: plot.coord_y,
+                            coord_z: plot.coord_z,
+                            order: node.order,
+                        };
+                    nodes.push(transect_node);
+                }
+
+                transect_objs.push(crate::transects::models::Transect {
+                    id: transect.id,
+                    name: transect.name.clone(),
+                    description: transect.description.clone(),
+                    date_created: transect.date_created,
+                    last_updated: transect.last_updated,
+                    area: None,
+                    area_id: transect.area_id,
+                    nodes,
+                });
+            }
+
+            let convex_hull = super::services::get_convex_hull(db, model.id).await;
+
+            let area = Area {
+                geom: convex_hull,
+                last_updated: model.last_updated,
+                project_id: model.project_id,
+                id: model.id,
+                name: model.name,
+                description: model.description,
+                project: Some(project.into()),
+                plots: plots.into_iter().map(Into::into).collect(),
+                sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
+                soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
+                transects: transect_objs,
+            };
+            areas.push(area);
         }
+        Ok(areas)
     }
-}
 
-impl AreaRead {
-    pub async fn from_db(area: super::db::Model, db: &DatabaseConnection) -> Self {
-        let plots: Vec<PlotSimple> = PlotSimple::from_area(&area, db).await;
-        let sensors: Vec<SensorSimple> = SensorSimple::from_area(&area, db).await;
-        let transects: Vec<Transect> = Transect::from_area(&area, db).await;
-        let soil_profiles: Vec<SoilProfile> = SoilProfile::from_area(&area, db).await;
-        let project: Project = Project::from_area(&area, db).await;
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+        let model = Self::EntityType::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Area not found".into()))?;
 
-        // Fetch convex hull geom for the area
-        let geom: Option<Value> = crate::areas::services::get_convex_hull(&db, area.id).await;
+        let project = model.find_related(ProjectDB).one(db).await?.unwrap();
 
-        AreaRead {
-            id: area.id,
-            name: area.name,
-            description: area.description,
-            project_id: area.project_id,
-            last_updated: area.last_updated,
-            plots,
-            soil_profiles,
-            sensors,
-            transects, // Include transects with nodes
-            project,
-            geom,
+        let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+
+        let sensor_profiles = model
+            .find_related(crate::sensors::profile::db::Entity)
+            .all(db)
+            .await?;
+
+        let soil_profiles = model
+            .find_related(crate::soil::profiles::db::Entity)
+            .all(db)
+            .await?;
+
+        let transects = model
+            .find_related(crate::transects::db::Entity)
+            .all(db)
+            .await?;
+        let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
+
+        for transect in transects.iter() {
+            let node_objs = transect
+                .find_related(crate::transects::nodes::db::Entity)
+                .all(db)
+                .await?;
+            let mut nodes = vec![];
+
+            for node in node_objs {
+                let plot: Plot = crate::plots::db::Entity::find()
+                    .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                    .one(db)
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
+                    .into();
+                let transect_node = crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
+                    id: plot.id,
+                    name: plot.name.clone(),
+                    coord_srid: plot.coord_srid,
+                    coord_x: plot.coord_x,
+                    coord_y: plot.coord_y,
+                    coord_z: plot.coord_z,
+                    order: node.order,
+                };
+                nodes.push(transect_node);
+            }
+
+            transect_objs.push(crate::transects::models::Transect {
+                id: transect.id,
+                name: transect.name.clone(),
+                description: transect.description.clone(),
+                date_created: transect.date_created,
+                last_updated: transect.last_updated,
+                area: None,
+                area_id: transect.area_id,
+                nodes,
+            });
         }
+
+        let convex_hull = super::services::get_convex_hull(db, model.id).await;
+
+        let area = Area {
+            geom: convex_hull,
+            last_updated: model.last_updated,
+            project_id: model.project_id,
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            project: Some(project.into()),
+            plots: plots.into_iter().map(Into::into).collect(),
+            sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
+            soil_profiles: soil_profiles.into_iter().map(Into::into).collect(),
+            transects: transect_objs,
+        };
+        Ok(area)
     }
-}
 
-impl From<AreaUpdate> for super::db::ActiveModel {
-    fn from(area: AreaUpdate) -> Self {
-        super::db::ActiveModel {
-            name: ActiveValue::Set(area.name),
-            description: ActiveValue::Set(area.description),
-            project_id: ActiveValue::Set(area.project_id),
-            id: ActiveValue::NotSet,
-            last_updated: ActiveValue::NotSet,
-            iterator: ActiveValue::NotSet,
-        }
+    async fn create(
+        db: &DatabaseConnection,
+        create_model: Self::CreateModel,
+    ) -> Result<Self::ApiModel, DbErr> {
+        let active_model: Self::ActiveModelType = create_model.into();
+        let inserted = active_model.insert(db).await?;
+        let area = Self::get_one(&db, inserted.id).await.unwrap();
+        Ok(area)
     }
-}
 
-impl super::db::ActiveModel {
-    pub fn merge(self, other: Self) -> Self {
-        super::db::ActiveModel {
-            name: match other.name {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.name,
-            },
-            description: match other.description {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.description,
-            },
-            project_id: match other.project_id {
-                ActiveValue::Set(value) => ActiveValue::Set(value),
-                _ => self.project_id,
-            },
-            // Keep all other fields unchanged if not set in `other`
-            id: self.id,
-            last_updated: self.last_updated,
-            iterator: self.iterator,
-        }
+    async fn update(
+        db: &DatabaseConnection,
+        id: Uuid,
+        update_model: Self::UpdateModel,
+    ) -> Result<Self::ApiModel, DbErr> {
+        let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Area not found".into()))?
+            .into();
+
+        let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
+        let response_obj = updated_obj.update(db).await?;
+        let area = Self::get_one(&db, response_obj.id).await?;
+        Ok(area)
+    }
+
+    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
+        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
+        Ok(res.rows_affected as usize)
+    }
+
+    fn default_index_column() -> Self::ColumnType {
+        super::db::Column::Id
+    }
+
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("id", super::db::Column::Id),
+            ("name", super::db::Column::Name),
+        ]
+    }
+
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("name", super::db::Column::Name),
+            ("description", super::db::Column::Description),
+        ]
     }
 }

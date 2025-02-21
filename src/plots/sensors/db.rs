@@ -12,8 +12,6 @@ pub struct Model {
     pub plot_id: Uuid,
     pub sensor_id: Uuid,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     pub depth_cm: i32,
 }

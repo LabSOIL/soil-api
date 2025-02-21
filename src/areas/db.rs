@@ -1,6 +1,6 @@
 use crate::plots::db::Entity as Plot;
 use crate::projects::db::Entity as Project;
-use crate::sensors::db::Entity as Sensor;
+use crate::sensors::profile::db::Entity as SensorProfile;
 use crate::soil::profiles::db::Entity as SoilProfile;
 use crate::transects::db::Entity as Transect;
 
@@ -11,13 +11,11 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "area")]
 pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
-    #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
-    pub id: Uuid,
     pub last_updated: NaiveDateTime,
 }
 
@@ -33,8 +31,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Project,
-    #[sea_orm(has_many = "Sensor")]
-    Sensor,
+    #[sea_orm(has_many = "SensorProfile")]
+    SensorProfile,
     #[sea_orm(has_many = "SoilProfile")]
     Soilprofile,
     #[sea_orm(has_many = "Transect")]
@@ -53,9 +51,9 @@ impl Related<Project> for Entity {
     }
 }
 
-impl Related<Sensor> for Entity {
+impl Related<SensorProfile> for Entity {
     fn to() -> RelationDef {
-        Relation::Sensor.def()
+        Relation::SensorProfile.def()
     }
 }
 

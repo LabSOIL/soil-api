@@ -8,9 +8,7 @@ use uuid::Uuid;
 pub struct Model {
     pub name: String,
     pub description: String,
-    #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub last_updated: NaiveDateTime,
     pub image: Option<String>,

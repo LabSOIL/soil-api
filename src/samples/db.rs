@@ -59,8 +59,6 @@ pub struct Model {
     #[sea_orm(column_type = "Double", nullable)]
     pub si_ug_per_g: Option<f64>,
     #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
     pub id: Uuid,
     #[sea_orm(column_type = "Double", nullable)]
     pub subsample_replica_weight: Option<f64>,

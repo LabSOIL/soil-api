@@ -1,138 +1,84 @@
-// use crate::common::models::ClosestFeature;
-// use crate::common::models::ClosestFeature;
-// use crate::sensors::data::db::Entity as SensorDataDB;
-// use crate::sensors::db::Entity as SensorDB;
-use lttb::lttb;
-// use sea_orm::DbBackend;
-// use sea_orm::{query::*, DatabaseConnection};
-// use sea_query::Alias;
-// use sea_query::Expr;
-// use sea_query::Order;
-// use serde_json::json;
-// use std::cmp::min;
-// use uuid::Uuid;
+use base64::{engine::general_purpose, Engine as _};
+use chrono::NaiveDateTime;
+use std::str;
+use uuid::Uuid;
 
-// pub async fn fetch_closest_features(
-//     sensor_id: Uuid,
-//     area_id: Uuid,
-//     db: &DatabaseConnection,
-// ) -> Vec<ClosestFeature> {
-//     // Fetch plots closest to the sensor
-//     let plots = fetch_closest_plots(sensor_id, area_id, db).await;
-
-//     // Fetch soil profiles closest to the sensor
-//     let soil_profiles = fetch_closest_soil_profiles(sensor_id, area_id, db).await;
-
-//     // Combine both lists of plots and soil profiles
-//     let mut closest_features: Vec<ClosestFeature> = Vec::new();
-
-//     closest_features.extend(plots);
-//     closest_features.extend(soil_profiles);
-
-//     // Sort by distance and return the closest 10
-//     closest_features.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-
-//     closest_features.into_iter().take(10).collect()
-// }
-use lttb::DataPoint;
-
-pub fn simplify_sensor_data_lttb(
-    data: Vec<crate::sensors::data::db::Model>,
-    target_points: usize,
-) -> Vec<crate::sensors::data::db::Model> {
-    let len = data.len();
-
-    if len <= target_points {
-        return data;
+fn decode_base64(value: &str) -> Result<(Vec<u8>, String), String> {
+    // Helper function: decode base64 and return (raw_bytes, file_type)
+    let parts: Vec<&str> = value.split(',').collect();
+    if parts.len() < 2 {
+        return Err("Invalid base64 format".into());
     }
-
-    // Convert the sensor data timestamps and temperature_1 values to DataPoint structs
-    let timestamps: Vec<DataPoint> = data
-        .iter()
-        .enumerate()
-        .map(|(i, d)| DataPoint {
-            x: i as f64, // or use d.time_utc.and_utc().timestamp() as f64
-            y: d.temperature_1.unwrap_or(0.0),
-        })
-        .collect();
-
-    // Downsample the data using the LTTB algorithm
-    let downsampled_points = lttb(timestamps, target_points);
-
-    // Now map the downsampled points back to your original data
-    let mut downsampled_data = vec![];
-
-    for point in downsampled_points {
-        let original = &data[point.x as usize]; // Map x value back to original index
-        let simplified = crate::sensors::data::db::Model {
-            temperature_1: Some(point.y),
-            ..original.clone()
-        };
-        downsampled_data.push(simplified);
-    }
-
-    downsampled_data
+    let meta = parts[0];
+    let data_part = parts[1];
+    let file_type = if meta.contains("text/csv") {
+        "csv".to_string()
+    } else if meta.contains("gpx") {
+        "gpx".to_string()
+    } else if meta.contains("text/plain") {
+        "txt".to_string()
+    } else {
+        return Err("Only CSV, TXT, and GPX files are supported".into());
+    };
+    let decoded = general_purpose::STANDARD
+        .decode(data_part)
+        .map_err(|e| e.to_string())?;
+    Ok((decoded, file_type))
 }
-// async fn fetch_closest_plots(
-//     sensor_id: Uuid,
-//     area_id: Uuid,
-//     db: &DatabaseConnection,
-// ) -> Vec<ClosestFeature> {
-//     let stmt_plots = sea_query::Query::select()
-//         .columns([crate::plots::db::Column::Id, crate::plots::db::Column::Name])
-//         .expr_as(
-//             Expr::cust("ST_Distance(sensor.geom, plot.geom)"),
-//             Alias::new("distance"),
-//         )
-//         .expr_as(
-//             Expr::cust("ST_Z(sensor.geom) - ST_Z(plot.geom)"),
-//             Alias::new("elevation_difference"),
-//         )
-//         .from(crate::plots::db::Entity)
-//         .and_where(Expr::col(crate::plots::db::Column::AreaId).eq(area_id))
-//         .and_where(Expr::col(crate::plots::db::Column::Id).eq(sensor_id))
-//         .order_by_asc(Expr::cust("ST_Distance(sensor.geom, plot.geom)"))
-//         .to_owned();
 
-//     // Execute and fetch closest plots
-//     SensorDB::find_by_statement(Statement::from_sql_and_values(
-//         DbBackend::Postgres, // Use the appropriate database backend
-//         stmt_plots.sql(),    // SQL query
-//         stmt_plots.values(), // Bind values
-//     ));
+fn ingest_csv_data(
+    sensor_data: &[u8],
+    sensor_id: Uuid,
+) -> Result<Vec<crate::sensors::data::models::SensorData>, String> {
+    // Helper function: ingest CSV sensor data and create SensorData objects
+    let data_str = str::from_utf8(sensor_data).map_err(|_| "Invalid UTF-8 sequence")?;
+    let mut objs = Vec::new();
+    for line in data_str.lines() {
+        if !line.trim().is_empty() {
+            let parts: Vec<&str> = line.split(';').collect();
+            if parts.len() < 9 {
+                continue; // Skip malformed lines
+            }
+            let instrument_seq = parts[0].parse::<i32>().unwrap_or(0);
+            // println!("Date: {}", parts[1]);
+            let time_utc = NaiveDateTime::parse_from_str(parts[1], "%Y.%m.%d %H:%M")
+                .map_err(|_| "Invalid date format")?;
+            let temperature_1 = parts[3].parse::<f64>().unwrap_or(0.0);
+            let temperature_2 = parts[4].parse::<f64>().unwrap_or(0.0);
+            let temperature_3 = parts[5].parse::<f64>().unwrap_or(0.0);
+            let temperature_average = (temperature_1 + temperature_2 + temperature_3) / 3.0;
+            let soil_moisture_count = parts[6].parse::<i32>().unwrap_or(0);
+            let shake = parts[7].parse::<i32>().unwrap_or(0);
+            let error_flat = parts[8].parse::<i32>().unwrap_or(0);
 
-//     closest_plots
-// }
+            let sensor_data_obj = crate::sensors::data::models::SensorData {
+                instrument_seq,
+                time_utc,
+                temperature_1,
+                temperature_2,
+                temperature_3,
+                temperature_average,
+                soil_moisture_count,
+                shake,
+                error_flat,
+                sensor_id,
+                last_updated: chrono::Utc::now().naive_utc(),
+            };
+            objs.push(sensor_data_obj);
+        }
+    }
+    Ok(objs)
+}
 
-// async fn fetch_closest_soil_profiles(
-//     sensor_id: Uuid,
-//     area_id: Uuid,
-//     db: &DatabaseConnection,
-// ) -> Vec<ClosestFeature> {
-//     let stmt_soil_profiles = sea_query::Query::select()
-//         .columns([
-//             crate::soil::profiles::db::Column::Id,
-//             crate::soil::profiles::db::Column::Name,
-//         ])
-//         .expr_as(
-//             Expr::cust("ST_Distance(sensor.geom, soil_profile.geom)"),
-//             "distance",
-//         )
-//         .expr_as(
-//             Expr::cust("ST_Z(sensor.geom) - ST_Z(soil_profile.geom)"),
-//             "elevation_difference",
-//         )
-//         .from(crate::soil::profiles::db::Entity)
-//         .and_where(Expr::col(crate::soil::profiles::db::Column::AreaId).eq(area_id))
-//         .and_where(Expr::col(crate::soil::profiles::db::Column::Id).eq(sensor_id))
-//         .order_by(
-//             Expr::cust("ST_Distance(sensor.geom, soil_profile.geom)"),
-//             Order::Asc,
-//         )
-//         .to_owned();
-
-//     // Execute and fetch closest soil profiles
-//     let closest_soil_profiles: Vec<ClosestFeature> = SensorDB::find_by_statement(stmt_plots).all(db).await.unwrap()
-
-//     closest_soil_profiles
-// }
+// New helper function: process the base64 CSV sensor data and return SensorData models.
+pub fn process_sensor_data_base64(
+    data_base64: &str,
+    sensor_id: Uuid,
+) -> Result<Vec<crate::sensors::data::models::SensorData>, String> {
+    let (raw_data, file_type) = decode_base64(data_base64)?;
+    if file_type != "csv" {
+        return Err("Only CSV files are supported".into());
+    }
+    let data_objs = ingest_csv_data(&raw_data, sensor_id)?;
+    Ok(data_objs)
+}

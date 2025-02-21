@@ -1,15 +1,26 @@
-use sea_orm::ColumnTrait;
-use sea_orm::Condition;
-use sea_orm::EntityTrait;
-use sea_orm::{query::*, DatabaseConnection, QueryFilter, QueryOrder};
-use sea_query::Order;
-use serde::Serialize;
+use async_trait::async_trait;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use sea_orm::{
+    sea_query::Order, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
+    DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize)]
+#[active_model = "super::db::ActiveModel"]
 pub struct PlotSample {
+    #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
+    pub created_on: Option<chrono::NaiveDate>,
+    #[crudcrate(
+        update_model = false, create_model = false,
+        on_create = chrono::Utc::now().naive_utc(),
+        on_update = chrono::Utc::now().naive_utc()
+    )]
+    pub last_updated: chrono::NaiveDateTime,
     pub name: String,
     pub upper_depth_cm: f64,
     pub lower_depth_cm: f64,
@@ -44,185 +55,147 @@ pub struct PlotSample {
     pub methanogens_per_g: Option<f64>,
     pub methanotrophs_per_g: Option<f64>,
     pub replicate: i32,
-    pub plot: crate::plots::models::PlotBasicWithAreaAndProject,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub plot: Option<crate::plots::models::Plot>,
 }
 
-impl PlotSample {
-    pub async fn get_all(
+impl From<crate::samples::db::Model> for PlotSample {
+    fn from(sample: crate::samples::db::Model) -> Self {
+        PlotSample {
+            id: sample.id,
+            name: sample.name,
+            upper_depth_cm: sample.upper_depth_cm,
+            lower_depth_cm: sample.lower_depth_cm,
+            plot_id: sample.plot_id,
+            sample_weight: sample.sample_weight,
+            subsample_weight: sample.subsample_weight,
+            ph: sample.ph,
+            rh: sample.rh,
+            loi: sample.loi,
+            mfc: sample.mfc,
+            c: sample.c,
+            n: sample.n,
+            cn: sample.cn,
+            clay_percent: sample.clay_percent,
+            silt_percent: sample.silt_percent,
+            sand_percent: sample.sand_percent,
+            fe_ug_per_g: sample.fe_ug_per_g,
+            na_ug_per_g: sample.na_ug_per_g,
+            al_ug_per_g: sample.al_ug_per_g,
+            k_ug_per_g: sample.k_ug_per_g,
+            ca_ug_per_g: sample.ca_ug_per_g,
+            mg_ug_per_g: sample.mg_ug_per_g,
+            mn_ug_per_g: sample.mn_ug_per_g,
+            s_ug_per_g: sample.s_ug_per_g,
+            cl_ug_per_g: sample.cl_ug_per_g,
+            p_ug_per_g: sample.p_ug_per_g,
+            si_ug_per_g: sample.si_ug_per_g,
+            subsample_replica_weight: sample.subsample_replica_weight,
+            fungi_per_g: sample.fungi_per_g,
+            bacteria_per_g: sample.bacteria_per_g,
+            archea_per_g: sample.archea_per_g,
+            methanogens_per_g: sample.methanogens_per_g,
+            methanotrophs_per_g: sample.methanotrophs_per_g,
+            replicate: sample.replicate,
+            last_updated: sample.last_updated,
+            created_on: sample.created_on,
+            plot: None,
+        }
+    }
+}
+
+impl From<(crate::samples::db::Model, crate::plots::db::Model)> for PlotSample {
+    fn from((sample, plot): (crate::samples::db::Model, crate::plots::db::Model)) -> Self {
+        let sample: PlotSample = sample.into();
+        let plot: crate::plots::models::Plot = plot.into();
+        PlotSample {
+            plot: Some(plot),
+            ..sample
+        }
+    }
+}
+
+#[async_trait]
+impl CRUDResource for PlotSample {
+    type EntityType = crate::samples::db::Entity;
+    type ColumnType = crate::samples::db::Column;
+    type ModelType = crate::samples::db::Model;
+    type ActiveModelType = crate::samples::db::ActiveModel;
+    type ApiModel = PlotSample;
+    type CreateModel = PlotSampleCreate;
+    type UpdateModel = PlotSampleUpdate;
+
+    const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
+    const RESOURCE_NAME_SINGULAR: &'static str = "plotsample";
+    const RESOURCE_NAME_PLURAL: &'static str = "plotsamples";
+
+    async fn get_all(
         db: &DatabaseConnection,
         condition: Condition,
-        order_column: <super::db::Entity as sea_orm::EntityTrait>::Column,
+        order_column: Self::ColumnType,
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Vec<Self> {
-        let samples = crate::samples::db::Entity::find()
+    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+        let samples = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
             .all(db)
-            .await
-            .unwrap();
-
+            .await?;
         let mut plot_samples: Vec<PlotSample> = Vec::new();
-
         for sample in samples {
-            let plot_obj = crate::plots::db::Entity::find()
+            let plot = crate::plots::db::Entity::find()
                 .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
                 .one(db)
-                .await
-                .unwrap()
-                .unwrap();
+                .await?
+                .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
 
-            let area = crate::areas::db::Entity::find()
-                .filter(crate::areas::db::Column::Id.eq(plot_obj.area_id))
-                .one(db)
-                .await
-                .unwrap()
-                .unwrap();
-
-            let project = crate::projects::db::Entity::find()
-                .filter(crate::projects::db::Column::Id.eq(area.project_id))
-                .one(db)
-                .await
-                .unwrap()
-                .unwrap();
-
-            let plot = crate::plots::models::PlotBasicWithAreaAndProject {
-                id: plot_obj.id,
-                name: plot_obj.name,
-                area: crate::areas::models::AreaBasicWithProject {
-                    id: area.id,
-                    name: area.name,
-                    project: crate::common::models::GenericNameAndID {
-                        id: project.id,
-                        name: project.name,
-                    },
-                },
-            };
-
-            plot_samples.push(PlotSample {
-                id: sample.id,
-                name: sample.name,
-                upper_depth_cm: sample.upper_depth_cm,
-                lower_depth_cm: sample.lower_depth_cm,
-                plot_id: sample.plot_id,
-                sample_weight: sample.sample_weight,
-                subsample_weight: sample.subsample_weight,
-                ph: sample.ph,
-                rh: sample.rh,
-                loi: sample.loi,
-                mfc: sample.mfc,
-                c: sample.c,
-                n: sample.n,
-                cn: sample.cn,
-                clay_percent: sample.clay_percent,
-                silt_percent: sample.silt_percent,
-                sand_percent: sample.sand_percent,
-                fe_ug_per_g: sample.fe_ug_per_g,
-                na_ug_per_g: sample.na_ug_per_g,
-                al_ug_per_g: sample.al_ug_per_g,
-                k_ug_per_g: sample.k_ug_per_g,
-                ca_ug_per_g: sample.ca_ug_per_g,
-                mg_ug_per_g: sample.mg_ug_per_g,
-                mn_ug_per_g: sample.mn_ug_per_g,
-                s_ug_per_g: sample.s_ug_per_g,
-                cl_ug_per_g: sample.cl_ug_per_g,
-                p_ug_per_g: sample.p_ug_per_g,
-                si_ug_per_g: sample.si_ug_per_g,
-                subsample_replica_weight: sample.subsample_replica_weight,
-                fungi_per_g: sample.fungi_per_g,
-                bacteria_per_g: sample.bacteria_per_g,
-                archea_per_g: sample.archea_per_g,
-                methanogens_per_g: sample.methanogens_per_g,
-                methanotrophs_per_g: sample.methanotrophs_per_g,
-                replicate: sample.replicate,
-                plot: plot,
-            });
+            plot_samples.push((sample, plot).into());
         }
-        plot_samples
+        Ok(plot_samples)
     }
 
-    // pub async fn get_one(id: Uuid, db: &DatabaseConnection) -> Option<Self> {
-    //     let sample = crate::samples::db::Entity::find()
-    //         .filter(crate::samples::db::Column::Id.eq(id))
-    //         .one(db)
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+        let sample = Self::EntityType::find()
+            .filter(crate::samples::db::Column::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Plot sample not found".into()))?;
+        let plot = crate::plots::db::Entity::find()
+            .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
 
-    //     let plot_obj = crate::plots::db::Entity::find()
-    //         .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
-    //         .one(db)
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
+        Ok((sample, plot).into())
+    }
 
-    //     let area = crate::areas::db::Entity::find()
-    //         .filter(crate::areas::db::Column::Id.eq(plot_obj.area_id))
-    //         .one(db)
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
+    async fn update(
+        db: &DatabaseConnection,
+        id: Uuid,
+        update_model: Self::UpdateModel,
+    ) -> Result<Self::ApiModel, DbErr> {
+        let existing: Self::ActiveModelType = Self::EntityType::find()
+            .filter(crate::samples::db::Column::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Plot sample not found".into()))?
+            .into();
+        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated = updated_model.update(db).await?;
+        Self::get_one(db, updated.id).await
+    }
 
-    //     let project = crate::projects::db::Entity::find()
-    //         .filter(crate::projects::db::Column::Id.eq(area.project_id))
-    //         .one(db)
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
+    fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![
+            ("id", crate::samples::db::Column::Id),
+            ("name", crate::samples::db::Column::Name),
+        ]
+    }
 
-    //     let plot = crate::plots::models::PlotBasicWithAreaAndProject {
-    //         id: plot_obj.id,
-    //         name: plot_obj.name,
-    //         area: crate::areas::models::AreaBasicWithProject {
-    //             id: area.id,
-    //             name: area.name,
-    //             project: crate::common::models::GenericNameAndID {
-    //                 id: project.id,
-    //                 name: project.name,
-    //             },
-    //         },
-    //     };
-
-    //     Some(PlotSample {
-    //         id: sample.id,
-    //         name: sample.name,
-    //         upper_depth_cm: sample.upper_depth_cm,
-    //         lower_depth_cm: sample.lower_depth_cm,
-    //         plot_id: sample.plot_id,
-    //         sample_weight: sample.sample_weight,
-    //         subsample_weight: sample.subsample_weight,
-    //         ph: sample.ph,
-    //         rh: sample.rh,
-    //         loi: sample.loi,
-    //         mfc: sample.mfc,
-    //         c: sample.c,
-    //         n: sample.n,
-    //         cn: sample.cn,
-    //         clay_percent: sample.clay_percent,
-    //         silt_percent: sample.silt_percent,
-    //         sand_percent: sample.sand_percent,
-    //         fe_ug_per_g: sample.fe_ug_per_g,
-    //         na_ug_per_g: sample.na_ug_per_g,
-    //         al_ug_per_g: sample.al_ug_per_g,
-    //         k_ug_per_g: sample.k_ug_per_g,
-    //         ca_ug_per_g: sample.ca_ug_per_g,
-    //         mg_ug_per_g: sample.mg_ug_per_g,
-    //         mn_ug_per_g: sample.mn_ug_per_g,
-    //         s_ug_per_g: sample.s_ug_per_g,
-    //         cl_ug_per_g: sample.cl_ug_per_g,
-    //         p_ug_per_g: sample.p_ug_per_g,
-    //         si_ug_per_g: sample.si_ug_per_g,
-    //         subsample_replica_weight: sample.subsample_replica_weight,
-    //         fungi_per_g: sample.fungi_per_g,
-    //         bacteria_per_g: sample.bacteria_per_g,
-    //         archea_per_g: sample.archea_per_g,
-    //         methanogens_per_g: sample.methanogens_per_g,
-    //         methanotrophs_per_g: sample.methanotrophs_per_g,
-    //         replicate: sample.replicate,
-    //         plot: plot,
-    //     })
-    // }
+    fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
+        vec![("name", crate::samples::db::Column::Name)]
+    }
 }

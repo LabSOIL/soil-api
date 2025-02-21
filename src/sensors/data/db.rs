@@ -1,31 +1,25 @@
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, ToSchema)]
 #[sea_orm(table_name = "sensordata")]
 pub struct Model {
     pub instrument_seq: i32,
-    pub time_zone: Option<i32>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub temperature_1: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub temperature_2: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub temperature_3: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub soil_moisture_count: Option<f64>,
-    pub shake: Option<i32>,
-    pub error_flat: Option<i32>,
-    #[sea_orm(unique)]
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
+    pub temperature_1: f64,
+    pub temperature_2: f64,
+    pub temperature_3: f64,
+    pub soil_moisture_count: i32,
+    pub shake: i32,
+    pub error_flat: i32,
+    #[sea_orm(primary_key)]
     pub sensor_id: Uuid,
     pub last_updated: NaiveDateTime,
+    #[sea_orm(primary_key)]
     pub time_utc: NaiveDateTime,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub temperature_average: Option<f64>,
+    pub temperature_average: f64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

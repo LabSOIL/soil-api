@@ -3,18 +3,15 @@ use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize)]
 #[sea_orm(table_name = "sensor")]
 pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
     pub comment: Option<String>,
-    #[sea_orm(primary_key)]
-    pub iterator: i32,
-    #[sea_orm(unique)]
-    pub id: Uuid,
-    // #[sea_orm(column_type = "custom(\"geometry\")", nullable)]
-    // pub geom: Option<String>,
     pub area_id: Uuid,
     pub last_updated: NaiveDateTime,
     pub serial_number: Option<String>,

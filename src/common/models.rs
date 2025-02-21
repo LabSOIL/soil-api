@@ -1,37 +1,43 @@
-use sea_orm::FromQueryResult;
-use serde::Deserialize;
-use serde::Serialize;
+use crate::config::Config;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use uuid::Uuid;
 
-#[derive(ToSchema, Deserialize, Default)]
-pub struct FilterOptions {
-    pub filter: Option<String>, // JSON-encoded filter
-    pub range: Option<String>,  // range in the format "[0,24]"
-    pub sort: Option<String>,   // sort in the format '["id", "ASC"]'
+#[derive(ToSchema, Deserialize, Serialize, Default)]
+pub struct Keycloak {
+    pub client_id: String,
+    pub realm: String,
+    pub url: String,
 }
 
-#[derive(ToSchema, Serialize, FromQueryResult)]
-pub struct GenericNameAndID {
-    pub id: Uuid,
-    pub name: String,
+#[derive(ToSchema, Deserialize, Serialize, Default)]
+pub struct UIConfiguration {
+    // pub keycloak: Keycloak, // DIsable for now (this is the structure of the BFF)
+    #[serde(rename = "clientId")]
+    pub client_id: String,
+    pub realm: String,
+    pub url: String,
+    pub deployment: String,
 }
 
-#[derive(Serialize)]
-pub struct ClosestFeature {
-    pub id: Uuid,
-    pub name: String,
-    pub distance: f64,
-    pub elevation_difference: f64,
-    pub feature_type: String,
+impl UIConfiguration {
+    pub fn new() -> Self {
+        let config: Config = Config::from_env();
+        Self {
+            client_id: config.keycloak_ui_id,
+            realm: config.keycloak_realm,
+            url: config.keycloak_url,
+            deployment: config.deployment,
+        }
+    }
 }
 
 #[derive(ToSchema, Deserialize, Serialize)]
-pub struct XYZGeometry {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub srid: i32,
-    pub latitude: f64,
-    pub longitude: f64,
+pub struct HealthCheck {
+    pub status: String,
+}
+
+#[derive(ToSchema, Deserialize, Serialize)]
+pub struct ServiceStatus {
+    pub s3_status: bool,
+    pub kubernetes_status: bool,
 }
