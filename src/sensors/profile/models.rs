@@ -1,10 +1,11 @@
 use super::db::Model;
 use crate::config::Config;
 use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    DbErr, EntityTrait, Order, QueryOrder, QuerySelect, Statement,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -120,6 +121,7 @@ impl CRUDResource for SensorProfile {
             .map(|(assignment)| assignment.into())
             .collect();
 
+        // We need to get the data in the same spiti
         let model = model.pop().ok_or(DbErr::RecordNotFound(
             format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
         ))?;
@@ -160,5 +162,109 @@ impl CRUDResource for SensorProfile {
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
         ]
+    }
+}
+
+impl SensorProfile {
+    pub async fn get_one_low_resolution(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<SensorProfile, DbErr> {
+        // First, get the sensor profile with assignments
+        let sensor_profile = Self::get_one(db, id).await?;
+        let mut all_data = Vec::new();
+        // For each assignment, aggregate sensor data within the date range
+        for assignment in sensor_profile.assignments.iter() {
+            let sql = format!(
+                "WITH buckets AS (
+                    SELECT
+                        sensor_id,
+                        to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24)) AT TIME ZONE 'UTC' AS bucket,
+                        temperature_1,
+                        temperature_2,
+                        temperature_3,
+                        temperature_average,
+                        soil_moisture_count
+                    FROM sensordata
+                    WHERE sensor_id = '{}' AND time_utc BETWEEN '{}' AND '{}'
+                )
+                SELECT
+                    sensor_id,
+                    bucket AS time_utc,
+                    min(temperature_1) AS temperature_1,
+                    min(temperature_2) AS temperature_2,
+                    min(temperature_3) AS temperature_3,
+                    min(temperature_average) AS temperature_average,
+                    round(avg(soil_moisture_count))::integer AS soil_moisture_count,
+                    count(*) AS record_count
+                FROM buckets
+                GROUP BY sensor_id, bucket
+                ORDER BY bucket",
+                assignment.sensor_id,
+                assignment.date_from,
+                assignment.date_to
+            );
+            let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
+            let rows = db.query_all(stmt).await?;
+            for row in rows {
+                let sensor_id: Uuid = row.try_get("", "sensor_id")?;
+                let time_utc: NaiveDateTime = row.try_get("", "time_utc")?;
+                let temperature_1: f64 = row.try_get("", "temperature_1")?;
+                let temperature_2: f64 = row.try_get("", "temperature_2")?;
+                let temperature_3: f64 = row.try_get("", "temperature_3")?;
+                let temperature_average: f64 = row.try_get("", "temperature_average")?;
+                let soil_moisture_count: i32 = row.try_get("", "soil_moisture_count")?;
+
+                let sensor_data = crate::sensors::data::models::SensorData {
+                    instrument_seq: 0,
+                    time_utc,
+                    temperature_1,
+                    temperature_2,
+                    temperature_3,
+                    temperature_average,
+                    soil_moisture_count,
+                    shake: 0,
+                    error_flat: 0,
+                    sensor_id,
+                    last_updated: time_utc,
+                };
+                all_data.push(sensor_data);
+            }
+        }
+        // Merge all segments and sort them in order
+        all_data.sort_by_key(|d| d.time_utc);
+        let mut sensor_profile_mut = sensor_profile;
+        sensor_profile_mut.data = all_data.into_iter().map(|d| d.into()).collect();
+        Ok(sensor_profile_mut)
+    }
+
+    pub async fn get_one_high_resolution(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<SensorProfile, DbErr> {
+        // First, get the sensor profile with assignments
+        let sensor_profile = Self::get_one(db, id).await?;
+        let mut all_data = Vec::new();
+        // For each assignment, fetch the full sensor data records within the date range
+        for assignment in sensor_profile.assignments.iter() {
+            let sensor_data_records = crate::sensors::data::db::Entity::find()
+                .filter(crate::sensors::data::db::Column::SensorId.eq(assignment.sensor_id))
+                .filter(
+                    crate::sensors::data::db::Column::TimeUtc
+                        .between(assignment.date_from, assignment.date_to),
+                )
+                .order_by_asc(crate::sensors::data::db::Column::TimeUtc)
+                .all(db)
+                .await?;
+            for record in sensor_data_records {
+                let sensor_data: crate::sensors::data::models::SensorData = record.into();
+                all_data.push(sensor_data);
+            }
+        }
+        // Merge all segments and sort them in order
+        all_data.sort_by_key(|d| d.time_utc);
+        let mut sensor_profile_mut = sensor_profile;
+        sensor_profile_mut.data = all_data;
+        Ok(sensor_profile_mut)
     }
 }

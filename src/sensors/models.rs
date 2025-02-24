@@ -399,8 +399,6 @@ impl Sensor {
             let avg_temp_avg: f64 = row.try_get("", "avg_temp_avg")?;
             let avg_soil_moisture_count: i32 = row.try_get("", "avg_soil_moisture_count")?;
 
-            // Create an aggregated SensorData instance.
-            // Adjust defaults (e.g., instrument_seq, shake, error_flat) as needed.
             let sensor_data = crate::sensors::data::models::SensorData {
                 instrument_seq: 0,
                 time_utc: bucket,
@@ -412,21 +410,42 @@ impl Sensor {
                 shake: 0,
                 error_flat: 0,
                 sensor_id,
-                last_updated: bucket, // Or use chrono::Utc::now().naive_utc() if preferred.
+                last_updated: bucket,
             };
             aggregated_data.push(sensor_data);
         }
 
-        // Convert the raw SensorData objects to your API model.
-        sensor.data = aggregated_data.into_iter().map(|d| d.into()).collect();
+        // Insert gap rows if there's a large gap between consecutive buckets.
+        aggregated_data.sort_by_key(|d| d.time_utc);
+        let mut processed_data = Vec::new();
+        let gap_threshold = chrono::Duration::days(1);
+        for window in aggregated_data.windows(2) {
+            processed_data.push(window[0].clone());
+            if window[1].time_utc - window[0].time_utc > gap_threshold {
+                // Insert a gap row with NaN values to break the line in Plotly.
+                processed_data.push(crate::sensors::data::models::SensorData {
+                    instrument_seq: 0,
+                    time_utc: window[0].time_utc + gap_threshold,
+                    temperature_1: f64::NAN,
+                    temperature_2: f64::NAN,
+                    temperature_3: f64::NAN,
+                    temperature_average: f64::NAN,
+                    // For soil_moisture_count, using -1 as a sentinel; adjust if needed.
+                    soil_moisture_count: -1,
+                    shake: 0,
+                    error_flat: 0,
+                    sensor_id: window[0].sensor_id,
+                    last_updated: window[0].time_utc + gap_threshold,
+                });
+            }
+        }
+        if let Some(last) = aggregated_data.last() {
+            processed_data.push(last.clone());
+        }
+
+        sensor.data = processed_data.into_iter().map(|d| d.into()).collect();
         Ok(Sensor::from(sensor))
     }
-}
-
-#[derive(Deserialize)]
-pub struct LowResolution {
-    #[serde(default)]
-    pub high_resolution: bool,
 }
 
 async fn get_data_range(

@@ -1,5 +1,6 @@
-use super::models::{LowResolution, Sensor};
+use super::models::Sensor;
 use crate::common::auth::Role;
+use crate::common::models::LowResolution;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,

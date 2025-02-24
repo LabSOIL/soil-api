@@ -41,3 +41,9 @@ pub struct ServiceStatus {
     pub s3_status: bool,
     pub kubernetes_status: bool,
 }
+
+#[derive(Deserialize)]
+pub struct LowResolution {
+    #[serde(default)]
+    pub high_resolution: bool,
+}

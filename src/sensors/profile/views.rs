@@ -1,15 +1,19 @@
 use super::models::SensorProfile;
 use crate::common::auth::Role;
+use crate::common::models::LowResolution;
 use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
     routing::{delete, get},
-    Router,
+    Json, Router,
 };
 use axum_keycloak_auth::{
     instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
 };
 use crudcrate::{routes as crud, CRUDResource};
-use sea_orm::DatabaseConnection;
+use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub fn router(
     db: DatabaseConnection,
@@ -25,7 +29,7 @@ where
         )
         .route(
             "/{id}",
-            get(crud::get_one::<SensorProfile>)
+            get(get_one::<SensorProfile>)
                 .put(crud::update_one::<SensorProfile>)
                 .delete(crud::delete_one::<SensorProfile>),
         )
@@ -50,4 +54,44 @@ where
     }
 
     mutating_router
+}
+
+pub async fn get_one<T>(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<LowResolution>,
+) -> Result<Json<T::ApiModel>, (StatusCode, Json<String>)>
+where
+    T: CRUDResource,
+    <T as CRUDResource>::ApiModel: From<SensorProfile>,
+{
+    if query.high_resolution {
+        match T::get_one(&db, id).await {
+            Ok(item) => Ok(Json(item)),
+            Err(DbErr::RecordNotFound(_)) => {
+                Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Internal Server Error".to_string()),
+                ))
+            }
+        }
+    } else {
+        match SensorProfile::get_one_low_resolution(&db, id).await {
+            Ok(item) => Ok(Json(item.into())),
+            Err(DbErr::RecordNotFound(_)) => {
+                Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Internal Server Error".to_string()),
+                ))
+            }
+        }
+    }
 }
