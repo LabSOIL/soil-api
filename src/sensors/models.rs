@@ -28,8 +28,10 @@ pub struct Sensor {
     pub data: Vec<crate::sensors::data::models::SensorData>,
     #[crudcrate(non_db_attr = true, default = vec![])]
     pub data_base64: Option<String>,
-    // #[crudcrate(update_model = false, create_model = false)]
-    // area: Option<crate::areas::models::AreaBasicWithProject>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub area: Option<crate::areas::models::Area>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment>,
 }
 
 impl From<Model> for Sensor {
@@ -45,7 +47,8 @@ impl From<Model> for Sensor {
             area_id: model.area_id,
             data: vec![],
             data_base64: None,
-            // area: None,
+            area: None,
+            assignments: vec![],
         }
     }
 }
@@ -79,7 +82,36 @@ impl CRUDResource for Sensor {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(Self::ApiModel::from).collect())
+
+        let assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment> =
+            models
+                .load_many(crate::sensors::profile::assignment::db::Entity, db)
+                .await?
+                .pop()
+                .unwrap()
+                .into_iter()
+                .map(|(assignment)| assignment.into())
+                .collect();
+
+        let mut sensors: Vec<Sensor> = Vec::new();
+
+        for model in models {
+            let sensor: Sensor = model.into();
+            let sensor_id = sensor.id;
+            let sensor_assignments: Vec<
+                crate::sensors::profile::assignment::models::SensorProfileAssignment,
+            > = assignments
+                .iter()
+                .filter(|assignment| assignment.sensor_id == sensor_id)
+                .cloned()
+                .collect();
+            sensors.push(Sensor {
+                assignments: sensor_assignments,
+                ..sensor
+            });
+        }
+
+        Ok(sensors)
     }
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
         let (sensor, data) = Self::EntityType::find()
@@ -94,9 +126,24 @@ impl CRUDResource for Sensor {
             ))?;
 
         let mut sensor: super::models::Sensor = sensor.into();
+
         sensor.data = data.into_iter().map(|d| d.into()).collect();
 
-        Ok(Self::ApiModel::from(sensor))
+        let assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment> =
+            crate::sensors::profile::assignment::db::Entity::find()
+                .filter(crate::sensors::profile::assignment::db::Column::SensorId.eq(id))
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|assignment| assignment.into())
+                .collect();
+
+        println!("Assignments: {:?}", assignments.len());
+        let sensor = Sensor {
+            assignments,
+            ..sensor.into()
+        };
+        Ok(sensor)
     }
 
     async fn create(
@@ -284,14 +331,7 @@ impl Sensor {
         id: Uuid,
     ) -> Result<Sensor, DbErr> {
         // Fetch the sensor record from the sensor table.
-        let sensor_model = super::db::Entity::find()
-            .filter(super::db::Column::Id.eq(id))
-            .one(db)
-            .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))?;
-        let mut sensor: super::models::Sensor = sensor_model.into();
+        let mut sensor = Self::get_one(db, id).await?;
 
         // Construct the raw SQL query using the provided script.
         // (Here the bucket interval is set to 24hr.)

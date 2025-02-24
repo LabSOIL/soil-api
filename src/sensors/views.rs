@@ -63,7 +63,6 @@ where
     T: CRUDResource,
     <T as CRUDResource>::ApiModel: From<Sensor>,
 {
-    println!("High resolution: {}", query.high_resolution);
     if query.high_resolution {
         match T::get_one(&db, id).await {
             Ok(item) => Ok(Json(item)),

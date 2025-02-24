@@ -10,7 +10,9 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-#[derive(ToSchema, Serialize, Deserialize, FromQueryResult, ToUpdateModel, ToCreateModel)]
+#[derive(
+    ToSchema, Serialize, Deserialize, FromQueryResult, ToUpdateModel, ToCreateModel, Clone,
+)]
 #[active_model = "super::db::ActiveModel"]
 pub struct Project {
     #[crudcrate(on_create = generate_random_color())]

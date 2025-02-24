@@ -71,6 +71,10 @@ impl CRUDResource for SensorProfileAssignment {
             .all(db)
             .await?;
 
+        if models.is_empty() {
+            return Ok(vec![]);
+        }
+
         let sensor_profile: crate::sensors::profile::models::SensorProfile = models
             .load_one(crate::sensors::profile::db::Entity, db)
             .await?
@@ -86,6 +90,7 @@ impl CRUDResource for SensorProfileAssignment {
             .unwrap()
             .unwrap()
             .into();
+
         let models: Vec<Self::ApiModel> = models
             .into_iter()
             .map(|model| {

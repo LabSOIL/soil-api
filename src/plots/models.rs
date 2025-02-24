@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel, Deserialize)]
+#[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel, Deserialize, Clone)]
 #[active_model = "super::db::ActiveModel"]
 
 pub struct Plot {

@@ -28,8 +28,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Area,
-    #[sea_orm(has_many = "crate::plots::sensors::db::Entity")]
-    Plotsensorassignments,
+    #[sea_orm(has_many = "crate::sensors::profile::assignment::db::Entity")]
+    SensorProfileAssignments,
     #[sea_orm(has_many = "crate::sensors::data::db::Entity")]
     Sensordata,
 }
@@ -40,9 +40,9 @@ impl Related<Area> for Entity {
     }
 }
 
-impl Related<crate::plots::sensors::db::Entity> for Entity {
+impl Related<crate::sensors::profile::assignment::db::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Plotsensorassignments.def()
+        Relation::SensorProfileAssignments.def()
     }
 }
 

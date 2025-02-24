@@ -10,7 +10,7 @@ pub struct TransectNode {
     pub plot: Plot,
 }
 
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, Clone)]
 pub struct TransectNodeAsPlotWithOrder {
     // A transect node is really a plot with an order value, this is similar to
     // the PlotSimple struct but with an additional order field
