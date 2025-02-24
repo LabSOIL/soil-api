@@ -1,4 +1,4 @@
-use super::models::Sensor;
+use super::models::{LowResolution, Sensor};
 use crate::common::auth::Role;
 use axum::{
     extract::{Path, Query, State},
@@ -11,7 +11,7 @@ use axum_keycloak_auth::{
 };
 use crudcrate::routes as crud;
 use crudcrate::CRUDResource;
-use sea_orm::{DatabaseConnection, DbErr};
+use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -32,6 +32,7 @@ pub fn router(
                 .delete(crud::delete_one::<Sensor>),
         )
         .route("/batch", delete(crud::delete_many::<Sensor>))
+        .route("/{id}/data", delete(delete_data))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
@@ -94,8 +95,21 @@ where
     }
 }
 
-#[derive(Deserialize)]
-pub struct LowResolution {
-    #[serde(default)]
-    pub high_resolution: bool,
+pub async fn delete_data(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, Json<String>)> {
+    crate::sensors::data::db::Entity::delete_many()
+        .filter(crate::sensors::data::db::Column::SensorId.eq(id))
+        .exec(&db)
+        .await
+        .map_err(|e| {
+            println!("Error: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            )
+        })?;
+
+    Ok(StatusCode::OK)
 }

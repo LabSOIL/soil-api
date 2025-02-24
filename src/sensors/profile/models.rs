@@ -27,6 +27,8 @@ pub struct SensorProfile {
     pub coord_srid: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
     pub assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment>,
+    #[crudcrate(non_db_attr = true, default = vec![])]
+    pub data: Vec<crate::sensors::data::models::SensorData>,
 }
 
 impl From<Model> for SensorProfile {
@@ -51,6 +53,7 @@ impl SensorProfile {
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
             assignments,
+            data: vec![],
         }
     }
 }

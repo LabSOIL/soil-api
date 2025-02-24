@@ -24,6 +24,10 @@ pub struct Sensor {
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
     pub last_updated: chrono::NaiveDateTime,
     pub area_id: Uuid,
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub data_from: Option<chrono::NaiveDateTime>,
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub data_to: Option<chrono::NaiveDateTime>,
     #[crudcrate(non_db_attr = true, default = vec![])]
     pub data: Vec<crate::sensors::data::models::SensorData>,
     #[crudcrate(non_db_attr = true, default = vec![])]
@@ -49,6 +53,8 @@ impl From<Model> for Sensor {
             data_base64: None,
             area: None,
             assignments: vec![],
+            data_from: None,
+            data_to: None,
         }
     }
 }
@@ -97,16 +103,19 @@ impl CRUDResource for Sensor {
 
         for model in models {
             let sensor: Sensor = model.into();
-            let sensor_id = sensor.id;
+            let (data_from, data_to) = get_data_range(db, sensor.id).await?;
+
             let sensor_assignments: Vec<
                 crate::sensors::profile::assignment::models::SensorProfileAssignment,
             > = assignments
                 .iter()
-                .filter(|assignment| assignment.sensor_id == sensor_id)
+                .filter(|assignment| assignment.sensor_id == sensor.id)
                 .cloned()
                 .collect();
             sensors.push(Sensor {
                 assignments: sensor_assignments,
+                data_from,
+                data_to,
                 ..sensor
             });
         }
@@ -126,6 +135,7 @@ impl CRUDResource for Sensor {
             ))?;
 
         let mut sensor: super::models::Sensor = sensor.into();
+        let (data_from, data_to) = get_data_range(db, sensor.id).await?;
 
         sensor.data = data.into_iter().map(|d| d.into()).collect();
 
@@ -138,9 +148,10 @@ impl CRUDResource for Sensor {
                 .map(|assignment| assignment.into())
                 .collect();
 
-        println!("Assignments: {:?}", assignments.len());
         let sensor = Sensor {
             assignments,
+            data_from,
+            data_to,
             ..sensor.into()
         };
         Ok(sensor)
@@ -184,6 +195,7 @@ impl CRUDResource for Sensor {
             )),
         }
     }
+
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
@@ -408,5 +420,36 @@ impl Sensor {
         // Convert the raw SensorData objects to your API model.
         sensor.data = aggregated_data.into_iter().map(|d| d.into()).collect();
         Ok(Sensor::from(sensor))
+    }
+}
+
+#[derive(Deserialize)]
+pub struct LowResolution {
+    #[serde(default)]
+    pub high_resolution: bool,
+}
+
+async fn get_data_range(
+    db: &DatabaseConnection,
+    sensor_id: Uuid,
+) -> Result<(Option<NaiveDateTime>, Option<NaiveDateTime>), DbErr> {
+    // Do a query for the data related to the model, and find the first data
+    // point and last and add them to data_from and data_to
+    let first_data = crate::sensors::data::db::Entity::find()
+        .filter(crate::sensors::data::db::Column::SensorId.eq(sensor_id))
+        .order_by_asc(crate::sensors::data::db::Column::TimeUtc)
+        .one(db)
+        .await?;
+
+    let last_data = crate::sensors::data::db::Entity::find()
+        .filter(crate::sensors::data::db::Column::SensorId.eq(sensor_id))
+        .order_by_desc(crate::sensors::data::db::Column::TimeUtc)
+        .one(db)
+        .await?;
+
+    if let (Some(first), Some(last)) = (first_data, last_data) {
+        Ok((Some(first.time_utc), Some(last.time_utc)))
+    } else {
+        Ok((None, None))
     }
 }
