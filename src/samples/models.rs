@@ -115,6 +115,34 @@ impl From<(crate::samples::db::Model, crate::plots::db::Model)> for PlotSample {
     }
 }
 
+impl
+    From<(
+        crate::samples::db::Model,
+        crate::plots::db::Model,
+        crate::areas::db::Model,
+        crate::projects::db::Model,
+    )> for PlotSample
+{
+    fn from(
+        (sample, plot, area, project): (
+            crate::samples::db::Model,
+            crate::plots::db::Model,
+            crate::areas::db::Model,
+            crate::projects::db::Model,
+        ),
+    ) -> Self {
+        let mut sample: PlotSample = sample.into();
+        let mut plot: crate::plots::models::Plot = plot.into();
+        let mut area: crate::areas::models::Area = area.into();
+        let project: crate::projects::models::Project = project.into();
+
+        area.project = Some(project);
+        plot.area = Some(area);
+        sample.plot = Some(plot);
+        sample
+    }
+}
+
 #[async_trait]
 impl CRUDResource for PlotSample {
     type EntityType = crate::samples::db::Entity;
@@ -169,7 +197,19 @@ impl CRUDResource for PlotSample {
             .await?
             .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
 
-        Ok((sample, plot).into())
+        let area: crate::areas::db::Model = crate::areas::db::Entity::find()
+            .filter(crate::areas::db::Column::Id.eq(plot.area_id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Area not found".into()))?;
+
+        let project: crate::projects::db::Model = crate::projects::db::Entity::find()
+            .filter(crate::projects::db::Column::Id.eq(area.project_id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
+
+        Ok((sample, plot, area, project).into())
     }
 
     async fn update(

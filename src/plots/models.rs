@@ -195,9 +195,13 @@ impl CRUDResource for Plot {
 
     fn filterable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
-            ("id", super::db::Column::Id),
             ("name", super::db::Column::Name),
-            ("area_id", super::db::Column::AreaId),
+            ("vegetation_type", super::db::Column::VegetationType),
+            ("topography", super::db::Column::Topography),
+            ("aspect", super::db::Column::Aspect),
+            // ("gradient", super::db::Column::Gradient),
+            ("weather", super::db::Column::Weather),
+            ("lithology", super::db::Column::Lithology),
         ]
     }
 }
