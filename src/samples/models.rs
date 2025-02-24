@@ -180,7 +180,19 @@ impl CRUDResource for PlotSample {
                 .await?
                 .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
 
-            plot_samples.push((sample, plot).into());
+            let area = crate::areas::db::Entity::find()
+                .filter(crate::areas::db::Column::Id.eq(plot.area_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Area not found".into()))?;
+
+            let project = crate::projects::db::Entity::find()
+                .filter(crate::projects::db::Column::Id.eq(area.project_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
+
+            plot_samples.push((sample, plot, area, project).into());
         }
         Ok(plot_samples)
     }
