@@ -89,6 +89,9 @@ impl CRUDResource for SensorProfile {
             .all(db)
             .await?;
 
+        if (models.len() == 0) {
+            return Ok(vec![]);
+        }
         let assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
             .load_many(super::assignment::db::Entity, db)
             .await?
