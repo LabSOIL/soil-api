@@ -18,8 +18,6 @@ use uuid::Uuid;
 )]
 #[active_model = "super::db::ActiveModel"]
 pub struct SensorData {
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
-    pub last_updated: DateTime<Utc>,
     pub instrument_seq: i32,
     pub temperature_1: f64,
     pub temperature_2: f64,
@@ -45,7 +43,6 @@ impl From<Model> for SensorData {
             shake: model.shake,
             error_flat: model.error_flat,
             temperature_average: model.temperature_average,
-            last_updated: model.last_updated,
         }
     }
 }

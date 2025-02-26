@@ -41,9 +41,14 @@ fn ingest_csv_data(
             }
             let instrument_seq = parts[0].parse::<i32>().unwrap_or(0);
             // println!("Date: {}", parts[1]);
-            let time_utc = DateTime::parse_from_str(parts[1], "%Y.%m.%d %H:%M")
-                .map_err(|_| "Invalid date format")?
-                .with_timezone(&Utc);
+            let time_str = format!("{}:00 +0000", parts[1]);
+            let time_utc = match DateTime::parse_from_str(&time_str, "%Y.%m.%d %H:%M:%S %z") {
+                Ok(dt) => dt.with_timezone(&Utc),
+                Err(e) => {
+                    println!("Error parsing date: {}", e);
+                    return Err("Invalid date format".into());
+                }
+            };
             let temperature_1 = parts[3].parse::<f64>().unwrap_or(0.0);
             let temperature_2 = parts[4].parse::<f64>().unwrap_or(0.0);
             let temperature_3 = parts[5].parse::<f64>().unwrap_or(0.0);
@@ -63,7 +68,6 @@ fn ingest_csv_data(
                 shake,
                 error_flat,
                 sensor_id,
-                last_updated: chrono::Utc::now(),
             };
             objs.push(sensor_data_obj);
         }

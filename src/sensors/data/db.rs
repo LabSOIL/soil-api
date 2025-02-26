@@ -16,7 +16,6 @@ pub struct Model {
     pub error_flat: i32,
     #[sea_orm(primary_key)]
     pub sensor_id: Uuid,
-    pub last_updated: DateTime<Utc>,
     #[sea_orm(primary_key)]
     pub time_utc: DateTime<Utc>,
     pub temperature_average: f64,

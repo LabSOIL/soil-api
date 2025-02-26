@@ -410,7 +410,6 @@ impl Sensor {
                 shake: 0,
                 error_flat: 0,
                 sensor_id,
-                last_updated: bucket,
             };
             aggregated_data.push(sensor_data);
         }
@@ -435,7 +434,6 @@ impl Sensor {
                     shake: 0,
                     error_flat: 0,
                     sensor_id: window[0].sensor_id,
-                    last_updated: window[0].time_utc + gap_threshold,
                 });
             }
         }

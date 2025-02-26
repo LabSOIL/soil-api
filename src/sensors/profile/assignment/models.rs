@@ -19,12 +19,20 @@ pub struct SensorProfileAssignment {
     pub sensorprofile_id: Uuid,
     pub date_from: DateTime<Utc>,
     pub date_to: DateTime<Utc>,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    #[crudcrate(
+        update_model = false,
+        create_model = false,
+        on_update = chrono::Utc::now(),
+        on_create = chrono::Utc::now()
+    )]
     pub last_updated: DateTime<Utc>,
     #[crudcrate(update_model = false, create_model = false)]
     pub sensor_profile: Option<crate::sensors::profile::models::SensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]
     pub sensor: Option<crate::sensors::models::Sensor>,
+    #[serde(default)]
+    #[crudcrate(non_db_attr = true)]
+    pub data: Vec<crate::sensors::data::models::SensorData>,
 }
 
 impl From<Model> for SensorProfileAssignment {
@@ -38,6 +46,7 @@ impl From<Model> for SensorProfileAssignment {
             last_updated: model.last_updated,
             sensor_profile: None,
             sensor: None,
+            data: vec![],
         }
     }
 }
