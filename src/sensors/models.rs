@@ -351,7 +351,7 @@ impl Sensor {
             "WITH buckets AS (
                 SELECT
                   sensor_id,
-                  to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24)) AT TIME ZONE 'UTC' AS bucket,
+                  to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24))::timestamptz AS bucket,
                   temperature_1,
                   temperature_2,
                   temperature_3,

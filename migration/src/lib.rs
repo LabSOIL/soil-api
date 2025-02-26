@@ -3,6 +3,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20250217_105133_first_migration;
 mod m20250219_075041_sensorprofile;
 mod m20250219_152310_modify_sensordata_moisturecount;
+mod m20250226_092944_use_utc_timestamps;
 
 pub struct Migrator;
 
@@ -13,6 +14,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250217_105133_first_migration::Migration),
             Box::new(m20250219_075041_sensorprofile::Migration),
             Box::new(m20250219_152310_modify_sensordata_moisturecount::Migration),
+            Box::new(m20250226_092944_use_utc_timestamps::Migration),
         ]
     }
 }
