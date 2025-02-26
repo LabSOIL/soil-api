@@ -3,7 +3,7 @@ use crate::plots::sensors::db::Entity as PlotSensorAssignments;
 use crate::samples::db::Entity as PlotSample;
 use crate::transects::nodes::db::Entity as TransectNode;
 use chrono::NaiveDate;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 // use geozero::wkb;
 use sea_orm::entity::prelude::*;
 use sea_orm::EntityTrait;
@@ -42,7 +42,7 @@ pub struct Model {
     pub coord_y: f64,
     pub coord_z: f64,
     pub coord_srid: i32,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub image: Option<String>,
 }
 

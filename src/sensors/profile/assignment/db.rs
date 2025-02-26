@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
@@ -10,9 +10,9 @@ pub struct Model {
     pub id: Uuid,
     pub sensor_id: Uuid,
     pub sensorprofile_id: Uuid,
-    pub date_from: NaiveDateTime,
-    pub date_to: NaiveDateTime,
-    pub last_updated: NaiveDateTime,
+    pub date_from: DateTime<Utc>,
+    pub date_to: DateTime<Utc>,
+    pub last_updated: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -1,14 +1,14 @@
 use crate::plots::db::Entity as Plot;
 use crate::sensors::db::Entity as Sensor;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "plotsensorassignments")]
 pub struct Model {
-    pub date_from: NaiveDateTime,
-    pub date_to: NaiveDateTime,
+    pub date_from: DateTime<Utc>,
+    pub date_to: DateTime<Utc>,
     pub plot_id: Uuid,
     pub sensor_id: Uuid,
     #[sea_orm(primary_key)]

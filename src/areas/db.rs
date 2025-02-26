@@ -4,7 +4,7 @@ use crate::sensors::profile::db::Entity as SensorProfile;
 use crate::soil::profiles::db::Entity as SoilProfile;
 use crate::transects::db::Entity as Transect;
 
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
@@ -16,7 +16,7 @@ pub struct Model {
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

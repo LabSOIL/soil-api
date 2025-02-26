@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,7 +10,7 @@ pub struct Model {
     pub description: String,
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub image: Option<String>,
 }
 

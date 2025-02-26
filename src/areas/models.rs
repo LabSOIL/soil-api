@@ -4,7 +4,7 @@ use crate::projects::models::Project;
 use crate::soil::profiles::models::SoilProfile;
 use crate::transects::models::Transect;
 use crate::{plots::models::Plot, sensors::profile::models::SensorProfile};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, Order,
@@ -20,8 +20,8 @@ use uuid::Uuid;
 pub struct Area {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: DateTime<Utc>,
     pub name: Option<String>,
     pub description: Option<String>,
     pub project_id: Uuid,

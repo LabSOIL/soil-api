@@ -1,5 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -17,11 +18,11 @@ pub struct GNSS {
     #[crudcrate(
         update_model = false,
         create_model = false,
-        on_update = chrono::Utc::now().naive_utc(),
-        on_create = chrono::Utc::now().naive_utc()
+        on_update = Utc::now(),
+        on_create = Utc::now()
     )]
-    pub last_updated: chrono::NaiveDateTime,
-    pub time: Option<chrono::NaiveDateTime>,
+    pub last_updated: DateTime<Utc>,
+    pub time: Option<DateTime<Utc>>,
     pub name: Option<String>,
     pub comment: Option<String>,
     pub original_filename: Option<String>,

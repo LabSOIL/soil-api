@@ -1,5 +1,5 @@
 use crate::plots::db::Entity as Plot;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
@@ -63,7 +63,7 @@ pub struct Model {
     #[sea_orm(column_type = "Double", nullable)]
     pub subsample_replica_weight: Option<f64>,
     pub created_on: Option<NaiveDate>,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     #[sea_orm(column_type = "Double", nullable)]
     pub fungi_per_g: Option<f64>,
     #[sea_orm(column_type = "Double", nullable)]

@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
@@ -8,10 +8,10 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub name: Option<String>,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
-    pub time: Option<NaiveDateTime>,
+    pub time: Option<DateTime<Utc>>,
     pub comment: Option<String>,
     pub original_filename: Option<String>,
     pub elevation_gps: Option<f64>,

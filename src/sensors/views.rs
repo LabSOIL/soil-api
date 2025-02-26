@@ -13,7 +13,6 @@ use axum_keycloak_auth::{
 use crudcrate::routes as crud;
 use crudcrate::CRUDResource;
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
-use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 

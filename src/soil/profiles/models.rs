@@ -1,6 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
@@ -21,15 +21,15 @@ pub struct SoilProfile {
     pub name: String,
     pub gradient: String,
     pub description_horizon: Option<Value>,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: chrono::DateTime<Utc>,
     pub weather: Option<String>,
     pub topography: Option<String>,
     pub vegetation_type: Option<String>,
     pub aspect: Option<String>,
     pub lythology_surficial_deposit: Option<String>,
-    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
-    pub created_on: Option<NaiveDateTime>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now())]
+    pub created_on: Option<DateTime<Utc>>,
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
     pub soil_diagram: Option<String>,

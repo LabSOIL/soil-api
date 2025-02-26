@@ -1,5 +1,5 @@
 use crate::areas::db::Entity as Area;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde_json::Value as Json;
 use uuid::Uuid;
@@ -16,14 +16,14 @@ pub struct Model {
     pub vegetation_type: Option<String>,
     pub aspect: Option<String>,
     pub lythology_surficial_deposit: Option<String>,
-    pub created_on: Option<NaiveDateTime>,
+    pub created_on: Option<DateTime<Utc>>,
     pub soil_type_id: Uuid,
     pub area_id: Uuid,
     pub coord_srid: i32,
     pub coord_x: f64,
     pub coord_y: f64,
     pub coord_z: f64,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
     #[sea_orm(column_type = "Double", nullable)]

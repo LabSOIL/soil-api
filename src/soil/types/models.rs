@@ -1,5 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -14,8 +15,8 @@ use uuid::Uuid;
 pub struct SoilType {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = Utc::now(), on_create = Utc::now())]
+    pub last_updated: DateTime<Utc>,
     pub name: String,
     pub description: String,
     pub image: Option<String>,

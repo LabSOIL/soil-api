@@ -1,5 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -8,16 +9,15 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
 #[active_model = "super::db::ActiveModel"]
 pub struct InstrumentExperiment {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: DateTime<Utc>,
     pub name: Option<String>,
-    pub date: Option<chrono::NaiveDateTime>,
+    pub date: Option<DateTime<Utc>>,
     pub description: Option<String>,
     pub filename: Option<String>,
     pub device_filename: Option<String>,

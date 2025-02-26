@@ -11,7 +11,7 @@ use axum_keycloak_auth::{
     instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
 };
 use crudcrate::{routes as crud, CRUDResource};
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{DatabaseConnection, DbErr};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -66,8 +66,8 @@ where
     <T as CRUDResource>::ApiModel: From<SensorProfile>,
 {
     if query.high_resolution {
-        match T::get_one(&db, id).await {
-            Ok(item) => Ok(Json(item)),
+        match SensorProfile::get_one_high_resolution(&db, id).await {
+            Ok(item) => Ok(Json(item.into())),
             Err(DbErr::RecordNotFound(_)) => {
                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
             }

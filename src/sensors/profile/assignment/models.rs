@@ -1,5 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -16,10 +17,10 @@ pub struct SensorProfileAssignment {
     pub id: Uuid,
     pub sensor_id: Uuid,
     pub sensorprofile_id: Uuid,
-    pub date_from: chrono::NaiveDateTime,
-    pub date_to: chrono::NaiveDateTime,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    pub date_from: DateTime<Utc>,
+    pub date_to: DateTime<Utc>,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: DateTime<Utc>,
     #[crudcrate(update_model = false, create_model = false)]
     pub sensor_profile: Option<crate::sensors::profile::models::SensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]

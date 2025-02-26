@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
@@ -15,7 +15,7 @@ pub struct Model {
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
     pub coord_srid: Option<i32>,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

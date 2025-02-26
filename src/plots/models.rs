@@ -1,8 +1,7 @@
 use crate::config::Config;
 use crate::plots::db::Gradientchoices;
 use async_trait::async_trait;
-use chrono::NaiveDate;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDate, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -27,8 +26,8 @@ pub struct Plot {
     pub created_on: Option<NaiveDate>,
     pub weather: Option<String>,
     pub lithology: Option<String>,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: DateTime<Utc>,
     pub image: Option<String>,
     pub coord_x: f64,
     pub coord_y: f64,

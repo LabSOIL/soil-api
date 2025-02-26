@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -16,9 +16,9 @@ pub struct Model {
     pub error_flat: i32,
     #[sea_orm(primary_key)]
     pub sensor_id: Uuid,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     #[sea_orm(primary_key)]
-    pub time_utc: NaiveDateTime,
+    pub time_utc: DateTime<Utc>,
     pub temperature_average: f64,
 }
 

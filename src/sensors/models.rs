@@ -1,6 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, query::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition,
@@ -21,13 +21,13 @@ pub struct Sensor {
     pub manufacturer: Option<String>,
     pub description: Option<String>,
     pub comment: Option<String>,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: chrono::DateTime<Utc>,
     pub area_id: Uuid,
     #[crudcrate(non_db_attr = true, default = None)]
-    pub data_from: Option<chrono::NaiveDateTime>,
+    pub data_from: Option<chrono::DateTime<Utc>>,
     #[crudcrate(non_db_attr = true, default = None)]
-    pub data_to: Option<chrono::NaiveDateTime>,
+    pub data_to: Option<chrono::DateTime<Utc>>,
     #[crudcrate(non_db_attr = true, default = vec![])]
     pub data: Vec<crate::sensors::data::models::SensorData>,
     #[crudcrate(non_db_attr = true, default = vec![])]
@@ -96,7 +96,7 @@ impl CRUDResource for Sensor {
                 .pop()
                 .unwrap()
                 .into_iter()
-                .map(|(assignment)| assignment.into())
+                .map(|assignment| assignment.into())
                 .collect();
 
         let mut sensors: Vec<Sensor> = Vec::new();
@@ -392,7 +392,7 @@ impl Sensor {
         let mut aggregated_data = Vec::new();
         for row in rows {
             let sensor_id: Uuid = row.try_get("", "sensor_id")?;
-            let bucket: NaiveDateTime = row.try_get("", "bucket")?;
+            let bucket: DateTime<Utc> = row.try_get("", "bucket")?;
             let avg_temp_1: f64 = row.try_get("", "avg_temp_1")?;
             let avg_temp_2: f64 = row.try_get("", "avg_temp_2")?;
             let avg_temp_3: f64 = row.try_get("", "avg_temp_3")?;
@@ -451,7 +451,7 @@ impl Sensor {
 async fn get_data_range(
     db: &DatabaseConnection,
     sensor_id: Uuid,
-) -> Result<(Option<NaiveDateTime>, Option<NaiveDateTime>), DbErr> {
+) -> Result<(Option<DateTime<Utc>>, Option<DateTime<Utc>>), DbErr> {
     // Do a query for the data related to the model, and find the first data
     // point and last and add them to data_from and data_to
     let first_data = crate::sensors::data::db::Entity::find()

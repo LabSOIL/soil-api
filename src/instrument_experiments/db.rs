@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
 
@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub name: Option<String>,
-    pub date: Option<NaiveDateTime>,
+    pub date: Option<DateTime<Utc>>,
     pub description: Option<String>,
     pub filename: Option<String>,
     pub device_filename: Option<String>,
@@ -20,7 +20,7 @@ pub struct Model {
     pub quiet_time: Option<f64>,
     pub sensitivity: Option<f64>,
     pub samples: Option<i32>,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub project_id: Option<Uuid>,
 }
 

@@ -1,6 +1,6 @@
 use super::db::Model;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use rand::Rng;
 use sea_orm::{
@@ -20,10 +20,10 @@ pub struct Project {
     #[crudcrate(
         create_model = false,
         update_model = false,
-        on_create = chrono::Utc::now().naive_utc(),
-        on_update = chrono::Utc::now().naive_utc()
+        on_create = chrono::Utc::now(),
+        on_update = chrono::Utc::now()
     )]
-    last_updated: NaiveDateTime,
+    last_updated: DateTime<Utc>,
     description: Option<String>,
     #[crudcrate(update_model = false, update_model = false, on_create = Uuid::new_v4())]
     id: Uuid,

@@ -107,7 +107,7 @@ mod tests {
             id: Set(dummy_soil_type_id),
             name: Set("Dummy".to_owned()),
             description: Set("Dummy soil type".to_owned()),
-            last_updated: Set(Utc::now().naive_utc()),
+            last_updated: Set(Utc::now()),
             image: Set(None),
         };
         crate::soil::types::db::Entity::insert(dummy_soiltype)
@@ -122,7 +122,7 @@ mod tests {
             name: Set("Dummy Project".to_owned()),
             description: Set(Some("Dummy project description".to_owned())),
             color: Set("#0000FF".to_owned()),
-            last_updated: Set(Utc::now().naive_utc()),
+            last_updated: Set(Utc::now()),
         };
         crate::projects::db::Entity::insert(dummy_project)
             .exec(db)
@@ -136,7 +136,7 @@ mod tests {
             project_id: Set(dummy_project_id),
             name: Set(Some("Dummy Area".to_owned())),
             description: Set(Some("Dummy area description".to_owned())),
-            last_updated: Set(Utc::now().naive_utc()),
+            last_updated: Set(Utc::now()),
         };
         crate::areas::db::Entity::insert(dummy_area)
             .exec(db)

@@ -2,7 +2,7 @@ use crate::plots::models::Plot;
 use crate::transects::db;
 use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
@@ -19,11 +19,11 @@ pub struct Transect {
     pub id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
-    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
-    pub date_created: Option<NaiveDateTime>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now())]
+    pub date_created: Option<DateTime<Utc>>,
     pub area_id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: DateTime<Utc>,
     #[crudcrate(update_model = false, create_model = false)]
     pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]

@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use std::str;
 use uuid::Uuid;
 
@@ -41,8 +41,9 @@ fn ingest_csv_data(
             }
             let instrument_seq = parts[0].parse::<i32>().unwrap_or(0);
             // println!("Date: {}", parts[1]);
-            let time_utc = NaiveDateTime::parse_from_str(parts[1], "%Y.%m.%d %H:%M")
-                .map_err(|_| "Invalid date format")?;
+            let time_utc = DateTime::parse_from_str(parts[1], "%Y.%m.%d %H:%M")
+                .map_err(|_| "Invalid date format")?
+                .with_timezone(&Utc);
             let temperature_1 = parts[3].parse::<f64>().unwrap_or(0.0);
             let temperature_2 = parts[4].parse::<f64>().unwrap_or(0.0);
             let temperature_3 = parts[5].parse::<f64>().unwrap_or(0.0);
@@ -62,7 +63,7 @@ fn ingest_csv_data(
                 shake,
                 error_flat,
                 sensor_id,
-                last_updated: chrono::Utc::now().naive_utc(),
+                last_updated: chrono::Utc::now(),
             };
             objs.push(sensor_data_obj);
         }

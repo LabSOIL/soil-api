@@ -1,5 +1,5 @@
 use crate::areas::db::Entity as Area;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ pub struct Model {
     pub description: Option<String>,
     pub comment: Option<String>,
     pub area_id: Uuid,
-    pub last_updated: NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub serial_number: Option<String>,
     pub manufacturer: Option<String>,
 }

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, NaiveDate, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     sea_query::Order, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -13,14 +14,14 @@ use uuid::Uuid;
 pub struct PlotSample {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now().naive_utc())]
-    pub created_on: Option<chrono::NaiveDate>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Local::now().naive_local())]
+    pub created_on: Option<NaiveDate>,
     #[crudcrate(
         update_model = false, create_model = false,
-        on_create = chrono::Utc::now().naive_utc(),
-        on_update = chrono::Utc::now().naive_utc()
+        on_create = Utc::now(),
+        on_update = Utc::now()
     )]
-    pub last_updated: chrono::NaiveDateTime,
+    pub last_updated: DateTime<Utc>,
     pub name: String,
     pub upper_depth_cm: f64,
     pub lower_depth_cm: f64,

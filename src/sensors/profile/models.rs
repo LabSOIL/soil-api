@@ -1,7 +1,7 @@
 use super::db::Model;
 use crate::config::Config;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
@@ -16,8 +16,8 @@ use uuid::Uuid;
 pub struct SensorProfile {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now().naive_utc(), on_create = chrono::Utc::now().naive_utc())]
-    pub last_updated: chrono::NaiveDateTime,
+    #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
+    pub last_updated: chrono::DateTime<Utc>,
     pub name: String,
     pub description: Option<String>,
     pub area_id: Uuid,
@@ -89,7 +89,7 @@ impl CRUDResource for SensorProfile {
             .all(db)
             .await?;
 
-        if (models.len() == 0) {
+        if models.len() == 0 {
             return Ok(vec![]);
         }
         let assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
@@ -98,7 +98,7 @@ impl CRUDResource for SensorProfile {
             .pop()
             .unwrap()
             .into_iter()
-            .map(|(assignment)| assignment.into())
+            .map(|assignment| assignment.into())
             .collect();
 
         let mut sensor_profiles: Vec<SensorProfile> = Vec::new();
@@ -121,7 +121,7 @@ impl CRUDResource for SensorProfile {
             .pop()
             .unwrap()
             .into_iter()
-            .map(|(assignment)| assignment.into())
+            .map(|assignment| assignment.into())
             .collect();
 
         // We need to get the data in the same spiti
@@ -211,7 +211,7 @@ impl SensorProfile {
             let rows = db.query_all(stmt).await?;
             for row in rows {
                 let sensor_id: Uuid = row.try_get("", "sensor_id")?;
-                let time_utc: NaiveDateTime = row.try_get("", "time_utc")?;
+                let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
                 let temperature_1: f64 = row.try_get("", "temperature_1")?;
                 let temperature_2: f64 = row.try_get("", "temperature_2")?;
                 let temperature_3: f64 = row.try_get("", "temperature_3")?;
