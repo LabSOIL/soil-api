@@ -26,6 +26,7 @@ from app.utils.validators import (
 if TYPE_CHECKING:
     from app.areas.models import Area
     from app.plots.samples.models import PlotSample
+from app.plots.sensors.models import PlotSensorAssignments
 
 
 class GradientChoices(str, enum.Enum):
@@ -38,14 +39,14 @@ class PlotBase(SQLModel):
         index=True,
         nullable=False,
     )
-    plot_iterator: int = Field(
-        description=(
-            "The ID given by the scientist to the plot and forms part "
-            "of the field ID. ie. 1 will become the 1 in BF01"
-        ),
-        default=None,
-        index=True,
-    )
+    # plot_iterator: int = Field(
+    #     description=(
+    #         "The ID given by the scientist to the plot and forms part "
+    #         "of the field ID. ie. 1 will become the 1 in BF01"
+    #     ),
+    #     default=None,
+    #     index=True,
+    # )
     area_id: UUID = Field(
         nullable=False,
         index=True,
@@ -95,7 +96,7 @@ class Plot(PlotBase, table=True):
     __table_args__ = (
         UniqueConstraint("id"),
         UniqueConstraint(
-            "plot_iterator",
+            # "plot_iterator",
             "area_id",
             "gradient",
             name="unique_plot",
@@ -105,13 +106,13 @@ class Plot(PlotBase, table=True):
             name="unique_plot_name",
         ),
     )
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
     id: UUID = Field(
+        primary_key=True,
         default_factory=uuid4,
         index=True,
         nullable=False,
@@ -136,6 +137,13 @@ class Plot(PlotBase, table=True):
             "lazy": "selectin",
         },
         link_model=TransectNode,
+    )
+    sensor_link: list[PlotSensorAssignments] = Relationship(
+        back_populates="plot",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all,delete,delete-orphan",
+        },
     )
 
 
@@ -180,6 +188,7 @@ class PlotReadWithSamples(PlotReadWithArea):
     area: Any
     transects: list[Any] = []
     sensors: list[SensorDistance] = []
+    sensor_link: list[Any] = []
 
 
 class PlotCreate(PlotBase):

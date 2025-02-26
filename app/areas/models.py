@@ -47,15 +47,16 @@ class Area(AreaBase, table=True):
         UniqueConstraint("id"),
         UniqueConstraint("name", "project_id", name="name_project_id"),
     )
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     primary_key=True,
+    #     index=True,
+    # )
     id: UUID = Field(
         default_factory=uuid4,
         index=True,
+        primary_key=True,
         nullable=False,
     )
     sensors: list["Sensor"] = Relationship(

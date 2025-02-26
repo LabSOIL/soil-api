@@ -44,14 +44,14 @@ class TransectBase(SQLModel):
 
 class Transect(TransectBase, table=True):
     __table_args__ = (UniqueConstraint("id"),)
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
     id: UUID = Field(
         default_factory=uuid4,
+        primary_key=True,
         index=True,
         nullable=False,
     )

@@ -26,14 +26,14 @@ if TYPE_CHECKING:
 
 class SoilProfileBase(SQLModel):
     name: str = Field(index=True)
-    profile_iterator: int = Field(
-        description=(
-            "The ID given by the scientist to the soil profile and forms part "
-            "of the field ID. ie. 1 will become the 1 in BF01"
-        ),
-        default=None,
-        index=True,
-    )
+    # profile_iterator: int = Field(
+    #     description=(
+    #         "The ID given by the scientist to the soil profile and forms part "
+    #         "of the field ID. ie. 1 will become the 1 in BF01"
+    #     ),
+    #     default=None,
+    #     index=True,
+    # )
     gradient: str | None = Field(
         default=None,
         index=True,
@@ -100,21 +100,21 @@ class SoilProfile(SoilProfileBase, table=True):
     __table_args__ = (
         UniqueConstraint("id"),
         UniqueConstraint(
-            "profile_iterator",
+            # "profile_iterator",
             "area_id",
             "gradient",
             name="unique_profile",
         ),
     )
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
     id: UUID = Field(
         default_factory=uuid4,
         index=True,
+        primary_key=True,
         nullable=False,
     )
     geom: Any = Field(

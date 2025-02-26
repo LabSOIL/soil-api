@@ -11,6 +11,7 @@ from app.utils.validators import convert_wkb_to_x_y, convert_x_y_to_wkt
 
 if TYPE_CHECKING:
     from app.areas.models import Area
+    from app.plots.sensors.models import PlotSensorAssignments
 
 
 class SensorBase(SQLModel):
@@ -32,19 +33,19 @@ class SensorBase(SQLModel):
 
 class Sensor(SensorBase, table=True):
     __table_args__ = (UniqueConstraint("id"),)
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
-    id: UUID = Field(
-        default_factory=uuid4,
-        index=True,
-        nullable=False,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
+    # id: UUID = Field(
+    #     primary_key=True,
+    #     default_factory=uuid4,
+    #     index=True,
+    #     nullable=False,
+    # )
 
-    geom: Any = Field(sa_column=Column(Geometry("POINTZ", srid=config.SRID)))
+    # geom: Any = Field(sa_column=Column(Geometry("POINTZ", srid=config.SRID)))
     area_id: UUID = Field(default=None, foreign_key="area.id")
 
     area: "Area" = Relationship(
@@ -56,6 +57,10 @@ class Sensor(SensorBase, table=True):
             "lazy": "selectin",
             "cascade": "all,delete,delete-orphan",
         },
+    )
+    plot_link: list["PlotSensorAssignments"] = Relationship(
+        back_populates="sensor",
+        sa_relationship_kwargs={"lazy": "selectin"},
     )
 
 
@@ -85,10 +90,10 @@ class SensorDataBase(SQLModel):
         index=True,
         nullable=False,
     )
-    time_zone: int | None = Field(
-        index=False,
-        nullable=True,
-    )
+    # time_zone: int | None = Field(
+    #     index=False,
+    #     nullable=True,
+    # )
     temperature_1: float | None = Field(
         index=True,
         nullable=True,
@@ -210,7 +215,7 @@ class SensorCreate(SensorBase):
     latitude: float | None = None
     longitude: float | None = None
 
-    geom: Any | None = None
+    # geom: Any | None = None
     data_base64: str | None = None  # Base64 encoded CSV data
 
     _convert_x_y_to_wkt = model_validator(mode="after")(convert_x_y_to_wkt)

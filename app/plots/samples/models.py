@@ -253,15 +253,15 @@ class PlotSample(PlotSampleBase, table=True):
             name="unique_plot_sample_depth",
         ),
     )
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-        title="Sample Iterator",
-        description="Unique identifier for the sample iterator",
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    #     title="Sample Iterator",
+    #     description="Unique identifier for the sample iterator",
+    # )
     id: UUID = Field(
+        primary_key=True,
         default_factory=uuid4,
         index=True,
         nullable=False,

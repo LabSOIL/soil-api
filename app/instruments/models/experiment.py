@@ -36,10 +36,17 @@ class InstrumentExperimentBase(SQLModel):
 
 class InstrumentExperiment(InstrumentExperimentBase, table=True):
     __table_args__ = (UniqueConstraint("id"),)
-    iterator: int = Field(
-        default=None, nullable=False, primary_key=True, index=True
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
+    id: UUID = Field(
+        default_factory=uuid4,
+        index=True,
+        nullable=False,
+        primary_key=True,
     )
-    id: UUID = Field(default_factory=uuid4, index=True, nullable=False)
     last_updated: datetime.datetime = Field(
         default_factory=datetime.datetime.now,
         title="Last Updated",

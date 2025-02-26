@@ -15,6 +15,7 @@ from app.soil.profiles.models import SoilProfile  # noqa
 from app.soil.types.models import SoilType  # noqa
 from app.plots.models import Plot  # noqa
 from app.plots.samples.models import PlotSample  # noqa
+from app.plots.sensors.models import PlotSensorAssignments  # noqa
 from app.projects.models import Project  # noqa
 from app.transects.models.transects import Transect  # noqa
 from app.transects.models.nodes import TransectNode  # noqa

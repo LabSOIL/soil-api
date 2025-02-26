@@ -35,14 +35,14 @@ class Project(ProjectBase, table=True):
         UniqueConstraint("id"),
         UniqueConstraint("name"),
     )
-    iterator: int = Field(
-        default=None,
-        nullable=False,
-        primary_key=True,
-        index=True,
-    )
+    # iterator: int = Field(
+    #     default=None,
+    #     nullable=False,
+    #     index=True,
+    # )
 
     id: UUID = Field(
+        primary_key=True,
         default_factory=uuid4,
         index=True,
         nullable=False,

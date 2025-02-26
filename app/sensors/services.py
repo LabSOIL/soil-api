@@ -5,20 +5,23 @@ from app.sensors.models import (
     SensorCreate,
     SensorUpdate,
     SensorDataBase,
-    SensorDataCreate,
-    SensorDataRead,
     SensorData,
+    # ClosestFeature,
 )
 from app.db import get_session, AsyncSession
-from fastapi import Depends, APIRouter, Query, Response, HTTPException
-from sqlmodel import select, delete
+from fastapi import Depends, Query, Response, HTTPException
+from sqlmodel import select
 from uuid import UUID
 from app.crud import CRUD
 from app.utils.funcs import decode_base64
-import csv
 from datetime import datetime
 import numpy as np
 from lttb import downsample
+
+
+# from sqlalchemy.sql import func, text
+# from app.soil.profiles.models import SoilProfile
+# from app.plots.models import Plot
 
 crud = CRUD(Sensor, SensorRead, SensorCreate, SensorUpdate)
 
@@ -27,8 +30,9 @@ def simplify_sensor_data_lttb(
     data: list[SensorDataBase], target_points: int = 100
 ) -> list[SensorDataBase]:
     """
-    Simplifies the sensor data using the Largest-Triangle-Three-Buckets (LTTB) algorithm, applied to each
-    variable that needs downsampling, while preserving the rest of the data.
+    Simplifies the sensor data using the Largest-Triangle-Three-Buckets (LTTB)
+    algorithm, applied to each variable that needs downsampling, while
+    preserving the rest of the data.
 
     Args:
         data: List of SensorDataRead containing time series sensor data.
@@ -83,7 +87,8 @@ def simplify_sensor_data_lttb(
     downsampled_temp_avg = downsample_field(temp_avg)
     downsampled_moisture = downsample_field(moisture)
 
-    # Build the simplified data by updating the downsampled fields while preserving other fields
+    # Build the simplified data by updating the downsampled fields while
+    # preserving other fields
     simplified_data = []
     for i, d in enumerate(downsampled_original_data):
         simplified_data.append(
@@ -143,6 +148,7 @@ async def get_one(
     low_resolution: bool = Query(False),
     session: AsyncSession = Depends(get_session),
 ):
+    # Fetch the sensor by ID
     res = await crud.get_model_by_id(model_id=sensor_id, session=session)
 
     if not res:
@@ -154,6 +160,63 @@ async def get_one(
 
     if low_resolution:
         res.data = simplify_sensor_data_lttb(res.data)
+
+    # # Custom SQL query to get all plots and their distances to the sensor
+    # stmt_plots = (
+    #     select(
+    #         Plot,
+    #         func.st_distance(Sensor.geom, Plot.geom).label("distance"),
+    #         (func.st_z(Sensor.geom) - func.st_z(Plot.geom)).label(
+    #             "elevation_difference"
+    #         ),
+    #         text("'plot' AS type"),  # No label(), alias directly in text()
+    #     )
+    #     .where(Sensor.id == sensor_id)
+    #     .where(Plot.area_id == res.area_id)
+    #     .order_by(func.st_distance(Sensor.geom, Plot.geom))
+    # )
+
+    # Custom query to get all soil profiles and their distances to the sensor
+    # stmt_soil_profiles = (
+    #     select(
+    #         SoilProfile,
+    #         func.st_distance(
+    # Sensor.geom, SoilProfile.geom).label("distance"),
+    #         (func.st_z(Sensor.geom) - func.st_z(SoilProfile.geom)).label(
+    #             "elevation_difference"
+    #         ),
+    #         text("'soil_profile' AS type"),
+    #     )
+    #     .where(Sensor.id == sensor_id)
+    #     .where(SoilProfile.area_id == res.area_id)
+    #     .order_by(func.st_distance(Sensor.geom, SoilProfile.geom))
+    # )
+
+    # Execute the SQL queries
+    # result_plots = await session.exec(stmt_plots)
+    # result_soil_profiles = await session.exec(stmt_soil_profiles)
+
+    # plots = result_plots.fetchall()
+    # profiles = result_soil_profiles.fetchall()
+
+    # Combine both lists of plots and soil profiles
+    closest_features = []
+    # for features in [plots, profiles]:
+    #    for feature, distance, elevation_difference, feature_type in features:
+    #         closest_features.append(
+    #             ClosestFeature(
+    #                 id=feature.id,
+    #                 name=feature.name,
+    #                 distance=distance,
+    #                 elevation_difference=elevation_difference,
+    #                 type=feature_type,
+    #             )
+    #         )
+
+    # Add the closest features to the sensor response, add the closest 10
+    res.closest_features = sorted(closest_features, key=lambda x: x.distance)[
+        :10
+    ]
 
     return res
 
