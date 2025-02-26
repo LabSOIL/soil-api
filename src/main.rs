@@ -48,6 +48,8 @@ async fn main() {
     //     .await
     //     .expect("Failed to run downgrade migration");
 
+    println!("DB migrations complete");
+
     let keycloak_auth_instance: Arc<KeycloakAuthInstance> = Arc::new(KeycloakAuthInstance::new(
         KeycloakConfig::builder()
             .server(Url::parse(&config.keycloak_url).unwrap())
