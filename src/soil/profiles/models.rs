@@ -1,4 +1,5 @@
 use super::db::Model;
+use crate::config::Config;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
@@ -35,6 +36,7 @@ pub struct SoilProfile {
     pub soil_diagram: Option<String>,
     pub photo: Option<String>,
     pub parent_material: Option<f64>,
+    #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: i32,
     pub coord_x: f64,
     pub coord_y: f64,

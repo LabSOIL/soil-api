@@ -1,4 +1,5 @@
 use super::db::Model;
+use crate::config::Config;
 use async_trait::async_trait;
 use base64;
 use base64::Engine;
@@ -31,23 +32,16 @@ pub struct GNSS {
         on_create = Utc::now()
     )]
     pub last_updated: DateTime<Utc>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub time: Option<DateTime<Utc>>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub name: Option<String>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub comment: Option<String>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub original_filename: Option<String>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub elevation_gps: Option<f64>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub latitude: Option<f64>,
-    // #[crudcrate(update_model = false, create_model = false)]
     pub longitude: Option<f64>,
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
-    // #[crudcrate(update_model = false, create_model = false)]
+    #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: Option<i32>,
     #[crudcrate(non_db_attr = true)]
     pub data_base64: Option<String>,
@@ -140,7 +134,7 @@ impl CRUDResource for GNSS {
             data_base64: create_model.data_base64.unwrap(),
             filename: create_model.filename.unwrap(),
         };
-        let creates = gnss.into_gnss_creates(4326).await.unwrap();
+        let creates = gnss.into_gnss_creates().await.unwrap();
 
         let mut response_objs = Vec::new();
         for create in creates {
@@ -212,10 +206,7 @@ pub struct GNSSCreateFromFile {
 impl GNSSCreateFromFile {
     /// Converts the uploaded GPX file (in base64) into a list of GNSSCreate models.
     /// The `srid` parameter defines the target spatial reference (e.g. from your config).
-    pub async fn into_gnss_creates(
-        self,
-        srid: i32,
-    ) -> Result<Vec<GNSSCreate>, Box<dyn std::error::Error>> {
+    pub async fn into_gnss_creates(self) -> Result<Vec<GNSSCreate>, Box<dyn std::error::Error>> {
         // Remove known base64 prefix if present
         let base64_prefix = "data:application/gpx+xml;base64,";
         let encoded = if self.data_base64.starts_with(base64_prefix) {
@@ -235,20 +226,9 @@ impl GNSSCreateFromFile {
         // println!("GPX: {:?}", gpx.metadata);
         let mut creates = Vec::new();
         for wpt in gpx.waypoints {
-            // println!("WPT: {:?}", wpt);
-            // println!("Time: {:?}", wpt.time);
-            // let latitude = wpt.point().y();
-            // let longitude = wpt.point().x();
-            // let elevation = wpt.elevation;
             // Time is structured as: 2023-07-20T09:32:34.000000000Z convert to Date
             let time: DateTime<Utc> =
                 DateTime::parse_from_rfc3339(&wpt.time.unwrap().format().unwrap())?.into();
-            // let name = wpt.name;
-            // let comment = wpt.comment;
-            // (Any additional GPX fields you care about can be extracted here)
-            // println!("Time: {}, Name: {:?}, Comment: {:?}", time, name, comment);
-            // Transform longitude, latitude to x, y using the provided SRID
-            // let (x, y) = to_proj.convert((longitude, latitude))?;
 
             creates.push(GNSSCreate {
                 latitude: Some(wpt.point().y()),
@@ -260,7 +240,6 @@ impl GNSSCreateFromFile {
                 original_filename: Some(self.filename.clone()),
                 coord_x: None,
                 coord_y: None,
-                coord_srid: Some(srid),
                 data_base64: None,
                 filename: None,
             });
