@@ -33,8 +33,8 @@ pub struct SensorProfile {
     pub coord_srid: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
     pub assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment>,
-    #[crudcrate(non_db_attr = true, default = vec![])]
-    pub data: Vec<crate::sensors::data::models::SensorData>,
+    // #[crudcrate(non_db_attr = true, default = vec![])]
+    // pub data: Vec<crate::sensors::data::models::SensorData>,
 }
 
 impl From<Model> for SensorProfile {
@@ -59,7 +59,7 @@ impl SensorProfile {
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
             assignments,
-            data: vec![],
+            // data: vec![],
         }
     }
 }
@@ -97,7 +97,7 @@ impl CRUDResource for SensorProfile {
         if models.len() == 0 {
             return Ok(vec![]);
         }
-        let assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
+        let mut assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
             .load_many(super::assignment::db::Entity, db)
             .await?
             .pop()
@@ -105,6 +105,17 @@ impl CRUDResource for SensorProfile {
             .into_iter()
             .map(|assignment| assignment.into())
             .collect();
+
+        for assignment in &mut assignments {
+            // Get the sensor for each assignment
+            let sensor: crate::sensors::models::Sensor = crate::sensors::db::Entity::find()
+                .filter(crate::sensors::db::Column::Id.eq(assignment.sensor_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
+                .into();
+            assignment.sensor = Some(sensor);
+        }
 
         let mut sensor_profiles: Vec<SensorProfile> = Vec::new();
         for model in models {
@@ -120,7 +131,7 @@ impl CRUDResource for SensorProfile {
             .all(db)
             .await?;
 
-        let assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
+        let mut assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
             .load_many(super::assignment::db::Entity, db)
             .await?
             .pop()
@@ -129,6 +140,16 @@ impl CRUDResource for SensorProfile {
             .map(|assignment| assignment.into())
             .collect();
 
+        // As in get_all, get sensor for each assignment
+        for assignment in &mut assignments {
+            let sensor: crate::sensors::models::Sensor = crate::sensors::db::Entity::find()
+                .filter(crate::sensors::db::Column::Id.eq(assignment.sensor_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
+                .into();
+            assignment.sensor = Some(sensor);
+        }
         let model = models.pop().ok_or(DbErr::RecordNotFound(
             format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
         ))?;
@@ -242,7 +263,7 @@ impl SensorProfile {
             all_data.extend(assignment.data.clone());
         }
         all_data.sort_by_key(|d| d.time_utc);
-        sensor_profile.data = all_data;
+        // sensor_profile.data = all_data;
         Ok(sensor_profile)
     }
 
@@ -273,7 +294,7 @@ impl SensorProfile {
             all_data.extend(assignment.data.clone());
         }
         all_data.sort_by_key(|d| d.time_utc);
-        sensor_profile.data = all_data;
+        // sensor_profile.data = all_data;
         Ok(sensor_profile)
     }
 }

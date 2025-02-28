@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    DbBackend, DbErr, EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect, Statement,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -38,6 +38,8 @@ pub struct Plot {
     pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]
     pub samples: Vec<crate::samples::models::PlotSample>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub nearest_sensor_profiles: Vec<ClosestSensorProfile>,
 }
 
 impl From<super::db::Model> for Plot {
@@ -61,6 +63,7 @@ impl From<super::db::Model> for Plot {
             coord_srid: model.coord_srid,
             area: None,
             samples: vec![],
+            nearest_sensor_profiles: vec![],
         }
     }
 }
@@ -69,13 +72,15 @@ impl
         super::db::Model,
         crate::areas::db::Model,
         Vec<crate::samples::db::Model>,
+        Vec<ClosestSensorProfile>,
     )> for Plot
 {
     fn from(
-        (plot_db, area_db, samples_db): (
+        (plot_db, area_db, samples_db, nearest_sensor_profiles): (
             super::db::Model,
             crate::areas::db::Model,
             Vec<crate::samples::db::Model>,
+            Vec<ClosestSensorProfile>,
         ),
     ) -> Self {
         let area: crate::areas::models::Area = area_db.into();
@@ -87,6 +92,8 @@ impl
 
         plot.area = Some(area);
         plot.samples = samples;
+        plot.nearest_sensor_profiles = nearest_sensor_profiles;
+
         plot
     }
 }
@@ -138,7 +145,7 @@ impl CRUDResource for Plot {
                 .await
                 .unwrap();
 
-            plots.push(Plot::from((obj, area, samples)));
+            plots.push(Plot::from((obj, area, samples, vec![])));
         }
 
         Ok(plots)
@@ -165,7 +172,29 @@ impl CRUDResource for Plot {
             .await
             .unwrap();
 
-        Ok(Plot::from((plot, area, samples)))
+        // Get "nearest_sensor_profiles" from the sensor profile table with a postgis spatial query
+        // on the geom of the plot vs the geom of the sensor profile as nearest distance
+        // let mut nearest_sensor_profiles = vec![];
+
+        // Perform query
+        // select b.id, st_distance(a.geom, b.geom) from plot a, sensorprofile b where a.area_id = b.area_id and a.id = '0ced76e8-1526-4f28-93ad-9378926183af' order by st_distance(a.geom, b.geom);
+        println!("Plot ID: {:?}", id);
+        let nearest_sensor_profiles: Vec<ClosestSensorProfile> =
+            ClosestSensorProfile::find_by_statement(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            r#"SELECT b.id, st_distance(a.geom, b.geom) AS distance, st_z(a.geom) - st_z(b.geom) AS elevation_difference, b.name
+                FROM plot a, sensorprofile b
+                WHERE a.area_id = b.area_id
+                AND a.id = $1
+                ORDER BY st_distance(a.geom, b.geom);
+            "#,
+            vec![id.into()],
+            ))
+            .all(db)
+            .await
+            .unwrap_or_else(|_| vec![]);
+        println!("Nearest Sensor Profiles: {:?}", nearest_sensor_profiles);
+        Ok(Plot::from((plot, area, samples, nearest_sensor_profiles)))
     }
 
     async fn update(
@@ -203,4 +232,12 @@ impl CRUDResource for Plot {
             ("lithology", super::db::Column::Lithology),
         ]
     }
+}
+
+#[derive(Debug, FromQueryResult, Clone, Deserialize, Serialize, ToSchema)]
+pub struct ClosestSensorProfile {
+    pub id: Uuid,
+    pub name: String,
+    pub distance: f64,
+    pub elevation_difference: f64,
 }
