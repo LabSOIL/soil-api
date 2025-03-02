@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult,
+    ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, entity::prelude::*,
+    query::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

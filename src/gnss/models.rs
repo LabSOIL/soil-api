@@ -7,10 +7,10 @@ use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use gpx::read;
 use sea_orm::{
-    entity::prelude::*,
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;

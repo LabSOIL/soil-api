@@ -1,14 +1,17 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+// use pyo3::prelude::*;
+// use pyo3::types::PyDict;
 use sea_orm::{
-    sea_query::Order, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    QueryFilter, QueryOrder, QuerySelect, sea_query::Order,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+// #[pyclass]
 #[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize, Clone)]
 #[active_model = "super::db::ActiveModel"]
 pub struct PlotSample {
@@ -252,3 +255,39 @@ impl CRUDResource for PlotSample {
         vec![("name", crate::samples::db::Column::Name)]
     }
 }
+
+// #[pymethods]
+// impl PlotSample {
+//     #[new]
+//     fn new(id: String, name: String, upper_depth_cm: f64, lower_depth_cm: f64) -> Self {
+//         PlotSample {
+//             id,
+//             name,
+//             upper_depth_cm,
+//             lower_depth_cm,
+//             plot_id: Uuid::new_v4(),
+//             created_on: None,
+//             last_updated: Utc::now(),
+//             sample_weight: None,
+
+//         }
+//     }
+
+//     /// Convert the PlotSample into a Python dictionary
+//     fn to_dict(&self, py: Python) -> PyObject {
+//         let dict = PyDict::new(py);
+//         dict.set_item("id", &self.id).unwrap();
+//         dict.set_item("name", &self.name).unwrap();
+//         dict.set_item("upper_depth_cm", self.upper_depth_cm)
+//             .unwrap();
+//         dict.set_item("lower_depth_cm", self.lower_depth_cm)
+//             .unwrap();
+//         dict.into()
+//     }
+// }
+
+// #[pymodule]
+// fn my_api(py: Python, m: &PyModule) -> PyResult<()> {
+//     m.add_class::<PlotSample>()?;
+//     Ok(())
+// }

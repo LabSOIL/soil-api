@@ -11,14 +11,14 @@ mod soil;
 mod transects;
 
 use crate::common::views::{get_ui_config, healthz};
-use axum::extract::DefaultBodyLimit;
 use axum::Router;
-use axum_keycloak_auth::{instance::KeycloakAuthInstance, instance::KeycloakConfig, Url};
+use axum::extract::DefaultBodyLimit;
+use axum_keycloak_auth::{Url, instance::KeycloakAuthInstance, instance::KeycloakConfig};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use std::sync::Arc;
 use tracing_subscriber;
-use utoipa_scalar::Scalar;
+// use utoipa_scalar::Scalar;
 
 #[tokio::main]
 async fn main() {
@@ -75,6 +75,7 @@ async fn main() {
         )
         .nest(
             "/api/areas",
+            // areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
             areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
         )
         .nest(

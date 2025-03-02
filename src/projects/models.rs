@@ -2,14 +2,17 @@ use super::db::Model;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+// use pyo3::prelude::*;
+// use pyo3::types::{PyDict, PyList};
 use rand::Rng;
 use sea_orm::{
-    entity::prelude::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
-    Order, QueryOrder, QuerySelect,
+    ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult, Order, QueryOrder,
+    QuerySelect, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+// #[pyclass]
 #[derive(
     ToSchema, Serialize, Deserialize, FromQueryResult, ToUpdateModel, ToCreateModel, Clone,
 )]
@@ -126,3 +129,16 @@ fn generate_random_color() -> String {
     let mut rng = rand::rng();
     format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
 }
+
+// #[pymethods]
+// impl ProjectCreate {
+//     #[new]
+//     fn new(name: String, description: Option<String>, color: Option<String>) -> Self {
+//         Self {
+//             name,
+//             description,
+//             color: color.unwrap_or_else(|| generate_random_color()),
+//             id: Uuid::new_v4(),
+//         }
+//     }
+// }

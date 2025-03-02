@@ -1,13 +1,13 @@
 use crate::common::auth::Role;
 use crate::soil::profiles::models::SoilProfile;
 use axum::{
-    routing::{delete, get},
     Router,
+    routing::{delete, get},
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{routes as crud, CRUDResource};
+use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
@@ -55,11 +55,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::{to_bytes, Body};
+    use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
     use chrono::Utc;
     use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, Schema};
-    use serde_json::{from_slice, json, Value};
+    use serde_json::{Value, from_slice, json};
     use tower::ServiceExt;
 
     // Setup a fresh in-memory SQLite database for each test.
@@ -69,28 +69,28 @@ mod tests {
         // Create the soilprofile table.
         let soilprofile_stmt = schema
             .create_table_from_entity(crate::soil::profiles::db::Entity)
-            .to_owned();
+            .clone();
         db.execute(db.get_database_backend().build(&soilprofile_stmt))
             .await
             .unwrap();
 
         let project_stmt = schema
             .create_table_from_entity(crate::projects::db::Entity)
-            .to_owned();
+            .clone();
         db.execute(db.get_database_backend().build(&project_stmt))
             .await
             .unwrap();
 
         let area_stmt = schema
             .create_table_from_entity(crate::areas::db::Entity)
-            .to_owned();
+            .clone();
         db.execute(db.get_database_backend().build(&area_stmt))
             .await
             .unwrap();
         // Also create the soiltype table for the FK constraint.
         let soiltype_stmt = schema
             .create_table_from_entity(crate::soil::types::db::Entity)
-            .to_owned();
+            .clone();
         db.execute(db.get_database_backend().build(&soiltype_stmt))
             .await
             .unwrap();

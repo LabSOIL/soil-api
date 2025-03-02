@@ -7,8 +7,8 @@ use crate::{plots::models::Plot, sensors::profile::models::SensorProfile};
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ActiveValue, Condition, DatabaseConnection, EntityTrait, Order,
-    QueryOrder,
+    ActiveValue, Condition, DatabaseConnection, EntityTrait, Order, QueryOrder, entity::prelude::*,
+    query::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

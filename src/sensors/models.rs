@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, query::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition,
-    DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, Order, Statement,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    IntoActiveModel, Order, Statement, entity::prelude::*, query::*,
 };
 use serde::{Deserialize, Serialize};
 use std::vec;

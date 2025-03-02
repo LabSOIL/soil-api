@@ -1,13 +1,13 @@
 use crate::common::auth::Role;
 use crate::soil::types::models::SoilType;
 use axum::{
-    routing::{delete, get},
     Router,
+    routing::{delete, get},
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{routes as crud, CRUDResource};
+use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
@@ -55,8 +55,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::to_bytes;
     use axum::body::Body;
+    use axum::body::to_bytes;
     use axum::http::{Request, StatusCode};
     use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Schema};
     use serde_json::{from_slice, json};
@@ -69,7 +69,7 @@ mod tests {
         // Assuming you only need to create the soil_types table for this module.
         let stmt = schema
             .create_table_from_entity(crate::soil::types::db::Entity)
-            .to_owned();
+            .clone();
         db.execute(db.get_database_backend().build(&stmt))
             .await
             .unwrap();
