@@ -66,7 +66,7 @@ impl CRUDResource for Transect {
         // Convert create_model into the active model without nodes
         let active_model: Self::ActiveModelType = create_model.clone().into();
         let result = Self::EntityType::insert(active_model).exec(db).await?;
-        let transect_id = result.last_insert_id.into();
+        let transect_id = result.last_insert_id;
 
         // Loop over the nodes provided in the create_model and add each one
         for (i, node) in create_model.nodes.into_iter().enumerate() {
@@ -81,7 +81,7 @@ impl CRUDResource for Transect {
             let transect_node_active = crate::transects::nodes::db::ActiveModel {
                 plot_id: Set(plot.id),
                 transect_id: Set(transect_id),
-                order: Set(i as i32),
+                order: Set(i32::try_from(i).unwrap()),
                 ..Default::default()
             };
             crate::transects::nodes::db::Entity::insert(transect_node_active)
@@ -92,9 +92,10 @@ impl CRUDResource for Transect {
         // Return the complete transect object with its nodes by re-fetching it
         match Self::get_one(db, transect_id).await {
             Ok(obj) => Ok(obj),
-            Err(_) => Err(DbErr::RecordNotFound(
-                format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
-            )),
+            Err(_) => Err(DbErr::RecordNotFound(format!(
+                "{} not created",
+                Self::RESOURCE_NAME_SINGULAR
+            ))),
         }
     }
 
@@ -191,27 +192,29 @@ impl CRUDResource for Transect {
             transect_api.area = Some(area);
             Ok(transect_api)
         } else {
-            Err(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))
+            Err(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))
         }
     }
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
-        update_model: Self::UpdateModel,
+        update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         // Directly assign nodes from the update model (it's already a Vec)
-        let new_nodes = update_model.nodes.clone();
+        let new_nodes = update_data.nodes.clone();
 
         let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_PLURAL).into(),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_PLURAL
+            )))?
             .into();
-        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
 
         // If new_nodes is not empty, update transect nodes.
@@ -231,7 +234,7 @@ impl CRUDResource for Transect {
                 let transect_node_active = crate::transects::nodes::db::ActiveModel {
                     plot_id: Set(plot.id),
                     transect_id: Set(updated.id),
-                    order: Set(i as i32),
+                    order: Set(i32::try_from(i).unwrap()),
                     ..Default::default()
                 };
                 crate::transects::nodes::db::Entity::insert(transect_node_active)

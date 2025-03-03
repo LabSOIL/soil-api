@@ -3,7 +3,7 @@ use sea_orm::{DatabaseConnection, DbBackend, Statement};
 use serde_json::Value;
 
 pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<Value> {
-    let raw_sql = r#"
+    let raw_sql = r"
     SELECT area.id,
            ST_AsGeoJSON(ST_Transform(ST_Buffer(ST_ConvexHull(ST_Collect(area.geom)), $1), $2)) AS convex_hull
     FROM (
@@ -24,7 +24,7 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
     ) AS area
     WHERE area.id = $6
     GROUP BY area.id
-    "#;
+    ";
 
     // Try to execute the query
     if let Ok(result) = db
@@ -42,12 +42,10 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
         ))
         .await
     {
-        if let Some(row) = result {
-            if let Ok(convex_hull) = row.try_get::<String>("", "convex_hull") {
-                if let Ok(parsed_geojson) = serde_json::from_str(&convex_hull) {
-                    return parsed_geojson; // Return the parsed GeoJSON if valid
-                }
-            }
+        let row = result.unwrap();
+        let convex_hull = row.try_get::<String>("", "convex_hull").unwrap();
+        if let Ok(parsed_geojson) = serde_json::from_str(&convex_hull) {
+            return Some(parsed_geojson); // Return the parsed GeoJSON if valid
         }
     }
 

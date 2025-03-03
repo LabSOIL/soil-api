@@ -110,7 +110,7 @@ impl CRUDResource for InstrumentExperiment {
             .into_iter()
             .next()
             .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
             ))?;
 
         let (model, channels) = model;
@@ -131,13 +131,13 @@ impl CRUDResource for InstrumentExperiment {
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
             ))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let obj = Self::get_one(&db, response_obj.id).await?;
+        let obj = Self::get_one(db, response_obj.id).await?;
         Ok(obj)
     }
 

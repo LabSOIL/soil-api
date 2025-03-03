@@ -3,23 +3,22 @@ use crate::instrument_experiments::channels::db as channel_db;
 use crate::instrument_experiments::db;
 use crate::instrument_experiments::models::InstrumentExperiment;
 use axum::{
-    debug_handler,
+    Json, Router, debug_handler,
     extract::{Path, State},
     http::StatusCode,
     routing::{delete, get},
-    Json, Router,
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{routes as crud, CRUDResource};
+use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router
 where
@@ -101,16 +100,15 @@ pub async fn get_raw_data(
     let mut csv_data = vec![header];
 
     // Use the first channel's time_values as the reference.
-    if let Some(first_channel) = channels.get(0) {
+    if let Some(first_channel) = channels.first() {
         let time_values: Vec<f64> = if let Some(json) = &first_channel.time_values {
             serde_json::from_value(json.clone()).unwrap_or_default()
         } else {
             Vec::new()
         };
 
-        let len = time_values.len();
-        for i in 0..len {
-            let mut row = vec![time_values[i].to_string()];
+        for time_value in time_values.clone() {
+            let mut row = vec![time_value.to_string()];
             for channel in &channels {
                 let raw_values: Vec<f64> = if let Some(json) = &channel.raw_values {
                     serde_json::from_value(json.clone()).unwrap_or_default()
@@ -118,8 +116,13 @@ pub async fn get_raw_data(
                     Vec::new()
                 };
                 let value = raw_values
-                    .get(i)
-                    .map_or("N/A".to_string(), |v| v.to_string());
+                    .get(
+                        time_values
+                            .iter()
+                            .position(|&v| (v - time_value).abs() < f64::EPSILON)
+                            .unwrap_or(0),
+                    )
+                    .map_or("N/A".to_string(), std::string::ToString::to_string);
                 row.push(value);
             }
             csv_data.push(row);
@@ -147,11 +150,131 @@ pub async fn get_filtered_data(
     let mut channels = channels;
     channels.sort_by(|a, b| a.channel_name.cmp(&b.channel_name));
 
+    let mut samples = build_vector_of_samples(&channels);
+
+    // Ensure unique column names.
+    ensure_unique_column_name(&mut samples);
+
+    // Sort samples by their column name.
+    samples.sort_by(|a, b| {
+        let a_col = a.get("column").and_then(|v| v.as_str()).unwrap_or("");
+        let b_col = b.get("column").and_then(|v| v.as_str()).unwrap_or("");
+        a_col.cmp(b_col)
+    });
+
+    // Adjust each sample: set adjusted_start = 0 and adjusted_end = end - start.
+    for sample in &mut samples {
+        let start = sample
+            .get("start")
+            .and_then(sea_orm::JsonValue::as_f64)
+            .unwrap_or(0.0);
+        let end = sample
+            .get("end")
+            .and_then(sea_orm::JsonValue::as_f64)
+            .unwrap_or(0.0);
+        sample.insert("adjusted_start".to_string(), json!(0.0));
+        sample.insert("adjusted_end".to_string(), json!(end - start));
+    }
+
+    // Build CSV header: "time/s" plus each sample's column name.
+    let mut header: Vec<JsonValue> = vec![JsonValue::String("time/s".to_string())];
+    for sample in &samples {
+        if let Some(col) = sample.get("column").and_then(|v| v.as_str()) {
+            header.push(JsonValue::String(col.to_string()));
+        }
+    }
+    let mut csv_data: Vec<Vec<JsonValue>> = vec![header];
+
+    // Determine the time_step from the first channel.
+    let first_channel = channels.first().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json("No channel found".to_string()),
+    ))?;
+    let time_values: Vec<f64> = if let Some(ref json) = first_channel.time_values {
+        serde_json::from_value(json.clone()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    if time_values.len() < 2 {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json("Not enough time values".to_string()),
+        ));
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let time_step = (time_values[1] - time_values[0]).round() as i64;
+    #[allow(clippy::cast_possible_truncation)]
+    let max_time = samples
+        .iter()
+        .filter_map(|sample| sample.get("end").and_then(sea_orm::JsonValue::as_f64))
+        .fold(0.0, f64::max)
+        .round() as i64;
+
+    // Build CSV rows: for each time value (stepping by time_step), add baseline data from each sample.
+    let mut t = 0;
+    while t <= max_time {
+        let mut row: Vec<JsonValue> = vec![JsonValue::Number(serde_json::Number::from(t))];
+        let mut empty_count = 0;
+        for sample in &samples {
+            let baseline: Vec<JsonValue> = sample
+                .get("baseline_values")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let value = baseline
+                .get(usize::try_from(t / time_step).unwrap())
+                .cloned()
+                .unwrap_or(JsonValue::Null);
+            if value.is_null() {
+                empty_count += 1;
+            }
+            row.push(value);
+        }
+        if empty_count == samples.len() {
+            break;
+        }
+        csv_data.push(row);
+        t += time_step;
+    }
+    Ok(Json(csv_data))
+}
+
+fn ensure_unique_column_name(
+    samples: &mut Vec<serde_json::Map<String, JsonValue>>,
+) -> &mut Vec<serde_json::Map<String, JsonValue>> {
+    let mut updates = Vec::new();
+    for i in 0..samples.len() {
+        let col_i = samples[i]
+            .get("column")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        for (j, sample_j) in samples.iter().enumerate() {
+            if i != j {
+                let col_j = sample_j
+                    .get("column")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if col_i == col_j {
+                    updates.push((i, format!("{col_i}_{i}")));
+                }
+            }
+        }
+    }
+
+    for (i, new_col) in updates {
+        samples[i].insert("column".to_string(), JsonValue::String(new_col));
+    }
+
+    samples
+}
+
+fn build_vector_of_samples(
+    channels: &Vec<channel_db::Model>,
+) -> Vec<serde_json::Map<String, JsonValue>> {
     // Build a vector of sample results.
     // Each sample result is a JSON object (represented as a serde_json::Map)
     let mut samples: Vec<serde_json::Map<String, JsonValue>> = Vec::new();
 
-    for channel in &channels {
+    for channel in channels {
         // Parse time_values and baseline_values as Vec<f64>.
         let time_values: Vec<f64> = if let Some(ref json) = channel.time_values {
             serde_json::from_value(json.clone()).unwrap_or_default()
@@ -185,13 +308,19 @@ pub async fn get_filtered_data(
                     .unwrap_or("undefined");
                 let column = format!("{}_{}", channel.channel_name, sample_name)
                     .to_lowercase()
-                    .replace(" ", "_");
+                    .replace(' ', "_");
                 obj.insert("column".to_string(), JsonValue::String(column));
             }
 
             // Get start and end markers.
-            let start = result.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let end = result.get("end").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let start = result
+                .get("start")
+                .and_then(sea_orm::JsonValue::as_f64)
+                .unwrap_or(0.0);
+            let end = result
+                .get("end")
+                .and_then(sea_orm::JsonValue::as_f64)
+                .unwrap_or(0.0);
             // Find indices in time_values.
             let start_index = time_values.iter().position(|&v| (v - start).abs() < 1e-6);
             let end_index = time_values.iter().position(|&v| (v - end).abs() < 1e-6);
@@ -207,105 +336,8 @@ pub async fn get_filtered_data(
             samples.push(result.as_object().cloned().unwrap());
         }
     }
-
-    // Ensure unique column names.
-    let mut updates = Vec::new();
-    for i in 0..samples.len() {
-        let col_i = samples[i]
-            .get("column")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        for j in 0..samples.len() {
-            if i != j {
-                let col_j = samples[j]
-                    .get("column")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if col_i == col_j {
-                    updates.push((i, format!("{}_{}", col_i, i)));
-                }
-            }
-        }
-    }
-    for (i, new_col) in updates {
-        samples[i].insert("column".to_string(), JsonValue::String(new_col));
-    }
-
-    // Sort samples by their column name.
-    samples.sort_by(|a, b| {
-        let a_col = a.get("column").and_then(|v| v.as_str()).unwrap_or("");
-        let b_col = b.get("column").and_then(|v| v.as_str()).unwrap_or("");
-        a_col.cmp(b_col)
-    });
-
-    // Adjust each sample: set adjusted_start = 0 and adjusted_end = end - start.
-    for sample in samples.iter_mut() {
-        let start = sample.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let end = sample.get("end").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        sample.insert("adjusted_start".to_string(), json!(0.0));
-        sample.insert("adjusted_end".to_string(), json!(end - start));
-    }
-
-    // Build CSV header: "time/s" plus each sample's column name.
-    let mut header: Vec<JsonValue> = vec![JsonValue::String("time/s".to_string())];
-    for sample in &samples {
-        if let Some(col) = sample.get("column").and_then(|v| v.as_str()) {
-            header.push(JsonValue::String(col.to_string()));
-        }
-    }
-    let mut csv_data: Vec<Vec<JsonValue>> = vec![header];
-
-    // Determine the time_step from the first channel.
-    let first_channel = channels.get(0).ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json("No channel found".to_string()),
-    ))?;
-    let time_values: Vec<f64> = if let Some(ref json) = first_channel.time_values {
-        serde_json::from_value(json.clone()).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    if time_values.len() < 2 {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Not enough time values".to_string()),
-        ));
-    }
-    let time_step = (time_values[1] - time_values[0]).round() as i64;
-    let max_time = samples
-        .iter()
-        .filter_map(|sample| sample.get("end").and_then(|v| v.as_f64()))
-        .fold(0.0, f64::max)
-        .round() as i64;
-
-    // Build CSV rows: for each time value (stepping by time_step), add baseline data from each sample.
-    let mut t = 0;
-    while t <= max_time {
-        let mut row: Vec<JsonValue> = vec![JsonValue::Number(serde_json::Number::from(t))];
-        let mut empty_count = 0;
-        for sample in &samples {
-            let baseline: Vec<JsonValue> = sample
-                .get("baseline_values")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default();
-            let value = baseline
-                .get((t / time_step) as usize)
-                .cloned()
-                .unwrap_or(JsonValue::Null);
-            if value.is_null() {
-                empty_count += 1;
-            }
-            row.push(value);
-        }
-        if empty_count == samples.len() {
-            break;
-        }
-        csv_data.push(row);
-        t += time_step;
-    }
-    Ok(Json(csv_data))
+    samples
 }
-
 /// Returns a summary CSV that reports each channel’s integral results.
 #[debug_handler]
 pub async fn get_summary_data(
@@ -326,7 +358,7 @@ pub async fn get_summary_data(
     // Determine the maximum number of samples (i.e. length of integral_results) among all channels.
     let mut max_samples = 0;
     let mut channel_results: Vec<(String, Vec<JsonValue>)> = Vec::new();
-    for channel in channels.iter() {
+    for channel in &channels {
         let integral_results: Vec<JsonValue> = if let Some(ref json) = channel.integral_results {
             serde_json::from_value(json.clone()).unwrap_or_default()
         } else {
@@ -339,32 +371,29 @@ pub async fn get_summary_data(
     // Build CSV header: "measurement" plus four columns per sample.
     let mut header = vec!["measurement".to_string()];
     for i in 1..=max_samples {
-        header.push(format!("sample{}_start", i));
-        header.push(format!("sample{}_end", i));
-        header.push(format!("sample{}_electrons_transferred_mol", i));
-        header.push(format!("sample{}_sample_name", i));
+        header.push(format!("sample{i}_start"));
+        header.push(format!("sample{i}_end"));
+        header.push(format!("sample{i}_electrons_transferred_mol"));
+        header.push(format!("sample{i}_sample_name"));
     }
     let mut csv_data = vec![header];
 
     // For each channel, build a row with its name and then each sample's integral data.
     for (channel_name, integral_results) in channel_results {
         let mut row = vec![channel_name];
-        for sample in integral_results.iter() {
+        for sample in &integral_results {
             let start = sample
                 .get("start")
-                .and_then(|v| v.as_f64())
-                .map(|v| v.to_string())
-                .unwrap_or("nan".to_string());
+                .and_then(sea_orm::JsonValue::as_f64)
+                .map_or("nan".to_string(), |v| v.to_string());
             let end = sample
                 .get("end")
-                .and_then(|v| v.as_f64())
-                .map(|v| v.to_string())
-                .unwrap_or("nan".to_string());
+                .and_then(sea_orm::JsonValue::as_f64)
+                .map_or("nan".to_string(), |v| v.to_string());
             let area = sample
                 .get("area")
-                .and_then(|v| v.as_f64())
-                .map(|v| v.to_string())
-                .unwrap_or("nan".to_string());
+                .and_then(sea_orm::JsonValue::as_f64)
+                .map_or("nan".to_string(), |v| v.to_string());
             let sample_name = sample
                 .get("sample_name")
                 .and_then(|v| v.as_str())

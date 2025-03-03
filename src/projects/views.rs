@@ -1,18 +1,18 @@
 use crate::common::auth::Role;
 use crate::projects::models::Project;
 use axum::{
-    routing::{delete, get},
     Router,
+    routing::{delete, get},
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{routes as crud, CRUDResource};
+use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router
 where

@@ -82,26 +82,28 @@ impl CRUDResource for Project {
             Self::EntityType::find_by_id(id)
                 .one(db)
                 .await?
-                .ok_or(DbErr::RecordNotFound(
-                    format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-                ))?;
+                .ok_or(DbErr::RecordNotFound(format!(
+                    "{} not found",
+                    Self::RESOURCE_NAME_SINGULAR
+                )))?;
         Ok(Self::ApiModel::from(model))
     }
 
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
-        update_model: Self::UpdateModel,
+        update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_PLURAL).into(),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_PLURAL
+            )))?
             .into();
 
-        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
         Ok(Self::ApiModel::from(updated))
     }
@@ -127,7 +129,7 @@ impl CRUDResource for Project {
 
 fn generate_random_color() -> String {
     let mut rng = rand::rng();
-    format!("#{:06x}", rng.random::<u32>() & 0xFFFFFF)
+    format!("#{:06x}", rng.random::<u32>() & 0xFF_FFFF)
 }
 
 // #[pymethods]

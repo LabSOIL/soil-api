@@ -231,7 +231,7 @@ impl CRUDResource for PlotSample {
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
-        update_model: Self::UpdateModel,
+        update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(crate::samples::db::Column::Id.eq(id))
@@ -239,7 +239,7 @@ impl CRUDResource for PlotSample {
             .await?
             .ok_or(DbErr::RecordNotFound("Plot sample not found".into()))?
             .into();
-        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
         Self::get_one(db, updated.id).await
     }

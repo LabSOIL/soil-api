@@ -2,22 +2,22 @@ use super::models::Sensor;
 use crate::common::auth::Role;
 use crate::common::models::LowResolution;
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{delete, get},
-    Json, Router,
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::routes as crud;
 use crudcrate::CRUDResource;
+use crudcrate::routes as crud;
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router {
     let mut mutating_router = Router::new()
@@ -71,7 +71,7 @@ where
                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
             }
             Err(e) => {
-                println!("Error: {:?}", e);
+                println!("Error: {e:?}");
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal Server Error".to_string()),
@@ -85,7 +85,7 @@ where
                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
             }
             Err(e) => {
-                println!("Error: {:?}", e);
+                println!("Error: {e:?}");
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal Server Error".to_string()),
@@ -104,7 +104,7 @@ pub async fn delete_data(
         .exec(&db)
         .await
         .map_err(|e| {
-            println!("Error: {:?}", e);
+            println!("Error: {e:?}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json("Internal Server Error".to_string()),

@@ -13,6 +13,7 @@ pub struct Model {
     pub filename: Option<String>,
     pub device_filename: Option<String>,
     pub data_source: Option<String>,
+    #[allow(clippy::struct_field_names)]
     pub instrument_model: Option<String>,
     pub init_e: Option<f64>,
     pub sample_interval: Option<f64>,

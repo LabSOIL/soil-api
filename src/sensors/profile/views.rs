@@ -2,21 +2,21 @@ use super::models::SensorProfile;
 use crate::common::auth::Role;
 use crate::common::models::LowResolution;
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{delete, get},
-    Json, Router,
 };
 use axum_keycloak_auth::{
-    instance::KeycloakAuthInstance, layer::KeycloakAuthLayer, PassthroughMode,
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{routes as crud, CRUDResource};
+use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::{DatabaseConnection, DbErr};
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router
 where
@@ -72,7 +72,7 @@ where
                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
             }
             Err(e) => {
-                println!("Error: {:?}", e);
+                println!("Error: {e:?}");
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal Server Error".to_string()),
@@ -86,7 +86,7 @@ where
                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
             }
             Err(e) => {
-                println!("Error: {:?}", e);
+                println!("Error: {e:?}");
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal Server Error".to_string()),

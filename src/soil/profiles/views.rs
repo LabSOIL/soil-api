@@ -12,7 +12,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router
 where
@@ -147,7 +147,7 @@ mod tests {
     }
 
     // Convenience function to build the router.
-    fn build_router(db: DatabaseConnection) -> axum::Router {
+    fn build_router(db: &DatabaseConnection) -> axum::Router {
         // Here, we assume that your profiles router is defined in this module.
         // Passing None for the Keycloak auth instance.
         router(db, None)
@@ -156,7 +156,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_and_get_soil_profile() {
         let db = setup_database().await;
-        let app = axum::Router::new().nest("/api/soil_profiles", build_router(db.clone()));
+        let app = axum::Router::new().nest("/api/soil_profiles", build_router(&db));
 
         // Insert a dummy soil type (required for FK constraint).
         let (dummy_soil_type_id, _dummy_project_id, dummy_area_id) =
@@ -232,7 +232,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_soil_profile() {
         let db = setup_database().await;
-        let app = axum::Router::new().nest("/api/soil_profiles", build_router(db.clone()));
+        let app = axum::Router::new().nest("/api/soil_profiles", build_router(&db));
 
         // Insert dummy data
         let (dummy_soil_type_id, _dummy_project_id, dummy_area_id) =
@@ -308,7 +308,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("PUT")
-                    .uri(&format!("/api/soil_profiles/{}", profile_id))
+                    .uri(format!("/api/soil_profiles/{profile_id}"))
                     .header("Content-Type", "application/json")
                     .body(Body::from(update_payload.to_string()))
                     .unwrap(),
@@ -343,7 +343,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_soil_profile() {
         let db = setup_database().await;
-        let app = axum::Router::new().nest("/api/soil_profiles", build_router(db.clone()));
+        let app = axum::Router::new().nest("/api/soil_profiles", build_router(&db));
 
         // Insert a dummy soil type.
         let (dummy_soil_type_id, _dummy_project_id, dummy_area_id) =
@@ -410,7 +410,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/soil_profiles/{}", profile_id))
+                    .uri(format!("/api/soil_profiles/{profile_id}"))
                     .body(Body::empty())
                     .unwrap(),
             )

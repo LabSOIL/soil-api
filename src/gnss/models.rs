@@ -22,7 +22,7 @@ use uuid::Uuid;
 // and remove the other fields that are not needed for creation or update.
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel, Debug)]
 #[active_model = "super::db::ActiveModel"]
-pub struct GNSS {
+pub struct Gnss {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
     #[crudcrate(
@@ -49,7 +49,7 @@ pub struct GNSS {
     pub filename: Option<String>,
 }
 
-impl From<Model> for GNSS {
+impl From<Model> for Gnss {
     fn from(model: Model) -> Self {
         Self {
             id: model.id,
@@ -71,14 +71,14 @@ impl From<Model> for GNSS {
 }
 
 #[async_trait]
-impl CRUDResource for GNSS {
+impl CRUDResource for Gnss {
     type EntityType = crate::gnss::db::Entity;
     type ColumnType = crate::gnss::db::Column;
     type ModelType = crate::gnss::db::Model;
     type ActiveModelType = crate::gnss::db::ActiveModel;
-    type ApiModel = GNSS;
-    type CreateModel = GNSSCreate;
-    type UpdateModel = GNSSUpdate;
+    type ApiModel = Gnss;
+    type CreateModel = GnssCreate;
+    type UpdateModel = GnssUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "gnss";
@@ -99,7 +99,7 @@ impl CRUDResource for GNSS {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(GNSS::from).collect())
+        Ok(models.into_iter().map(Gnss::from).collect())
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
@@ -107,10 +107,11 @@ impl CRUDResource for GNSS {
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))?;
-        Ok(GNSS::from(model))
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?;
+        Ok(Gnss::from(model))
     }
     // async fn create(
     //     db: &DatabaseConnection,
@@ -134,7 +135,7 @@ impl CRUDResource for GNSS {
             data_base64: create_model.data_base64.unwrap(),
             filename: create_model.filename.unwrap(),
         };
-        let creates = gnss.into_gnss_creates().await.unwrap();
+        let creates = gnss.into_gnss_creates().unwrap();
 
         let mut response_objs = Vec::new();
         for create in creates {
@@ -145,12 +146,12 @@ impl CRUDResource for GNSS {
             active_model.coord_y = NotSet;
             active_model.coord_srid = NotSet;
 
-            println!("Creates: {:?}", active_model);
+            println!("Creates: {active_model:?}");
 
             let response_obj = active_model.insert(db).await?;
             response_objs.push(response_obj);
         }
-        let obj = Self::get_one(&db, response_objs[0].id).await?;
+        let obj = Self::get_one(db, response_objs[0].id).await?;
         Ok(obj)
     }
 
@@ -162,13 +163,14 @@ impl CRUDResource for GNSS {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let obj = Self::get_one(&db, response_obj.id).await?;
+        let obj = Self::get_one(db, response_obj.id).await?;
         Ok(obj)
     }
 
@@ -204,9 +206,9 @@ pub struct GNSSCreateFromFile {
 }
 
 impl GNSSCreateFromFile {
-    /// Converts the uploaded GPX file (in base64) into a list of GNSSCreate models.
+    /// Converts the uploaded GPX file (in base64) into a list of `GNSSCreate` models.
     /// The `srid` parameter defines the target spatial reference (e.g. from your config).
-    pub async fn into_gnss_creates(self) -> Result<Vec<GNSSCreate>, Box<dyn std::error::Error>> {
+    pub fn into_gnss_creates(self) -> Result<Vec<GnssCreate>, Box<dyn std::error::Error>> {
         // Remove known base64 prefix if present
         let base64_prefix = "data:application/gpx+xml;base64,";
         let encoded = if self.data_base64.starts_with(base64_prefix) {
@@ -230,7 +232,7 @@ impl GNSSCreateFromFile {
             let time: DateTime<Utc> =
                 DateTime::parse_from_rfc3339(&wpt.time.unwrap().format().unwrap())?.into();
 
-            creates.push(GNSSCreate {
+            creates.push(GnssCreate {
                 latitude: Some(wpt.point().y()),
                 longitude: Some(wpt.point().x()),
                 elevation_gps: wpt.elevation,

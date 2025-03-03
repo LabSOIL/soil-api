@@ -3,8 +3,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
-    IntoActiveModel, Order, Statement, entity::prelude::*, query::*,
+    ActiveModelTrait, ActiveValue,
+    ActiveValue::Set,
+    ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, Order, Statement,
+    entity::prelude::*,
+    query::{QueryOrder, QuerySelect},
 };
 use serde::{Deserialize, Serialize};
 use std::vec;
@@ -96,7 +99,7 @@ impl CRUDResource for Sensor {
                 .pop()
                 .unwrap()
                 .into_iter()
-                .map(|assignment| assignment.into())
+                .map(std::convert::Into::into)
                 .collect();
 
         let mut sensors: Vec<Sensor> = Vec::new();
@@ -130,14 +133,15 @@ impl CRUDResource for Sensor {
             .all(db)
             .await?
             .pop()
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))?;
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?;
 
         let mut sensor: super::models::Sensor = sensor.into();
         let (data_from, data_to) = get_data_range(db, sensor.id).await?;
 
-        sensor.data = data.into_iter().map(|d| d.into()).collect();
+        sensor.data = data.into_iter().map(std::convert::Into::into).collect();
 
         let assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment> =
             crate::sensors::profile::assignment::db::Entity::find()
@@ -145,14 +149,14 @@ impl CRUDResource for Sensor {
                 .all(db)
                 .await?
                 .into_iter()
-                .map(|assignment| assignment.into())
+                .map(std::convert::Into::into)
                 .collect();
 
         let sensor = Sensor {
-            assignments,
             data_from,
             data_to,
-            ..sensor.into()
+            assignments,
+            ..sensor
         };
         Ok(sensor)
     }
@@ -169,15 +173,33 @@ impl CRUDResource for Sensor {
             // Process the base64 string into SensorData objects
             let new_data_result = crate::sensors::services::process_sensor_data_base64(
                 data_base64,
-                result.last_insert_id.into(),
+                result.last_insert_id,
             )
-            .map_err(|e| DbErr::Custom(e))?;
+            .map_err(DbErr::Custom)?;
 
             // Prepare bulk insert of new sensor data records into the DB
-            let active_models: Vec<crate::sensors::data::db::ActiveModel> = new_data_result
-                .into_iter()
-                .map(|record| record.into_active_model())
-                .collect();
+            // let active_models: Vec<crate::sensors::data::db::ActiveModel> = new_data_result
+            //     .into_iter()
+            //     .map(sea_orm::IntoActiveModel::into_active_model)
+            //     .collect();
+
+            let mut active_models: Vec<crate::sensors::data::db::ActiveModel> = vec![];
+
+            for obj in new_data_result {
+                let active_model = crate::sensors::data::db::ActiveModel {
+                    sensor_id: Set(result.last_insert_id),
+                    instrument_seq: Set(obj.instrument_seq),
+                    time_utc: Set(obj.time_utc),
+                    temperature_1: Set(obj.temperature_1),
+                    temperature_2: Set(obj.temperature_2),
+                    temperature_3: Set(obj.temperature_3),
+                    temperature_average: Set(obj.temperature_average),
+                    soil_moisture_count: Set(obj.soil_moisture_count),
+                    shake: Set(obj.shake),
+                    error_flat: Set(obj.error_flat),
+                };
+                active_models.push(active_model);
+            }
             if !active_models.is_empty() {
                 const CHUNK_SIZE: usize = 1000; // Define the chunk size
                 for chunk in active_models.chunks(CHUNK_SIZE) {
@@ -188,11 +210,12 @@ impl CRUDResource for Sensor {
             }
         }
 
-        match Self::get_one(db, result.last_insert_id.into()).await {
+        match Self::get_one(db, result.last_insert_id).await {
             Ok(obj) => Ok(obj),
-            Err(_) => Err(DbErr::RecordNotFound(
-                format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
-            )),
+            Err(_) => Err(DbErr::RecordNotFound(format!(
+                "{} not created",
+                Self::RESOURCE_NAME_SINGULAR
+            ))),
         }
     }
 
@@ -204,16 +227,17 @@ impl CRUDResource for Sensor {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
         // Process sensor data from base64 if provided
         if let Some(ref data_base64) = update_model.data_base64 {
             // Process the base64 string into SensorData objects
             let new_data_result =
                 crate::sensors::services::process_sensor_data_base64(data_base64, id)
-                    .map_err(|e| DbErr::Custom(e))?;
+                    .map_err(DbErr::Custom)?;
 
             // Query existing sensor data records for this sensor, sorted by time_utc descending
             let existing_data = crate::sensors::data::db::Entity::find()
@@ -235,15 +259,28 @@ impl CRUDResource for Sensor {
             // If there are no new records to insert, return early
             if filtered_new_data.is_empty() {
                 // Break early if there are no new records to insert
-                let obj = Self::get_one(&db, id).await?;
+                let obj = Self::get_one(db, id).await?;
                 return Ok(obj);
             }
 
             // Prepare bulk insert of new sensor data records into the DB
-            let active_models: Vec<crate::sensors::data::db::ActiveModel> = filtered_new_data
-                .into_iter()
-                .map(|record| record.into_active_model())
-                .collect();
+            let mut active_models: Vec<crate::sensors::data::db::ActiveModel> = vec![];
+
+            for obj in filtered_new_data {
+                let active_model = crate::sensors::data::db::ActiveModel {
+                    sensor_id: Set(id),
+                    instrument_seq: Set(obj.instrument_seq),
+                    time_utc: Set(obj.time_utc),
+                    temperature_1: Set(obj.temperature_1),
+                    temperature_2: Set(obj.temperature_2),
+                    temperature_3: Set(obj.temperature_3),
+                    temperature_average: Set(obj.temperature_average),
+                    soil_moisture_count: Set(obj.soil_moisture_count),
+                    shake: Set(obj.shake),
+                    error_flat: Set(obj.error_flat),
+                };
+                active_models.push(active_model);
+            }
 
             if !active_models.is_empty() {
                 const CHUNK_SIZE: usize = 1000; // Define the chunk size
@@ -259,11 +296,11 @@ impl CRUDResource for Sensor {
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
 
-        let obj = Self::get_one(&db, response_obj.id).await?;
+        let obj = Self::get_one(db, response_obj.id).await?;
 
         Ok(obj)
     }
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
+    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<Uuid, DbErr> {
         // If the sensor has a relationship to sensor profiles via sensor profile
         // assignments, we need to delete those first. Refuse to delete the sensor
         // if it has any sensor profile assignments.
@@ -288,7 +325,13 @@ impl CRUDResource for Sensor {
             .exec(db)
             .await?;
 
-        Ok(res.rows_affected as usize)
+        match res.rows_affected {
+            0 => Err(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            ))),
+            _ => Ok(id),
+        }
     }
 
     async fn delete_many(db: &DatabaseConnection, ids: Vec<Uuid>) -> Result<Vec<Uuid>, DbErr> {
@@ -300,13 +343,9 @@ impl CRUDResource for Sensor {
                     .await?;
 
             if !sensor_profile_assignments.is_empty() {
-                return Err(DbErr::Custom(
-                    format!(
-                        "Cannot delete sensor with sensor profile assignments: {}",
-                        id
-                    )
-                    .into(),
-                ));
+                return Err(DbErr::Custom(format!(
+                    "Cannot delete sensor with sensor profile assignments: {id}"
+                )));
             }
 
             crate::sensors::data::db::Entity::delete_many()
@@ -358,7 +397,7 @@ impl Sensor {
                   temperature_average,
                   soil_moisture_count
                 FROM sensordata
-                WHERE sensor_id = '{}'
+                WHERE sensor_id = '{id}'
               )
               SELECT
                 sensor_id,
@@ -379,8 +418,7 @@ impl Sensor {
                 count(*) AS record_count
               FROM buckets
               GROUP BY sensor_id, bucket
-              ORDER BY bucket",
-            id
+              ORDER BY bucket"
         );
 
         let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
@@ -441,8 +479,8 @@ impl Sensor {
             processed_data.push(last.clone());
         }
 
-        sensor.data = processed_data.into_iter().map(|d| d.into()).collect();
-        Ok(Sensor::from(sensor))
+        sensor.data = processed_data.into_iter().collect();
+        Ok(sensor)
     }
 }
 

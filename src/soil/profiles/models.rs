@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, entity::prelude::*,
-    query::*,
+    ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    entity::prelude::*,
+    query::{Condition, Order, QueryOrder, QuerySelect},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -100,7 +101,7 @@ impl CRUDResource for SoilProfile {
             .all(db)
             .await?
             .into_iter()
-            .map(|model| model.into())
+            .map(std::convert::Into::into)
             .collect();
         Ok(profiles)
     }
@@ -118,7 +119,7 @@ impl CRUDResource for SoilProfile {
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
-        update_model: Self::UpdateModel,
+        update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
@@ -126,7 +127,7 @@ impl CRUDResource for SoilProfile {
             .await?
             .ok_or(DbErr::RecordNotFound("Soil profile not found".into()))?
             .into();
-        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
         Self::get_one(db, updated.id).await
     }

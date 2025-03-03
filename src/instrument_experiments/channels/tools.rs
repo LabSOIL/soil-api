@@ -33,12 +33,10 @@ pub fn calculate_spline(
     }
 
     // For now we only support "linear" interpolation.
-    if interpolation_method != "linear" {
-        panic!(
-            "Interpolation method {} not supported, only 'linear' is available",
-            interpolation_method
-        );
-    }
+    assert!(
+        (interpolation_method == "linear"),
+        "Interpolation method {interpolation_method} not supported, only 'linear' is available"
+    );
 
     let mut spline = Vec::with_capacity(x.len());
     for &xi in x {
@@ -112,14 +110,14 @@ pub fn integrate_trapz(x: &[f64], y: &[f64]) -> f64 {
 pub fn calculate_integral_for_range(x: &[f64], y: &[f64], integration_method: &str) -> f64 {
     match integration_method {
         "trapz" => integrate_trapz(x, y),
-        "simpson" => integrate_trapz(x, y), // Placeholder for Simpson's rule
-        _ => panic!("Integration method {} not supported", integration_method),
+        // "simpson" => integrate_trapz(x, y), // Placeholder for Simpson's rule
+        _ => panic!("Integration method {integration_method} not supported"),
     }
 }
 
 /// Calculate the integral for each pair in the provided list.
 /// Each pair is expected to be a JSON object with the structure:
-/// { "start": {"x": value}, "end": {"x": value}, "sample_name": "..." }
+/// { "start": {"x": value}, "end": {"x": value}, "`sample_name"`: "..." }
 ///
 /// # Arguments
 /// - `pairs`: A slice of JSON values representing the pairs.
@@ -128,7 +126,7 @@ pub fn calculate_integral_for_range(x: &[f64], y: &[f64], integration_method: &s
 /// - `integration_method`: Integration method to use ("trapz" or "simpson").
 ///
 /// # Returns
-/// A vector of JSON objects, each containing "start", "end", "area", and "sample_name".
+/// A vector of JSON objects, each containing "start", "end", "area", and "`sample_name`".
 pub fn calculate_integrals_for_pairs(
     pairs: &[serde_json::Value],
     baseline_values: &[f64],
@@ -141,12 +139,12 @@ pub fn calculate_integrals_for_pairs(
         let start = pair
             .get("start")
             .and_then(|v| v.get("x"))
-            .and_then(|v| v.as_f64())
+            .and_then(sea_orm::JsonValue::as_f64)
             .unwrap_or(0.0);
         let end = pair
             .get("end")
             .and_then(|v| v.get("x"))
-            .and_then(|v| v.as_f64())
+            .and_then(sea_orm::JsonValue::as_f64)
             .unwrap_or(0.0);
 
         let start_index = time_values.iter().position(|&v| (v - start).abs() < 1e-6);
@@ -172,8 +170,14 @@ pub fn calculate_integrals_for_pairs(
     }
 
     integration_results.sort_by(|a, b| {
-        let a_start = a.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let b_start = b.get("start").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let a_start = a
+            .get("start")
+            .and_then(sea_orm::JsonValue::as_f64)
+            .unwrap_or(0.0);
+        let b_start = b
+            .get("start")
+            .and_then(sea_orm::JsonValue::as_f64)
+            .unwrap_or(0.0);
         a_start.partial_cmp(&b_start).unwrap_or(Ordering::Equal)
     });
 

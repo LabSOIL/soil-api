@@ -94,7 +94,7 @@ impl CRUDResource for SensorProfile {
             .all(db)
             .await?;
 
-        if models.len() == 0 {
+        if models.is_empty() {
             return Ok(vec![]);
         }
         let mut assignments: Vec<super::assignment::models::SensorProfileAssignment> = models
@@ -103,7 +103,7 @@ impl CRUDResource for SensorProfile {
             .pop()
             .unwrap()
             .into_iter()
-            .map(|assignment| assignment.into())
+            .map(std::convert::Into::into)
             .collect();
 
         for assignment in &mut assignments {
@@ -137,7 +137,7 @@ impl CRUDResource for SensorProfile {
             .pop()
             .unwrap()
             .into_iter()
-            .map(|assignment| assignment.into())
+            .map(std::convert::Into::into)
             .collect();
 
         // As in get_all, get sensor for each assignment
@@ -151,7 +151,7 @@ impl CRUDResource for SensorProfile {
             assignment.sensor = Some(sensor);
         }
         let model = models.pop().ok_or(DbErr::RecordNotFound(
-            format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+            format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
         ))?;
 
         let sensor_profile = SensorProfile::from_with_assignments(model, assignments);
@@ -167,13 +167,13 @@ impl CRUDResource for SensorProfile {
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
             ))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let obj = Self::get_one(&db, response_obj.id).await?;
+        let obj = Self::get_one(db, response_obj.id).await?;
         Ok(obj)
     }
 
@@ -200,7 +200,7 @@ impl SensorProfile {
     ) -> Result<SensorProfile, DbErr> {
         let mut sensor_profile = Self::get_one(db, id).await?;
         // For each assignment, fetch aggregated sensor data and store it in the assignment’s data field
-        for assignment in sensor_profile.assignments.iter_mut() {
+        for assignment in &mut sensor_profile.assignments {
             let sql = format!(
                 "WITH buckets AS (
                     SELECT
@@ -259,7 +259,7 @@ impl SensorProfile {
         }
         // Also merge all assignments’ data into sensor_profile.data (if needed for overall view)
         let mut all_data = Vec::new();
-        for assignment in sensor_profile.assignments.iter() {
+        for assignment in &sensor_profile.assignments {
             all_data.extend(assignment.data.clone());
         }
         all_data.sort_by_key(|d| d.time_utc);
@@ -272,7 +272,7 @@ impl SensorProfile {
         id: Uuid,
     ) -> Result<SensorProfile, DbErr> {
         let mut sensor_profile = Self::get_one(db, id).await?;
-        for assignment in sensor_profile.assignments.iter_mut() {
+        for assignment in &mut sensor_profile.assignments {
             let sensor_data_records = crate::sensors::data::db::Entity::find()
                 .filter(crate::sensors::data::db::Column::SensorId.eq(assignment.sensor_id))
                 .filter(
@@ -290,7 +290,7 @@ impl SensorProfile {
             assignment.data = data_vec;
         }
         let mut all_data = Vec::new();
-        for assignment in sensor_profile.assignments.iter() {
+        for assignment in &sensor_profile.assignments {
             all_data.extend(assignment.data.clone());
         }
         all_data.sort_by_key(|d| d.time_utc);

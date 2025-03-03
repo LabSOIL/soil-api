@@ -12,7 +12,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 pub fn router(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
 ) -> Router
 where
@@ -80,7 +80,7 @@ mod tests {
     async fn test_get_all_soil_types() {
         let db = setup_database().await;
         // Initialize the router with the test DB
-        let app = Router::new().nest("/api/soil_types", router(db.clone(), None));
+        let app = Router::new().nest("/api/soil_types", router(&db, None));
 
         // Create a new soil type via POST
         let soil_type = json!({
@@ -100,7 +100,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("{:?}", response);
+        println!("{response:?}");
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // Retrieve all soil types via GET
@@ -130,7 +130,7 @@ mod tests {
 
         // Verify the soil type details (ignoring the "image" field in the GET response)
         let soil_type_obj = soil_types[0].as_object().unwrap();
-        println!("{:?}", soil_type_obj);
+        println!("{soil_type_obj:?}");
         assert_eq!(soil_type_obj.get("name").unwrap(), "Clay");
         assert_eq!(soil_type_obj.get("description").unwrap(), "Clay soil type");
         assert_eq!(

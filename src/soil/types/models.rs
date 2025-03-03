@@ -65,7 +65,7 @@ impl CRUDResource for SoilType {
             .await?;
 
         // For get all, don't return the image attribute
-        for model in models.iter_mut() {
+        for model in &mut models {
             model.image = None;
         }
 
@@ -90,13 +90,13 @@ impl CRUDResource for SoilType {
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR).into(),
+                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
             ))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let obj = Self::get_one(&db, response_obj.id).await?;
+        let obj = Self::get_one(db, response_obj.id).await?;
         Ok(obj)
     }
 

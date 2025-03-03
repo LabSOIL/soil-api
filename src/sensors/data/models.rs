@@ -1,21 +1,12 @@
-use super::db::{ActiveModel, Model};
+use super::db::Model;
 use chrono::{DateTime, Utc};
 use crudcrate::{ToCreateModel, ToUpdateModel};
-use sea_orm::{ActiveValue, DeriveIntoActiveModel};
+use sea_orm::ActiveValue;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(
-    Clone,
-    ToSchema,
-    Serialize,
-    Deserialize,
-    Debug,
-    ToCreateModel,
-    ToUpdateModel,
-    DeriveIntoActiveModel,
-)]
+#[derive(Clone, ToSchema, Serialize, Deserialize, Debug, ToCreateModel, ToUpdateModel)]
 #[active_model = "super::db::ActiveModel"]
 pub struct SensorData {
     pub instrument_seq: i32,

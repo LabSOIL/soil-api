@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     ActiveValue, Condition, DatabaseConnection, EntityTrait, Order, QueryOrder, entity::prelude::*,
-    query::*,
+    query::QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -108,7 +108,7 @@ impl CRUDResource for Area {
                 .await?;
             let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
 
-            for transect in transects.iter() {
+            for transect in &transects {
                 let node_objs = transect
                     .find_related(crate::transects::nodes::db::Entity)
                     .all(db)
@@ -193,7 +193,7 @@ impl CRUDResource for Area {
             .await?;
         let mut transect_objs: Vec<crate::transects::models::Transect> = vec![];
 
-        for transect in transects.iter() {
+        for transect in &transects {
             let node_objs = transect
                 .find_related(crate::transects::nodes::db::Entity)
                 .all(db)
@@ -255,7 +255,7 @@ impl CRUDResource for Area {
     ) -> Result<Self::ApiModel, DbErr> {
         let active_model: Self::ActiveModelType = create_model.into();
         let inserted = active_model.insert(db).await?;
-        let area = Self::get_one(&db, inserted.id).await.unwrap();
+        let area = Self::get_one(db, inserted.id).await.unwrap();
         Ok(area)
     }
 
@@ -272,13 +272,8 @@ impl CRUDResource for Area {
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
         let response_obj = updated_obj.update(db).await?;
-        let area = Self::get_one(&db, response_obj.id).await?;
+        let area = Self::get_one(db, response_obj.id).await?;
         Ok(area)
-    }
-
-    async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<usize, DbErr> {
-        let res = Self::EntityType::delete_by_id(id).exec(db).await?;
-        Ok(res.rows_affected as usize)
     }
 
     fn default_index_column() -> Self::ColumnType {

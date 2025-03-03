@@ -17,7 +17,6 @@ use axum_keycloak_auth::{Url, instance::KeycloakAuthInstance, instance::Keycloak
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use std::sync::Arc;
-use tracing_subscriber;
 // use utoipa_scalar::Scalar;
 
 #[tokio::main]
@@ -29,7 +28,7 @@ async fn main() {
     // Load configuration
     let config = config::Config::from_env();
 
-    let db: DatabaseConnection = Database::connect(&*config.db_url.as_ref().unwrap())
+    let db: DatabaseConnection = Database::connect(config.db_url.as_ref().unwrap())
         .await
         .unwrap();
 
@@ -71,62 +70,59 @@ async fn main() {
         .with_state(db.clone())
         .nest(
             "/api/plots",
-            plots::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            plots::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/areas",
             // areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
-            areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            areas::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/projects",
-            projects::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            projects::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/gnss",
-            gnss::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            gnss::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/plot_samples",
-            samples::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            samples::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/sensors",
-            sensors::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            sensors::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/sensor_profiles",
-            sensors::profile::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/sensor_profile_assignments",
-            sensors::profile::assignment::views::router(
-                db.clone(),
-                Some(keycloak_auth_instance.clone()),
-            ),
+            sensors::profile::assignment::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/transects",
-            transects::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            transects::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/instruments",
-            instrument_experiments::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            instrument_experiments::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/instrument_channels",
             instrument_experiments::channels::views::router(
-                db.clone(),
+                &db,
                 Some(keycloak_auth_instance.clone()),
             ),
         )
         .nest(
             "/api/soil_types",
-            soil::types::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            soil::types::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .nest(
             "/api/soil_profiles",
-            soil::profiles::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
+            soil::profiles::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024));
     // .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
@@ -135,7 +131,7 @@ async fn main() {
 
     // Bind to an address and serve the application
     let addr: std::net::SocketAddr = "0.0.0.0:3000".parse().unwrap();
-    println!("Listening on {}", addr);
+    println!("Listening on {addr}");
 
     // Run the server (correct axum usage without `hyper::Server`)
     axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)

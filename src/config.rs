@@ -29,7 +29,9 @@ impl Config {
             ))
         });
 
-        let config = Config {
+        
+
+        Config {
             app_name: env::var("APP_NAME").expect("APP_NAME must be set"),
             keycloak_ui_id: env::var("KEYCLOAK_UI_ID").expect("KEYCLOAK_UI_ID must be set"),
             keycloak_url: env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set"),
@@ -38,8 +40,6 @@ impl Config {
                 .expect("DEPLOYMENT must be set, this can be local, dev, stage, or prod"),
             db_url,
             srid,
-        };
-
-        config
+        }
     }
 }

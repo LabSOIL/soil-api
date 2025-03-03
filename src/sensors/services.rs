@@ -45,7 +45,7 @@ fn ingest_csv_data(
             let time_utc = match DateTime::parse_from_str(&time_str, "%Y.%m.%d %H:%M:%S %z") {
                 Ok(dt) => dt.with_timezone(&Utc),
                 Err(e) => {
-                    println!("Error parsing date: {}", e);
+                    println!("Error parsing date: {e}");
                     return Err("Invalid date format".into());
                 }
             };
@@ -57,18 +57,7 @@ fn ingest_csv_data(
             let shake = parts[7].parse::<i32>().unwrap_or(0);
             let error_flat = parts[8].parse::<i32>().unwrap_or(0);
 
-            let sensor_data_obj = crate::sensors::data::models::SensorData {
-                instrument_seq,
-                time_utc,
-                temperature_1,
-                temperature_2,
-                temperature_3,
-                temperature_average,
-                soil_moisture_count,
-                shake,
-                error_flat,
-                sensor_id,
-            };
+            let sensor_data_obj = crate::sensors::data::models::SensorData { instrument_seq, temperature_1, temperature_2, temperature_3, soil_moisture_count, shake, error_flat, sensor_id, time_utc, temperature_average };
             objs.push(sensor_data_obj);
         }
     }

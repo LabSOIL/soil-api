@@ -13,7 +13,6 @@ use uuid::Uuid;
 
 #[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel, Deserialize, Clone)]
 #[active_model = "super::db::ActiveModel"]
-
 pub struct Plot {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
@@ -86,7 +85,7 @@ impl
         let area: crate::areas::models::Area = area_db.into();
         let samples: Vec<crate::samples::models::PlotSample> = samples_db
             .into_iter()
-            .map(|sample| crate::samples::models::PlotSample::from(sample))
+            .map(crate::samples::models::PlotSample::from)
             .collect();
         let mut plot: Plot = plot_db.into();
 
@@ -182,12 +181,12 @@ impl CRUDResource for Plot {
         let nearest_sensor_profiles: Vec<ClosestSensorProfile> =
             ClosestSensorProfile::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT b.id, st_distance(a.geom, b.geom) AS distance, st_z(a.geom) - st_z(b.geom) AS elevation_difference, b.name
+            r"SELECT b.id, st_distance(a.geom, b.geom) AS distance, st_z(a.geom) - st_z(b.geom) AS elevation_difference, b.name
                 FROM plot a, sensorprofile b
                 WHERE a.area_id = b.area_id
                 AND a.id = $1
                 ORDER BY st_distance(a.geom, b.geom);
-            "#,
+            ",
             vec![id.into()],
             ))
             .all(db)
@@ -200,7 +199,7 @@ impl CRUDResource for Plot {
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
-        update_model: Self::UpdateModel,
+        update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(super::db::Column::Id.eq(id))
@@ -208,7 +207,7 @@ impl CRUDResource for Plot {
             .await?
             .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
             .into();
-        let updated_model = update_model.merge_into_activemodel(existing);
+        let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
         Self::get_one(db, updated.id).await
     }

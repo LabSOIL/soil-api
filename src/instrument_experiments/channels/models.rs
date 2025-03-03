@@ -153,7 +153,7 @@ impl CRUDResource for InstrumentExperimentChannel {
                 // Extract chosen x-values.
                 let chosen_points: Vec<f64> = baseline_chosen_points
                     .into_iter()
-                    .filter_map(|bp| bp.get("x").and_then(|v| v.as_f64()))
+                    .filter_map(|bp| bp.get("x").and_then(sea_orm::JsonValue::as_f64))
                     .collect();
 
                 let spline = super::tools::calculate_spline(&x, &y, &chosen_points, "linear");
@@ -166,8 +166,7 @@ impl CRUDResource for InstrumentExperimentChannel {
                 active_model.baseline_values =
                     ActiveValue::Set(Some(serde_json::to_value(&filtered_baseline).unwrap()));
             }
-        } else {
-        }
+        } 
 
         // --- Process integral_chosen_pairs ---
         if let Some(integral_chosen_pairs_json) = update_model.integral_chosen_pairs {
@@ -209,8 +208,7 @@ impl CRUDResource for InstrumentExperimentChannel {
 
             active_model.integral_results =
                 ActiveValue::Set(Some(serde_json::to_value(&integral_results).unwrap()));
-        } else {
-        }
+        } 
 
         // Execute the update in the database.
         let response_obj = active_model.update(db).await?;

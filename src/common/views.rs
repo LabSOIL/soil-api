@@ -1,6 +1,6 @@
 use super::models::HealthCheck;
 use super::models::UIConfiguration;
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 use sea_orm::DatabaseConnection;
 
 #[utoipa::path(
@@ -16,16 +16,13 @@ use sea_orm::DatabaseConnection;
     )
 )]
 pub async fn healthz(State(db): State<DatabaseConnection>) -> (StatusCode, Json<HealthCheck>) {
-    match db.ping().await {
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(HealthCheck {
-                    status: "error".to_string(),
-                }),
-            )
-        }
-        _ => {}
+    if db.ping().await.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(HealthCheck {
+                status: "error".to_string(),
+            }),
+        );
     };
 
     (
