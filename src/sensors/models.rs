@@ -26,7 +26,6 @@ pub struct Sensor {
     pub comment: Option<String>,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
     pub last_updated: chrono::DateTime<Utc>,
-    pub area_id: Uuid,
     #[crudcrate(non_db_attr = true, default = None)]
     pub data_from: Option<chrono::DateTime<Utc>>,
     #[crudcrate(non_db_attr = true, default = None)]
@@ -51,7 +50,6 @@ impl From<Model> for Sensor {
             description: model.description,
             comment: model.comment,
             last_updated: model.last_updated,
-            area_id: model.area_id,
             data: vec![],
             data_base64: None,
             area: None,
@@ -176,12 +174,6 @@ impl CRUDResource for Sensor {
                 result.last_insert_id,
             )
             .map_err(DbErr::Custom)?;
-
-            // Prepare bulk insert of new sensor data records into the DB
-            // let active_models: Vec<crate::sensors::data::db::ActiveModel> = new_data_result
-            //     .into_iter()
-            //     .map(sea_orm::IntoActiveModel::into_active_model)
-            //     .collect();
 
             let mut active_models: Vec<crate::sensors::data::db::ActiveModel> = vec![];
 
