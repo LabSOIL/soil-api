@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    Order, QueryOrder, QuerySelect, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -31,7 +31,7 @@ pub struct SensorProfileAssignment {
     #[crudcrate(update_model = false, create_model = false)]
     pub sensor: Option<crate::sensors::models::Sensor>,
     #[serde(default)]
-    #[crudcrate(non_db_attr = true)]
+    #[crudcrate(non_db_attr = true, default = vec![])]
     pub data: Vec<crate::sensors::data::models::SensorData>,
 }
 
@@ -158,9 +158,10 @@ impl CRUDResource for SensorProfileAssignment {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
