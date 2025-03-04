@@ -6,7 +6,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "transect")]
 pub struct Model {
-    pub name: Option<String>,
+    pub name: String,
     pub description: Option<String>,
     pub date_created: Option<DateTime<Utc>>,
     pub last_updated: DateTime<Utc>,

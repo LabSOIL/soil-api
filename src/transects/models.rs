@@ -17,7 +17,7 @@ use uuid::Uuid;
 pub struct Transect {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
     pub id: Uuid,
-    pub name: Option<String>,
+    pub name: String,
     pub description: Option<String>,
     #[crudcrate(update_model = false, create_model = false, on_create = chrono::Utc::now())]
     pub date_created: Option<DateTime<Utc>>,
@@ -226,7 +226,7 @@ impl CRUDResource for Transect {
             .await?;
 
         // Insert each new node with its order
-        for node in new_nodes.into_iter() {
+        for node in new_nodes {
             // Find the plot associated with the node's plot_id
             let mut plot = crate::plots::db::Entity::find()
                 .filter(crate::plots::db::Column::Id.eq(node.plot_id))

@@ -7,6 +7,7 @@ mod m20250226_092944_use_utc_timestamps;
 mod m20250226_104416_remove_last_updated_sensordata;
 mod m20250227_110710_remove_indexes_on_large_attributes;
 mod m20250303_101534_remove_areaid_from_sensors;
+mod m20250304_110517_set_unique_transect_name_per_area;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250226_104416_remove_last_updated_sensordata::Migration),
             Box::new(m20250227_110710_remove_indexes_on_large_attributes::Migration),
             Box::new(m20250303_101534_remove_areaid_from_sensors::Migration),
+            Box::new(m20250304_110517_set_unique_transect_name_per_area::Migration),
         ]
     }
 }
