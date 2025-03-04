@@ -1,17 +1,27 @@
+use crate::common::auth::Role;
 use crate::plots::db::Gradientchoices;
 use crate::{config::Config, transects::models::Transect};
 use async_trait::async_trait;
+use axum::{
+    Router,
+    routing::{delete, get},
+};
+use axum_keycloak_auth::{
+    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
+};
 use chrono::{DateTime, NaiveDate, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::get_one;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, routes as crud};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbBackend, DbErr,
     EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(ToSchema, Serialize, ToUpdateModel, ToCreateModel, Deserialize, Clone)]
+#[derive(Serialize, ToUpdateModel, ToCreateModel, Deserialize, Clone, ToSchema)]
 #[active_model = "super::db::ActiveModel"]
 pub struct Plot {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
@@ -34,8 +44,10 @@ pub struct Plot {
     #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: i32,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub samples: Vec<crate::samples::models::PlotSample>,
     #[crudcrate(update_model = false, create_model = false)]
     pub nearest_sensor_profiles: Vec<ClosestSensorProfile>,

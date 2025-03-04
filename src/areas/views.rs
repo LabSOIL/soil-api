@@ -10,15 +10,15 @@ use axum_keycloak_auth::{
 use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-
+use utoipa_axum::router::OpenApiRouter;
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     Area: CRUDResource,
 {
-    let mut mutating_router = Router::new()
+    let mut mutating_router = OpenApiRouter::new()
         .route(
             "/",
             get(crud::get_all::<Area>).post(crud::create_one::<Area>),

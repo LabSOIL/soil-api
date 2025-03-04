@@ -26,16 +26,22 @@ pub struct Area {
     pub description: Option<String>,
     pub project_id: Uuid,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub project: Option<Project>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub soil_profiles: Vec<SoilProfile>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub plots: Vec<Plot>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub sensor_profiles: Vec<SensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub transects: Vec<Transect>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub geom: Option<Value>,
 }
 
