@@ -1,6 +1,6 @@
 use crate::plots::models::Plot;
 use crate::transects::db;
-use crate::transects::nodes::models::TransectNodeAsPlotWithOrder;
+use crate::transects::nodes::models::TransectNode;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
@@ -26,8 +26,8 @@ pub struct Transect {
     pub last_updated: DateTime<Utc>,
     #[crudcrate(update_model = false, create_model = false)]
     pub area: Option<crate::areas::models::Area>,
-    #[crudcrate(non_db_attr = true)]
-    pub nodes: Vec<TransectNodeAsPlotWithOrder>,
+    #[crudcrate(non_db_attr = true, default = vec![])]
+    pub nodes: Vec<TransectNode>,
 }
 
 impl From<db::Model> for Transect {
@@ -64,25 +64,26 @@ impl CRUDResource for Transect {
         create_model: Self::CreateModel,
     ) -> Result<Self::ApiModel, DbErr> {
         // Convert create_model into the active model without nodes
+
         let active_model: Self::ActiveModelType = create_model.clone().into();
         let result = Self::EntityType::insert(active_model).exec(db).await?;
         let transect_id = result.last_insert_id;
-
         // Loop over the nodes provided in the create_model and add each one
         for (i, node) in create_model.nodes.into_iter().enumerate() {
             // Find the plot associated with the node id
-            let plot = crate::plots::db::Entity::find()
-                .filter(crate::plots::db::Column::Id.eq(node.id))
+            let mut plot = crate::plots::db::Entity::find()
+                .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                 .one(db)
                 .await?
                 .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
 
+            plot.image = None;
             // Create and insert the transect node with the corresponding order
             let transect_node_active = crate::transects::nodes::db::ActiveModel {
+                id: Set(Uuid::new_v4()),
                 plot_id: Set(plot.id),
                 transect_id: Set(transect_id),
                 order: Set(i32::try_from(i).unwrap()),
-                ..Default::default()
             };
             crate::transects::nodes::db::Entity::insert(transect_node_active)
                 .exec(db)
@@ -122,20 +123,20 @@ impl CRUDResource for Transect {
             let mut transect_nodes = Vec::new();
             for node in nodes {
                 // Fetch the plot details for each node
-                let plot: Plot = crate::plots::db::Entity::find()
+                let mut plot: Plot = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                     .one(db)
                     .await?
                     .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                     .into();
-                transect_nodes.push(TransectNodeAsPlotWithOrder {
-                    id: plot.id,
+
+                plot.image = None;
+                transect_nodes.push(TransectNode {
+                    // id: node.id,
                     order: node.order,
-                    name: plot.name,
-                    coord_srid: plot.coord_srid,
-                    coord_x: plot.coord_x,
-                    coord_y: plot.coord_y,
-                    coord_z: plot.coord_z,
+                    plot: Some(plot),
+                    plot_id: node.plot_id,
+                    // transect_id: transect_model.id,
                 });
             }
             // Load the associated area (with project info)
@@ -164,20 +165,19 @@ impl CRUDResource for Transect {
         if let Some((transect_model, nodes)) = results.into_iter().next() {
             let mut transect_nodes = Vec::new();
             for node in nodes {
-                let plot: Plot = crate::plots::db::Entity::find()
+                let mut plot: Plot = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                     .one(db)
                     .await?
                     .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                     .into();
-                transect_nodes.push(TransectNodeAsPlotWithOrder {
-                    id: plot.id,
+
+                plot.image = None;
+
+                transect_nodes.push(TransectNode {
                     order: node.order,
-                    name: plot.name,
-                    coord_srid: plot.coord_srid,
-                    coord_x: plot.coord_x,
-                    coord_y: plot.coord_y,
-                    coord_z: plot.coord_z,
+                    plot_id: plot.id,
+                    plot: Some(plot),
                 });
             }
             let area: crate::areas::models::Area = crate::areas::db::Entity::find()
@@ -203,9 +203,10 @@ impl CRUDResource for Transect {
         id: Uuid,
         update_data: Self::UpdateModel,
     ) -> Result<Self::ApiModel, DbErr> {
-        // Directly assign nodes from the update model (it's already a Vec)
+        // Clone the new nodes from the update model
         let new_nodes = update_data.nodes.clone();
 
+        // Find the existing transect active model
         let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
@@ -214,35 +215,39 @@ impl CRUDResource for Transect {
                 Self::RESOURCE_NAME_PLURAL
             )))?
             .into();
+        // Merge update_data into the existing active model
         let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
 
-        // If new_nodes is not empty, update transect nodes.
-        if !new_nodes.is_empty() {
-            // Remove all existing nodes for the transect.
-            crate::transects::nodes::db::Entity::delete_many()
-                .filter(crate::transects::nodes::db::Column::TransectId.eq(updated.id))
+        // Remove all existing nodes for the transect
+        crate::transects::nodes::db::Entity::delete_many()
+            .filter(crate::transects::nodes::db::Column::TransectId.eq(updated.id))
+            .exec(db)
+            .await?;
+
+        // Insert each new node with its order
+        for node in new_nodes.into_iter() {
+            // Find the plot associated with the node's plot_id
+            let mut plot = crate::plots::db::Entity::find()
+                .filter(crate::plots::db::Column::Id.eq(node.plot_id))
+                .one(db)
+                .await?
+                .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
+
+            // Clear any image field if needed
+            plot.image = None;
+            let transect_node_active = crate::transects::nodes::db::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                plot_id: Set(node.plot_id),
+                transect_id: Set(updated.id),
+                order: Set(node.order),
+            };
+            crate::transects::nodes::db::Entity::insert(transect_node_active)
                 .exec(db)
                 .await?;
-            // Insert each new node with its order.
-            for (i, node) in new_nodes.into_iter().enumerate() {
-                let plot = crate::plots::db::Entity::find()
-                    .filter(crate::plots::db::Column::Id.eq(node.id))
-                    .one(db)
-                    .await?
-                    .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
-                let transect_node_active = crate::transects::nodes::db::ActiveModel {
-                    plot_id: Set(plot.id),
-                    transect_id: Set(updated.id),
-                    order: Set(i32::try_from(i).unwrap()),
-                    ..Default::default()
-                };
-                crate::transects::nodes::db::Entity::insert(transect_node_active)
-                    .exec(db)
-                    .await?;
-            }
         }
 
+        // Return the complete transect object with its nodes by re-fetching it
         Self::get_one(db, updated.id).await
     }
 

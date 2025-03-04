@@ -1,5 +1,5 @@
-use crate::config::Config;
 use crate::plots::db::Gradientchoices;
+use crate::{config::Config, transects::models::Transect};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
@@ -39,6 +39,8 @@ pub struct Plot {
     pub samples: Vec<crate::samples::models::PlotSample>,
     #[crudcrate(update_model = false, create_model = false)]
     pub nearest_sensor_profiles: Vec<ClosestSensorProfile>,
+    #[crudcrate(update_model = false, create_model = false)]
+    pub transects: Vec<crate::transects::models::Transect>,
 }
 
 impl From<super::db::Model> for Plot {
@@ -63,6 +65,7 @@ impl From<super::db::Model> for Plot {
             area: None,
             samples: vec![],
             nearest_sensor_profiles: vec![],
+            transects: vec![],
         }
     }
 }
@@ -72,14 +75,16 @@ impl
         crate::areas::db::Model,
         Vec<crate::samples::db::Model>,
         Vec<ClosestSensorProfile>,
+        Vec<Transect>,
     )> for Plot
 {
     fn from(
-        (plot_db, area_db, samples_db, nearest_sensor_profiles): (
+        (plot_db, area_db, samples_db, nearest_sensor_profiles, transects): (
             super::db::Model,
             crate::areas::db::Model,
             Vec<crate::samples::db::Model>,
             Vec<ClosestSensorProfile>,
+            Vec<Transect>,
         ),
     ) -> Self {
         let area: crate::areas::models::Area = area_db.into();
@@ -92,6 +97,7 @@ impl
         plot.area = Some(area);
         plot.samples = samples;
         plot.nearest_sensor_profiles = nearest_sensor_profiles;
+        plot.transects = transects;
 
         plot
     }
@@ -144,7 +150,7 @@ impl CRUDResource for Plot {
                 .await
                 .unwrap();
 
-            plots.push(Plot::from((obj, area, samples, vec![])));
+            plots.push(Plot::from((obj, area, samples, vec![], vec![])));
         }
 
         Ok(plots)
@@ -171,6 +177,27 @@ impl CRUDResource for Plot {
             .await
             .unwrap();
 
+        // Search transect nodes table where the plot_id is the same as the id
+        // then get the transect that it belongs to
+        let transect_nodes = crate::transects::nodes::db::Entity::find()
+            .filter(crate::transects::nodes::db::Column::PlotId.eq(id))
+            // .find_also_related(crate::transects::db::Entity)
+            .all(db)
+            .await;
+
+        let mut transects = vec![];
+        if let Ok(transect_nodes) = transect_nodes {
+            for node in transect_nodes {
+                let transect = node
+                    .find_related(crate::transects::db::Entity)
+                    .one(db)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                transects.push(crate::transects::models::Transect::from(transect));
+            }
+        }
+
         // Get "nearest_sensor_profiles" from the sensor profile table with a postgis spatial query
         // on the geom of the plot vs the geom of the sensor profile as nearest distance
         // let mut nearest_sensor_profiles = vec![];
@@ -193,7 +220,13 @@ impl CRUDResource for Plot {
             .await
             .unwrap_or_else(|_| vec![]);
         println!("Nearest Sensor Profiles: {:?}", nearest_sensor_profiles);
-        Ok(Plot::from((plot, area, samples, nearest_sensor_profiles)))
+        Ok(Plot::from((
+            plot,
+            area,
+            samples,
+            nearest_sensor_profiles,
+            transects,
+        )))
     }
 
     async fn update(

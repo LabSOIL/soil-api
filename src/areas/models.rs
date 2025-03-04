@@ -122,16 +122,13 @@ impl CRUDResource for Area {
                         .await?
                         .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                         .into();
-                    let transect_node =
-                        crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
-                            id: plot.id,
-                            name: plot.name.clone(),
-                            coord_srid: plot.coord_srid,
-                            coord_x: plot.coord_x,
-                            coord_y: plot.coord_y,
-                            coord_z: plot.coord_z,
-                            order: node.order,
-                        };
+                    let transect_node = crate::transects::nodes::models::TransectNode {
+                        // id: node.id,
+                        plot: Some(plot),
+                        order: node.order,
+                        // transect_id: node.transect_id,
+                        plot_id: node.plot_id,
+                    };
                     nodes.push(transect_node);
                 }
 
@@ -207,14 +204,12 @@ impl CRUDResource for Area {
                     .await?
                     .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                     .into();
-                let transect_node = crate::transects::nodes::models::TransectNodeAsPlotWithOrder {
-                    id: plot.id,
-                    name: plot.name.clone(),
-                    coord_srid: plot.coord_srid,
-                    coord_x: plot.coord_x,
-                    coord_y: plot.coord_y,
-                    coord_z: plot.coord_z,
+                let transect_node = crate::transects::nodes::models::TransectNode {
+                    // id: node.id,
+                    plot: Some(plot),
                     order: node.order,
+                    // transect_id: node.transect_id,
+                    plot_id: node.plot_id,
                 };
                 nodes.push(transect_node);
             }
