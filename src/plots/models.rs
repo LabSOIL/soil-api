@@ -10,7 +10,6 @@ use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use crudcrate::get_one;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, routes as crud};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbBackend, DbErr,

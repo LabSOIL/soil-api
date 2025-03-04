@@ -1,9 +1,6 @@
 use crate::areas::models::Area;
 use crate::common::auth::Role;
-use axum::{
-    Router,
-    routing::{delete, get},
-};
+use axum::routing::{delete, get};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
@@ -11,6 +8,7 @@ use crudcrate::{CRUDResource, routes as crud};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use utoipa_axum::router::OpenApiRouter;
+
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
