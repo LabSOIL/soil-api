@@ -1,24 +1,12 @@
 use super::models::{Plot, PlotCreate, PlotUpdate};
 use crate::common::auth::Role;
-// use axum::{
-//     Router,
-//     routing::{delete, get},
-// };
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-
-use crudcrate::{CRUDResource, crud_handlers};
 use utoipa_axum::{router::OpenApiRouter, routes};
-// get_one!(Plot);
-// create_one!(Plot, PlotCreate);
-// update_one!(Plot, PlotUpdate);
-// get_all!(Plot);
-// delete_many!(Plot);
-// delete_one!(Plot);
-
 crud_handlers!(Plot, PlotUpdate, PlotCreate);
 
 pub fn router(
@@ -30,11 +18,11 @@ where
 {
     let mut mutating_router = OpenApiRouter::new()
         .routes(routes!(get_one_handler))
-        // .routes(routes!(get_all_handler))
+        .routes(routes!(get_all_handler))
         .routes(routes!(create_one_handler))
-        // .routes(routes!(update_one_handler))
-        // .routes(routes!(delete_one_handler))
-        // .routes(routes!(delete_many_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {

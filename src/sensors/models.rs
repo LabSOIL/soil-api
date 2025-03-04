@@ -37,6 +37,7 @@ pub struct Sensor {
     #[crudcrate(update_model = false, create_model = false)]
     pub area: Option<crate::areas::models::Area>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment>,
 }
 

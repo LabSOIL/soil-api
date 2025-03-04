@@ -86,22 +86,22 @@ async fn main() {
             // areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
             areas::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
-        // .nest(
-        //     "/api/projects",
-        //     projects::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/gnss",
-        //     gnss::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/plot_samples",
-        //     samples::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/sensors",
-        //     sensors::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
+        .nest(
+            "/api/projects",
+            projects::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/gnss",
+            gnss::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/plot_samples",
+            samples::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/sensors",
+            sensors::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
         // .nest(
         //     "/api/sensor_profiles",
         //     sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
@@ -133,7 +133,7 @@ async fn main() {
         //     "/api/soil_profiles",
         //     soil::profiles::views::router(&db, Some(keycloak_auth_instance.clone())),
         // )
-        // .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
         .split_for_parts();
     // .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
     // .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))

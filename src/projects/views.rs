@@ -1,35 +1,29 @@
+use super::models::{Project, ProjectCreate, ProjectUpdate};
 use crate::common::auth::Role;
-use crate::projects::models::Project;
-use axum::{
-    Router,
-    routing::{delete, get},
-};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{CRUDResource, routes as crud};
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+crud_handlers!(Project, ProjectUpdate, ProjectCreate);
 
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     Project: CRUDResource,
 {
-    let mut mutating_router = Router::new()
-        .route(
-            "/",
-            get(crud::get_all::<Project>).post(crud::create_one::<Project>),
-        )
-        .route(
-            "/{id}",
-            get(crud::get_one::<Project>)
-                .put(crud::update_one::<Project>)
-                .delete(crud::delete_one::<Project>),
-        )
-        .route("/batch", delete(crud::delete_many::<Project>))
+    let mut mutating_router = OpenApiRouter::new()
+        .routes(routes!(get_one_handler))
+        .routes(routes!(get_all_handler))
+        .routes(routes!(create_one_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
