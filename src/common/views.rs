@@ -2,10 +2,18 @@ use super::models::HealthCheck;
 use super::models::UIConfiguration;
 use axum::{Json, extract::State, http::StatusCode};
 use sea_orm::DatabaseConnection;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
+    OpenApiRouter::new()
+        .routes(routes!(healthz))
+        .routes(routes!(get_ui_config))
+        .with_state(db.clone())
+}
 
 #[utoipa::path(
     get,
-    path = "/api/healthz",
+    path = "/healthz",
     responses(
         (
             status = OK,

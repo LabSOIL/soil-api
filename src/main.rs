@@ -10,7 +10,6 @@ mod sensors;
 mod soil;
 mod transects;
 
-use crate::common::views::{get_ui_config, healthz};
 use axum::extract::DefaultBodyLimit;
 use axum_keycloak_auth::{Url, instance::KeycloakAuthInstance, instance::KeycloakConfig};
 use migration::{Migrator, MigratorTrait};
@@ -73,9 +72,12 @@ async fn main() {
 
     // Build the router with routes from the plots module
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .route("/healthz", axum::routing::get(healthz))
-        .route("/api/config", axum::routing::get(get_ui_config))
-        .with_state(db.clone())
+        // .route("/healthz", axum::routing::get(healthz))
+        // .route("/api/config", axum::routing::get(get_ui_config))
+        // .routes(routes!(get_ui_config))
+        // .routes(routes!(healthz))
+        // .with_state(db.clone())
+        .merge(common::views::router(&db)) // Root routes
         .nest(
             "/api/plots",
             plots::views::router(&db, Some(keycloak_instance.clone())),
