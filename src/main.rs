@@ -102,10 +102,10 @@ async fn main() {
             "/api/sensors",
             sensors::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
-        // .nest(
-        //     "/api/sensor_profiles",
-        //     sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
+        .nest(
+            "/api/sensor_profiles",
+            sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
         // .nest(
         //     "/api/sensor_profile_assignments",
         //     sensors::profile::assignment::views::router(&db, Some(keycloak_auth_instance.clone())),

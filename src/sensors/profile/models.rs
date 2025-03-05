@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect, Statement,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -32,6 +32,7 @@ pub struct SensorProfile {
     #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
+    #[schema(no_recursion)]
     pub assignments: Vec<crate::sensors::profile::assignment::models::SensorProfileAssignment>,
     // #[crudcrate(non_db_attr = true, default = vec![])]
     // pub data: Vec<crate::sensors::data::models::SensorData>,
@@ -150,9 +151,10 @@ impl CRUDResource for SensorProfile {
                 .into();
             assignment.sensor = Some(sensor);
         }
-        let model = models.pop().ok_or(DbErr::RecordNotFound(
-            format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-        ))?;
+        let model = models.pop().ok_or(DbErr::RecordNotFound(format!(
+            "{} not found",
+            Self::RESOURCE_NAME_SINGULAR
+        )))?;
 
         let sensor_profile = SensorProfile::from_with_assignments(model, assignments);
         Ok(sensor_profile)
@@ -166,9 +168,10 @@ impl CRUDResource for SensorProfile {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);
