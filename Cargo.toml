@@ -1,5 +1,5 @@
 [package]
-name = "soil-api-rust"
+name = "soil-api"
 version = "2.1.0"
 edition = "2024"
 
