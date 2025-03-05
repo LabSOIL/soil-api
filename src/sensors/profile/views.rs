@@ -1,6 +1,7 @@
 use super::models::{SensorProfile, SensorProfileCreate, SensorProfileUpdate};
 use crate::common::auth::Role;
 use crate::common::models::LowResolution;
+use axum::extract::{Path, Query, State};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
@@ -14,7 +15,7 @@ crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
 
 #[utoipa::path(
     get,
-    path = "/sensors/{id}",
+    path = "/{id}",
     responses(
         (status = 200, description = "SensorProfile found", body = SensorProfile),
         (status = 404, description = "SensorProfile not found"),
@@ -26,13 +27,14 @@ crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
     )
 )]
 pub async fn get_one(
-    axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
-    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
-    axum::extract::Query(query): axum::extract::Query<LowResolution>,
+    State(db): State<sea_orm::DatabaseConnection>,
+    Path(id): Path<uuid::Uuid>,
+    Query(query): Query<LowResolution>,
 ) -> Result<
     Json<<SensorProfile as CRUDResource>::ApiModel>,
     (axum::http::StatusCode, axum::Json<String>),
 > {
+    println!("get_one");
     if query.high_resolution {
         match <SensorProfile as CRUDResource>::get_one(&db, id).await {
             Ok(item) => Ok(Json(item)),
@@ -101,43 +103,3 @@ where
 
     mutating_router
 }
-
-// pub async fn get_one<T>(
-//     State(db): State<DatabaseConnection>,
-//     Path(id): Path<Uuid>,
-//     Query(query): Query<LowResolution>,
-// ) -> Result<Json<T::ApiModel>, (StatusCode, Json<String>)>
-// where
-//     T: CRUDResource,
-//     <T as CRUDResource>::ApiModel: From<SensorProfile>,
-// {
-//     if query.high_resolution {
-//         match SensorProfile::get_one_high_resolution(&db, id).await {
-//             Ok(item) => Ok(Json(item.into())),
-//             Err(DbErr::RecordNotFound(_)) => {
-//                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
-//             }
-//             Err(e) => {
-//                 println!("Error: {e:?}");
-//                 Err((
-//                     StatusCode::INTERNAL_SERVER_ERROR,
-//                     Json("Internal Server Error".to_string()),
-//                 ))
-//             }
-//         }
-//     } else {
-//         match SensorProfile::get_one_low_resolution(&db, id).await {
-//             Ok(item) => Ok(Json(item.into())),
-//             Err(DbErr::RecordNotFound(_)) => {
-//                 Err((StatusCode::NOT_FOUND, Json("Not Found".to_string())))
-//             }
-//             Err(e) => {
-//                 println!("Error: {e:?}");
-//                 Err((
-//                     StatusCode::INTERNAL_SERVER_ERROR,
-//                     Json("Internal Server Error".to_string()),
-//                 ))
-//             }
-//         }
-//     }
-// }

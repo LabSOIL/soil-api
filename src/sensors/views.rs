@@ -14,7 +14,7 @@ crud_handlers!(Sensor, SensorUpdate, SensorCreate);
 
 #[utoipa::path(
     get,
-    path = "/sensors/{id}",
+    path = "/{id}",
     responses(
         (status = 200, description = "Sensor found", body = Sensor),
         (status = 404, description = "Sensor not found"),

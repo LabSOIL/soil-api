@@ -106,25 +106,25 @@ async fn main() {
             "/api/sensor_profiles",
             sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
         )
-        // .nest(
-        //     "/api/sensor_profile_assignments",
-        //     sensors::profile::assignment::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/transects",
-        //     transects::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/instruments",
-        //     instrument_experiments::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/instrument_channels",
-        //     instrument_experiments::channels::views::router(
-        //         &db,
-        //         Some(keycloak_auth_instance.clone()),
-        //     ),
-        // )
+        .nest(
+            "/api/sensor_profile_assignments",
+            sensors::profile::assignment::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/transects",
+            transects::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/instruments",
+            instrument_experiments::views::router(&db, Some(keycloak_auth_instance.clone())),
+        )
+        .nest(
+            "/api/instrument_channels",
+            instrument_experiments::channels::views::router(
+                &db,
+                Some(keycloak_auth_instance.clone()),
+            ),
+        )
         // .nest(
         //     "/api/soil_types",
         //     soil::types::views::router(&db, Some(keycloak_auth_instance.clone())),

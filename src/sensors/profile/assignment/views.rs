@@ -1,39 +1,35 @@
-use super::models::SensorProfileAssignment;
-use crate::common::auth::Role;
-use axum::{
-    Router,
-    routing::{delete, get},
+use super::models::{
+    SensorProfileAssignment, SensorProfileAssignmentCreate, SensorProfileAssignmentUpdate,
 };
+use crate::common::auth::Role;
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{CRUDResource, routes as crud};
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+crud_handlers!(
+    SensorProfileAssignment,
+    SensorProfileAssignmentUpdate,
+    SensorProfileAssignmentCreate
+);
 
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     SensorProfileAssignment: CRUDResource,
 {
-    let mut mutating_router = Router::new()
-        .route(
-            "/",
-            get(crud::get_all::<SensorProfileAssignment>)
-                .post(crud::create_one::<SensorProfileAssignment>),
-        )
-        .route(
-            "/{id}",
-            get(crud::get_one::<SensorProfileAssignment>)
-                .put(crud::update_one::<SensorProfileAssignment>)
-                .delete(crud::delete_one::<SensorProfileAssignment>),
-        )
-        .route(
-            "/batch",
-            delete(crud::delete_many::<SensorProfileAssignment>),
-        )
+    let mut mutating_router = OpenApiRouter::new()
+        .routes(routes!(get_one_handler))
+        .routes(routes!(get_all_handler))
+        .routes(routes!(create_one_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {

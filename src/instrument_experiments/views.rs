@@ -1,46 +1,43 @@
 use crate::common::auth::Role;
 use crate::instrument_experiments::channels::db as channel_db;
 use crate::instrument_experiments::db;
-use crate::instrument_experiments::models::InstrumentExperiment;
-use axum::{
-    Json, Router, debug_handler,
-    extract::{Path, State},
-    http::StatusCode,
-    routing::{delete, get},
+use crate::instrument_experiments::models::{
+    InstrumentExperiment, InstrumentExperimentCreate, InstrumentExperimentUpdate,
 };
+use axum::extract::{Path, State};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{CRUDResource, routes as crud};
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde_json::{Value as JsonValue, json};
 use std::sync::Arc;
-use uuid::Uuid;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+crud_handlers!(
+    InstrumentExperiment,
+    InstrumentExperimentUpdate,
+    InstrumentExperimentCreate
+);
 
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     InstrumentExperiment: CRUDResource,
 {
-    let mut mutating_router = Router::new()
-        .route(
-            "/",
-            get(crud::get_all::<InstrumentExperiment>)
-                .post(crud::create_one::<InstrumentExperiment>),
-        )
-        .route(
-            "/{id}",
-            get(crud::get_one::<InstrumentExperiment>)
-                .put(crud::update_one::<InstrumentExperiment>)
-                .delete(crud::delete_one::<InstrumentExperiment>),
-        )
+    let mut mutating_router = OpenApiRouter::new()
+        .routes(routes!(get_one_handler))
+        .routes(routes!(get_all_handler))
+        .routes(routes!(create_one_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         // Custom endpoints for CSV data
-        .route("/{id}/raw", get(get_raw_data))
-        .route("/{id}/filtered", get(get_filtered_data))
-        .route("/{id}/summary", get(get_summary_data))
-        .route("/batch", delete(crud::delete_many::<InstrumentExperiment>))
+        .routes(routes!(get_raw_data))
+        .routes(routes!(get_filtered_data))
+        .routes(routes!(get_summary_data))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
@@ -64,7 +61,18 @@ where
 }
 
 /// Returns CSV data (as JSON) built from the raw time and raw_values of each channel.
-#[debug_handler]
+#[utoipa::path(
+    get,
+    path = "/{id}/raw",
+    responses(
+        (status = 200, description = "Raw data found", body = Vec<Vec<String>>),
+        (status = 404, description = "Experiment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("id" = Uuid, description = "Experiment ID")
+    )
+)]
 pub async fn get_raw_data(
     Path(id): Path<Uuid>,
     State(db): State<DatabaseConnection>,
@@ -133,7 +141,18 @@ pub async fn get_raw_data(
 
 /// Returns baseline-filtered CSV data built by slicing each channel’s baseline_values
 /// according to the "start" and "end" markers in each channel’s integral_results.
-#[debug_handler]
+#[utoipa::path(
+    get,
+    path = "/{id}/filtered",
+    responses(
+        (status = 200, description = "Filtered data found", body = Vec<Vec<JsonValue>>),
+        (status = 404, description = "Experiment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("id" = Uuid, description = "Experiment ID")
+    )
+)]
 pub async fn get_filtered_data(
     Path(id): Path<Uuid>,
     State(db): State<DatabaseConnection>,
@@ -338,8 +357,20 @@ fn build_vector_of_samples(
     }
     samples
 }
+
 /// Returns a summary CSV that reports each channel’s integral results.
-#[debug_handler]
+#[utoipa::path(
+    get,
+    path = "/{id}/summary",
+    responses(
+        (status = 200, description = "Summary data found", body = Vec<Vec<String>>),
+        (status = 404, description = "Experiment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("id" = Uuid, description = "Experiment ID")
+    )
+)]
 pub async fn get_summary_data(
     Path(id): Path<Uuid>,
     State(db): State<DatabaseConnection>,
