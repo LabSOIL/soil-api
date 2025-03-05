@@ -178,11 +178,12 @@ impl CRUDResource for PlotSample {
             .await?;
         let mut plot_samples: Vec<PlotSample> = Vec::new();
         for sample in samples {
-            let plot = crate::plots::db::Entity::find()
+            let mut plot = crate::plots::db::Entity::find()
                 .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
                 .one(db)
                 .await?
                 .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
+            plot.image = None;
 
             let area = crate::areas::db::Entity::find()
                 .filter(crate::areas::db::Column::Id.eq(plot.area_id))
@@ -207,11 +208,12 @@ impl CRUDResource for PlotSample {
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound("Plot sample not found".into()))?;
-        let plot = crate::plots::db::Entity::find()
+        let mut plot = crate::plots::db::Entity::find()
             .filter(crate::plots::db::Column::Id.eq(sample.plot_id))
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound("Plot not found".into()))?;
+        plot.image = None;
 
         let area: crate::areas::db::Model = crate::areas::db::Entity::find()
             .filter(crate::areas::db::Column::Id.eq(plot.area_id))

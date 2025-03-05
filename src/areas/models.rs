@@ -96,7 +96,11 @@ impl CRUDResource for Area {
         for model in models {
             let project = model.find_related(ProjectDB).one(db).await?.unwrap();
 
-            let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+            let mut plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+            // Remove image var from get all
+            for plot in &mut plots {
+                plot.image = None;
+            }
 
             let sensor_profiles = model
                 .find_related(crate::sensors::profile::db::Entity)
@@ -122,17 +126,16 @@ impl CRUDResource for Area {
                 let mut nodes = vec![];
 
                 for node in node_objs {
-                    let plot: Plot = crate::plots::db::Entity::find()
+                    let mut plot: Plot = crate::plots::db::Entity::find()
                         .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                         .one(db)
                         .await?
                         .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                         .into();
+                    plot.image = None;
                     let transect_node = crate::transects::nodes::models::TransectNode {
-                        // id: node.id,
                         plot: Some(plot),
                         order: node.order,
-                        // transect_id: node.transect_id,
                         plot_id: node.plot_id,
                     };
                     nodes.push(transect_node);
@@ -178,17 +181,26 @@ impl CRUDResource for Area {
 
         let project = model.find_related(ProjectDB).one(db).await?.unwrap();
 
-        let plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+        let mut plots = model.find_related(crate::plots::db::Entity).all(db).await?;
+        // Remove image var from get all
+        for plot in &mut plots {
+            plot.image = None;
+        }
 
         let sensor_profiles = model
             .find_related(crate::sensors::profile::db::Entity)
             .all(db)
             .await?;
 
-        let soil_profiles = model
+        let mut soil_profiles = model
             .find_related(crate::soil::profiles::db::Entity)
             .all(db)
             .await?;
+
+        for soil_profile in &mut soil_profiles {
+            soil_profile.soil_diagram = None;
+            soil_profile.photo = None;
+        }
 
         let transects = model
             .find_related(crate::transects::db::Entity)
@@ -204,12 +216,13 @@ impl CRUDResource for Area {
             let mut nodes = vec![];
 
             for node in node_objs {
-                let plot: Plot = crate::plots::db::Entity::find()
+                let mut plot: Plot = crate::plots::db::Entity::find()
                     .filter(crate::plots::db::Column::Id.eq(node.plot_id))
                     .one(db)
                     .await?
                     .ok_or(DbErr::RecordNotFound("Plot not found".into()))?
                     .into();
+                plot.image = None;
                 let transect_node = crate::transects::nodes::models::TransectNode {
                     // id: node.id,
                     plot: Some(plot),
