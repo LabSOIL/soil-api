@@ -31,7 +31,7 @@ pub async fn healthz(State(db): State<DatabaseConnection>) -> (StatusCode, Json<
                 status: "error".to_string(),
             }),
         );
-    };
+    }
 
     (
         StatusCode::OK,

@@ -22,7 +22,9 @@ crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
     params(
         ("id" = Uuid, description = "SensorProfile ID"),
         ("high_resolution" = bool, Query, description = "High resolution data flag")
-    )
+    ),
+    summary = format!("Get one {}", SensorProfile::RESOURCE_NAME_SINGULAR),
+    description = format!("Retrieves one {} by its ID.\n\n{}", SensorProfile::RESOURCE_NAME_SINGULAR, SensorProfile::RESOURCE_DESCRIPTION)
 )]
 pub async fn get_one(
     State(db): State<sea_orm::DatabaseConnection>,

@@ -62,8 +62,9 @@ impl CRUDResource for SensorProfileAssignment {
     type UpdateModel = SensorProfileAssignmentUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "sensorprofileassignment";
-    const RESOURCE_NAME_PLURAL: &'static str = "sensorprofileassignments";
+    const RESOURCE_NAME_SINGULAR: &'static str = "assignment (sensor profile)";
+    const RESOURCE_NAME_PLURAL: &'static str = "assignments (sensor profile)";
+    const RESOURCE_DESCRIPTION: &'static str = "This is a record of a sensor being assigned to a sensor profile for a specific time period, should a sensor move or be changed over time. It therefore helps piece the data together for a sensor profile.";
 
     async fn get_all(
         db: &DatabaseConnection,

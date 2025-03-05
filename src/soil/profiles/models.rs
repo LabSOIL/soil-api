@@ -82,8 +82,9 @@ impl CRUDResource for SoilProfile {
     type UpdateModel = SoilProfileUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "soilprofile";
-    const RESOURCE_NAME_PLURAL: &'static str = "soilprofiles";
+    const RESOURCE_NAME_SINGULAR: &'static str = "soil profile";
+    const RESOURCE_NAME_PLURAL: &'static str = "soil profiles";
+    const RESOURCE_DESCRIPTION: &'static str = "Soil profiles are a collection of soil horizons that describe the soil at a specific location.";
 
     async fn get_all(
         db: &DatabaseConnection,

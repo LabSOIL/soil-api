@@ -59,7 +59,6 @@ where
     mutating_router
 }
 
-/// Returns CSV data (as JSON) built from the raw time and raw_values of each channel.
 #[utoipa::path(
     get,
     path = "/{id}/raw",
@@ -70,7 +69,9 @@ where
     ),
     params(
         ("id" = Uuid, description = "Experiment ID")
-    )
+    ),
+    summary = format!("Get raw {} data", InstrumentExperiment::RESOURCE_NAME_SINGULAR),
+    description = "Returns CSV data (as JSON) built from the raw time and raw_values of each channel."
 )]
 pub async fn get_raw_data(
     Path(id): Path<Uuid>,
@@ -138,8 +139,6 @@ pub async fn get_raw_data(
     Ok(Json(csv_data))
 }
 
-/// Returns baseline-filtered CSV data built by slicing each channel’s baseline_values
-/// according to the "start" and "end" markers in each channel’s integral_results.
 #[utoipa::path(
     get,
     path = "/{id}/filtered",
@@ -150,7 +149,9 @@ pub async fn get_raw_data(
     ),
     params(
         ("id" = Uuid, description = "Experiment ID")
-    )
+    ),
+    summary = format!("Get filtered {} data", InstrumentExperiment::RESOURCE_NAME_SINGULAR),
+    description = "Returns baseline-filtered CSV data built by slicing each channel’s baseline_values according to the 'start' and 'end' markers in each channel’s integral_results."
 )]
 pub async fn get_filtered_data(
     Path(id): Path<Uuid>,
@@ -357,7 +358,6 @@ fn build_vector_of_samples(
     samples
 }
 
-/// Returns a summary CSV that reports each channel’s integral results.
 #[utoipa::path(
     get,
     path = "/{id}/summary",
@@ -368,7 +368,9 @@ fn build_vector_of_samples(
     ),
     params(
         ("id" = Uuid, description = "Experiment ID")
-    )
+    ),
+    summary = format!("Get summary data for {}", InstrumentExperiment::RESOURCE_NAME_SINGULAR),
+    description = "Returns CSV data (as JSON) built from each channel’s integral_results."
 )]
 pub async fn get_summary_data(
     Path(id): Path<Uuid>,

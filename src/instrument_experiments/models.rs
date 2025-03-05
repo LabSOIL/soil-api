@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    Order, QueryOrder, QuerySelect, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -69,8 +69,10 @@ impl CRUDResource for InstrumentExperiment {
     type UpdateModel = InstrumentExperimentUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "instrumentexperiment";
-    const RESOURCE_NAME_PLURAL: &'static str = "instrumentexperiments";
+    const RESOURCE_NAME_SINGULAR: &'static str = "experiment (lab instrument)";
+    const RESOURCE_NAME_PLURAL: &'static str = "experiments (lab instrument)";
+    const RESOURCE_DESCRIPTION: &'static str =
+        "This represents a specific lab experiment and coincides with the channel data.";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -109,9 +111,10 @@ impl CRUDResource for InstrumentExperiment {
             .await?
             .into_iter()
             .next()
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-            ))?;
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?;
 
         let (model, channels) = model;
         let mut obj = InstrumentExperiment::from(model);
@@ -130,9 +133,10 @@ impl CRUDResource for InstrumentExperiment {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);

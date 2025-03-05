@@ -76,6 +76,7 @@ impl CRUDResource for Area {
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "areas";
     const RESOURCE_NAME_SINGULAR: &'static str = "area";
+    const RESOURCE_DESCRIPTION: &'static str = "Areas are the main entities in the system. They are the main container for all other entities. They are associated with a project and contain plots, sensor profiles, soil profiles, and transects.";
 
     async fn get_all(
         db: &DatabaseConnection,

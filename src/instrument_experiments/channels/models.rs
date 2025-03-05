@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection,
-    DbErr, EntityTrait, Order, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    Order, QueryOrder, QuerySelect, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
@@ -58,8 +58,9 @@ impl CRUDResource for InstrumentExperimentChannel {
     type UpdateModel = InstrumentExperimentChannelUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "instrumentexperimentchannel";
-    const RESOURCE_NAME_PLURAL: &'static str = "instrumentexperimentchannels";
+    const RESOURCE_NAME_SINGULAR: &'static str = "channel (instrument experiment)";
+    const RESOURCE_NAME_PLURAL: &'static str = "channels (instrument experiment)";
+    const RESOURCE_DESCRIPTION: &'static str = "This represents the data for a specific channel during the recording in the lab instrument.";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -166,7 +167,7 @@ impl CRUDResource for InstrumentExperimentChannel {
                 active_model.baseline_values =
                     ActiveValue::Set(Some(serde_json::to_value(&filtered_baseline).unwrap()));
             }
-        } 
+        }
 
         // --- Process integral_chosen_pairs ---
         if let Some(integral_chosen_pairs_json) = update_model.integral_chosen_pairs {
@@ -208,7 +209,7 @@ impl CRUDResource for InstrumentExperimentChannel {
 
             active_model.integral_results =
                 ActiveValue::Set(Some(serde_json::to_value(&integral_results).unwrap()));
-        } 
+        }
 
         // Execute the update in the database.
         let response_obj = active_model.update(db).await?;

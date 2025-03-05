@@ -81,8 +81,9 @@ impl CRUDResource for Gnss {
     type UpdateModel = GnssUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "gnss";
-    const RESOURCE_NAME_PLURAL: &'static str = "gnss";
+    const RESOURCE_NAME_SINGULAR: &'static str = "GNSS recording";
+    const RESOURCE_NAME_PLURAL: &'static str = "GNSS recordings";
+    const RESOURCE_DESCRIPTION: &'static str = "GNSS recordings taken from the field are stored here to help propagate to other resources (soil profiles, plots, sensor profiles, etc.)";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -113,19 +114,6 @@ impl CRUDResource for Gnss {
             )))?;
         Ok(Gnss::from(model))
     }
-    // async fn create(
-    //     db: &DatabaseConnection,
-    //     create_model: Self::CreateModel,
-    // ) -> Result<Self::ApiModel, DbErr> {
-    //     let active_model: Self::ActiveModelType = create_model.into();
-    //     let result = Self::EntityType::insert(active_model).exec(db).await?;
-    //     match Self::get_one(db, result.last_insert_id.into()).await {
-    //         Ok(obj) => Ok(obj),
-    //         Err(_) => Err(DbErr::RecordNotFound(
-    //             format!("{} not created", Self::RESOURCE_NAME_SINGULAR).into(),
-    //         )),
-    //     }
-    // }
 
     async fn create(
         db: &DatabaseConnection,

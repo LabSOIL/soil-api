@@ -118,6 +118,7 @@ impl CRUDResource for Plot {
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "plot";
     const RESOURCE_NAME_PLURAL: &'static str = "plots";
+    const RESOURCE_DESCRIPTION: &'static str = "This is a record of a plot, which is a specific area of land that is being studied. It is used to collect samples and data for analysis.";
 
     async fn get_all(
         db: &DatabaseConnection,

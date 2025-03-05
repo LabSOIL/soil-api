@@ -74,6 +74,7 @@ impl CRUDResource for Sensor {
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_SINGULAR: &'static str = "sensor";
     const RESOURCE_NAME_PLURAL: &'static str = "sensors";
+    const RESOURCE_DESCRIPTION: &'static str = "A sensor is a physical device placed in the field that collects moisture and temperature data that can then be associated with a plot (via a sensor profile and its assignments).";
 
     async fn get_all(
         db: &DatabaseConnection,

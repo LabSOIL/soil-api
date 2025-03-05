@@ -58,6 +58,7 @@ impl CRUDResource for Transect {
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "transects";
     const RESOURCE_NAME_SINGULAR: &'static str = "transect";
+    const RESOURCE_DESCRIPTION: &'static str = "This resource manages several plots within an area along a transect line in order to handle a specific methodology in the project.";
 
     async fn create(
         db: &DatabaseConnection,

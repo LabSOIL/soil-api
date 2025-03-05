@@ -45,8 +45,10 @@ impl CRUDResource for SoilType {
     type UpdateModel = SoilTypeUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "soiltype";
-    const RESOURCE_NAME_PLURAL: &'static str = "soiltypes";
+    const RESOURCE_NAME_SINGULAR: &'static str = "soil type";
+    const RESOURCE_NAME_PLURAL: &'static str = "soil types";
+    const RESOURCE_DESCRIPTION: &'static str =
+        "A categorisation of soil that is associated to a soil profile.";
 
     async fn get_all(
         db: &DatabaseConnection,
@@ -89,9 +91,10 @@ impl CRUDResource for SoilType {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbErr::RecordNotFound(
-                format!("{} not found", Self::RESOURCE_NAME_SINGULAR),
-            ))?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "{} not found",
+                Self::RESOURCE_NAME_SINGULAR
+            )))?
             .into();
 
         let updated_obj: super::db::ActiveModel = update_model.merge_into_activemodel(db_obj);

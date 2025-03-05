@@ -714,9 +714,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crudcrate"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38ed592255a50da42600184775b23f9a807f5a323b8697f54e1bee0d34fc3738"
+checksum = "a3d108ce519147024ea4e3c4873825b6fff5cf8c17d202c986c3ca708b44e80f"
 dependencies = [
  "async-trait",
  "axum",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "soil-api"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "async-std",
  "async-trait",

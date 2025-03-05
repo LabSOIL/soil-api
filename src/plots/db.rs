@@ -1,5 +1,4 @@
 use crate::areas::db::Entity as Area;
-use crate::plots::sensors::db::Entity as PlotSensorAssignments;
 use crate::samples::db::Entity as PlotSample;
 use crate::transects::nodes::db::Entity as TransectNode;
 use chrono::NaiveDate;
@@ -57,8 +56,6 @@ pub enum Relation {
     Area,
     #[sea_orm(has_many = "PlotSample")]
     Plotsample,
-    #[sea_orm(has_many = "PlotSensorAssignments")]
-    Plotsensorassignments,
     #[sea_orm(has_many = "TransectNode")]
     Transectnode,
 }
@@ -72,12 +69,6 @@ impl Related<Area> for Entity {
 impl Related<PlotSample> for Entity {
     fn to() -> RelationDef {
         Relation::Plotsample.def()
-    }
-}
-
-impl Related<PlotSensorAssignments> for Entity {
-    fn to() -> RelationDef {
-        Relation::Plotsensorassignments.def()
     }
 }
 

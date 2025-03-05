@@ -58,6 +58,7 @@ impl CRUDResource for Project {
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
     const RESOURCE_NAME_PLURAL: &'static str = "projects";
     const RESOURCE_NAME_SINGULAR: &'static str = "project";
+    const RESOURCE_DESCRIPTION: &'static str = "This resource allows the data hierarchically beneath each area to be allocated to a specific project. This is useful for grouping data together for analysis. The colour provides a visual representation of the project in the UI.";
 
     async fn get_all(
         db: &DatabaseConnection,

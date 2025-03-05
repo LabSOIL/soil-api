@@ -22,7 +22,9 @@ crud_handlers!(Sensor, SensorUpdate, SensorCreate);
     params(
         ("id" = Uuid, description = "Sensor ID"),
         ("high_resolution" = bool, Query, description = "High resolution data flag")
-    )
+    ),
+    summary = format!("Get one {}", Sensor::RESOURCE_NAME_SINGULAR),
+    description = format!("Retrieves one {} by its ID.\n\n{}", Sensor::RESOURCE_NAME_SINGULAR, Sensor::RESOURCE_DESCRIPTION)
 )]
 pub async fn get_one(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
@@ -72,7 +74,9 @@ pub async fn get_one(
     ),
     params(
         ("id" = Uuid, description = "Sensor ID")
-    )
+    ),
+    summary = "Delete sensor data",
+    description = "Deletes all data for a sensor by its given ID."
 )]
 pub async fn delete_data(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,

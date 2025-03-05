@@ -76,8 +76,9 @@ impl CRUDResource for SensorProfile {
     type UpdateModel = SensorProfileUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "sensorprofile";
-    const RESOURCE_NAME_PLURAL: &'static str = "sensorprofiles";
+    const RESOURCE_NAME_SINGULAR: &'static str = "profile (sensor)";
+    const RESOURCE_NAME_PLURAL: &'static str = "profiles (sensor)";
+    const RESOURCE_DESCRIPTION: &'static str = "A sensor profile represents a geographical location where a sensor is placed. The assignments that belong to it define the time periods for which sensor is active and the data it collects.";
 
     async fn get_all(
         db: &DatabaseConnection,

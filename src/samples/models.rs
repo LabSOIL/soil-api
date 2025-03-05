@@ -158,8 +158,9 @@ impl CRUDResource for PlotSample {
     type UpdateModel = PlotSampleUpdate;
 
     const ID_COLUMN: Self::ColumnType = super::db::Column::Id;
-    const RESOURCE_NAME_SINGULAR: &'static str = "plotsample";
-    const RESOURCE_NAME_PLURAL: &'static str = "plotsamples";
+    const RESOURCE_NAME_SINGULAR: &'static str = "sample (plot)";
+    const RESOURCE_NAME_PLURAL: &'static str = "samples (plot)";
+    const RESOURCE_DESCRIPTION: &'static str = "This resource represents a sample taken from a plot. It contains the data collected from the sample, such as pH, organic carbon, nitrogen, and other soil properties.";
 
     async fn get_all(
         db: &DatabaseConnection,
