@@ -1,35 +1,29 @@
+use super::models::{SoilProfile, SoilProfileCreate, SoilProfileUpdate};
 use crate::common::auth::Role;
-use crate::soil::profiles::models::SoilProfile;
-use axum::{
-    Router,
-    routing::{delete, get},
-};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{CRUDResource, routes as crud};
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+crud_handlers!(SoilProfile, SoilProfileUpdate, SoilProfileCreate);
 
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     SoilProfile: CRUDResource,
 {
-    let mut mutating_router = Router::new()
-        .route(
-            "/",
-            get(crud::get_all::<SoilProfile>).post(crud::create_one::<SoilProfile>),
-        )
-        .route(
-            "/{id}",
-            get(crud::get_one::<SoilProfile>)
-                .put(crud::update_one::<SoilProfile>)
-                .delete(crud::delete_one::<SoilProfile>),
-        )
-        .route("/batch", delete(crud::delete_many::<SoilProfile>))
+    let mut mutating_router = OpenApiRouter::new()
+        .routes(routes!(get_one_handler))
+        .routes(routes!(get_all_handler))
+        .routes(routes!(create_one_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
@@ -150,7 +144,8 @@ mod tests {
     fn build_router(db: &DatabaseConnection) -> axum::Router {
         // Here, we assume that your profiles router is defined in this module.
         // Passing None for the Keycloak auth instance.
-        router(db, None)
+        let (router, _api) = router(db, None).split_for_parts();
+        router
     }
 
     #[tokio::test]

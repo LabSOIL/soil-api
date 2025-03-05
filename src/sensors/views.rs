@@ -7,7 +7,6 @@ use axum_keycloak_auth::{
 use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use std::sync::Arc;
-use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 crud_handlers!(Sensor, SensorUpdate, SensorCreate);
@@ -48,7 +47,7 @@ pub async fn get_one(
         }
     } else {
         match Sensor::get_one_low_resolution(&db, id).await {
-            Ok(item) => Ok(Json(item.into())),
+            Ok(item) => Ok(Json(item)),
             Err(DbErr::RecordNotFound(_)) => Err((
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),

@@ -11,7 +11,6 @@ mod soil;
 mod transects;
 
 use crate::common::views::{get_ui_config, healthz};
-use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum_keycloak_auth::{Url, instance::KeycloakAuthInstance, instance::KeycloakConfig};
 use migration::{Migrator, MigratorTrait};
@@ -59,7 +58,7 @@ async fn main() {
 
     println!("DB migrations complete");
 
-    let keycloak_auth_instance: Arc<KeycloakAuthInstance> = Arc::new(KeycloakAuthInstance::new(
+    let keycloak_instance: Arc<KeycloakAuthInstance> = Arc::new(KeycloakAuthInstance::new(
         KeycloakConfig::builder()
             .server(Url::parse(&config.keycloak_url).unwrap())
             .realm(String::from(&config.keycloak_realm))
@@ -79,73 +78,63 @@ async fn main() {
         .with_state(db.clone())
         .nest(
             "/api/plots",
-            plots::views::router(&db, Some(keycloak_auth_instance.clone())),
+            plots::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/areas",
-            // areas::views::router(db.clone(), Some(keycloak_auth_instance.clone())),
-            areas::views::router(&db, Some(keycloak_auth_instance.clone())),
+            areas::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/projects",
-            projects::views::router(&db, Some(keycloak_auth_instance.clone())),
+            projects::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/gnss",
-            gnss::views::router(&db, Some(keycloak_auth_instance.clone())),
+            gnss::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/plot_samples",
-            samples::views::router(&db, Some(keycloak_auth_instance.clone())),
+            samples::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensors",
-            sensors::views::router(&db, Some(keycloak_auth_instance.clone())),
+            sensors::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensor_profiles",
-            sensors::profile::views::router(&db, Some(keycloak_auth_instance.clone())),
+            sensors::profile::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensor_profile_assignments",
-            sensors::profile::assignment::views::router(&db, Some(keycloak_auth_instance.clone())),
+            sensors::profile::assignment::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/transects",
-            transects::views::router(&db, Some(keycloak_auth_instance.clone())),
+            transects::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/instruments",
-            instrument_experiments::views::router(&db, Some(keycloak_auth_instance.clone())),
+            instrument_experiments::views::router(&db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/instrument_channels",
-            instrument_experiments::channels::views::router(
-                &db,
-                Some(keycloak_auth_instance.clone()),
-            ),
+            instrument_experiments::channels::views::router(&db, Some(keycloak_instance.clone())),
         )
-        // .nest(
-        //     "/api/soil_types",
-        //     soil::types::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
-        // .nest(
-        //     "/api/soil_profiles",
-        //     soil::profiles::views::router(&db, Some(keycloak_auth_instance.clone())),
-        // )
+        .nest(
+            "/api/soil_types",
+            soil::types::views::router(&db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/soil_profiles",
+            soil::profiles::views::router(&db, Some(keycloak_instance.clone())),
+        )
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
         .split_for_parts();
-    // .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-    // .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
-    // .merge(Scalar::with_url("/scalar", ApiDoc::openapi()));
 
-    // println!("Router built");
-    let router = router.merge(Scalar::with_url("/scalar", api));
-    // // Bind to an address and serve the application
+    let router = router.merge(Scalar::with_url("/api/docs", api));
     let addr: std::net::SocketAddr = "0.0.0.0:3000".parse().unwrap();
     println!("Listening on {addr}");
 
-    // // Run the server (correct axum usage without `hyper::Server`)
     axum::serve(
         tokio::net::TcpListener::bind(addr).await.unwrap(),
         router.into_make_service(),

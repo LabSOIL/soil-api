@@ -1,35 +1,29 @@
+use super::models::{SoilType, SoilTypeCreate, SoilTypeUpdate};
 use crate::common::auth::Role;
-use crate::soil::types::models::SoilType;
-use axum::{
-    Router,
-    routing::{delete, get},
-};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
-use crudcrate::{CRUDResource, routes as crud};
+use crudcrate::{CRUDResource, crud_handlers};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+crud_handlers!(SoilType, SoilTypeUpdate, SoilTypeCreate);
 
 pub fn router(
     db: &DatabaseConnection,
     keycloak_auth_instance: Option<Arc<KeycloakAuthInstance>>,
-) -> Router
+) -> OpenApiRouter
 where
     SoilType: CRUDResource,
 {
-    let mut mutating_router = Router::new()
-        .route(
-            "/",
-            get(crud::get_all::<SoilType>).post(crud::create_one::<SoilType>),
-        )
-        .route(
-            "/{id}",
-            get(crud::get_one::<SoilType>)
-                .put(crud::update_one::<SoilType>)
-                .delete(crud::delete_one::<SoilType>),
-        )
-        .route("/batch", delete(crud::delete_many::<SoilType>))
+    let mut mutating_router = OpenApiRouter::new()
+        .routes(routes!(get_one_handler))
+        .routes(routes!(get_all_handler))
+        .routes(routes!(create_one_handler))
+        .routes(routes!(update_one_handler))
+        .routes(routes!(delete_one_handler))
+        .routes(routes!(delete_many_handler))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
@@ -78,9 +72,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_all_soil_types() {
+        use axum::Router;
+
         let db = setup_database().await;
+
+        let (router, _) = router(&db, None).split_for_parts();
         // Initialize the router with the test DB
-        let app = Router::new().nest("/api/soil_types", router(&db, None));
+        let app = Router::new().nest("/api/soil_types", router);
 
         // Create a new soil type via POST
         let soil_type = json!({

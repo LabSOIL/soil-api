@@ -1,22 +1,13 @@
-use crate::common::auth::Role;
 use crate::plots::db::Gradientchoices;
 use crate::{config::Config, transects::models::Transect};
 use async_trait::async_trait;
-use axum::{
-    Router,
-    routing::{delete, get},
-};
-use axum_keycloak_auth::{
-    PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
-};
 use chrono::{DateTime, NaiveDate, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, routes as crud};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbBackend, DbErr,
     EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 

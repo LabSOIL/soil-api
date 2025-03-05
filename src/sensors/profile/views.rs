@@ -1,14 +1,12 @@
 use super::models::{SensorProfile, SensorProfileCreate, SensorProfileUpdate};
 use crate::common::auth::Role;
 use crate::common::models::LowResolution;
-use axum::extract::{Path, Query, State};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
 use crudcrate::{CRUDResource, crud_handlers};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
@@ -36,7 +34,7 @@ pub async fn get_one(
 > {
     println!("get_one");
     if query.high_resolution {
-        match <SensorProfile as CRUDResource>::get_one(&db, id).await {
+        match SensorProfile::get_one_high_resolution(&db, id).await {
             Ok(item) => Ok(Json(item)),
             Err(DbErr::RecordNotFound(_)) => Err((
                 axum::http::StatusCode::NOT_FOUND,
@@ -52,7 +50,7 @@ pub async fn get_one(
         }
     } else {
         match SensorProfile::get_one_low_resolution(&db, id).await {
-            Ok(item) => Ok(Json(item.into())),
+            Ok(item) => Ok(Json(item)),
             Err(DbErr::RecordNotFound(_)) => Err((
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),

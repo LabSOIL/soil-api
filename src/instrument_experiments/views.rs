@@ -4,7 +4,6 @@ use crate::instrument_experiments::db;
 use crate::instrument_experiments::models::{
     InstrumentExperiment, InstrumentExperimentCreate, InstrumentExperimentUpdate,
 };
-use axum::extract::{Path, State};
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
