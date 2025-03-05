@@ -22,12 +22,9 @@ use utoipa_scalar::{Scalar, Servable};
 #[tokio::main]
 async fn main() {
     #[derive(OpenApi)]
-    #[openapi(
-        tags(
-            (name = "soil-api", description = "API for managing SOIL lab data"),
-        )
-    )]
+    #[openapi()]
     struct ApiDoc;
+
     // Set up tracing/logging
     tracing_subscriber::fmt::init();
     println!("Starting server...");
@@ -72,11 +69,6 @@ async fn main() {
 
     // Build the router with routes from the plots module
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        // .route("/healthz", axum::routing::get(healthz))
-        // .route("/api/config", axum::routing::get(get_ui_config))
-        // .routes(routes!(get_ui_config))
-        // .routes(routes!(healthz))
-        // .with_state(db.clone())
         .merge(common::views::router(&db)) // Root routes
         .nest(
             "/api/plots",

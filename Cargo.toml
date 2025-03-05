@@ -2,6 +2,12 @@
 name = "soil-api"
 version = "2.1.1"
 edition = "2024"
+description = "API for managing SOIL lab data"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/LabSOIL/soil-api"
+keywords = ["soil", "lab", "data", "api", "axum", "sea-orm"]
+categories = ["web-programming", "database"]
 
 [workspace]
 members = [".", "migration"]
@@ -13,8 +19,8 @@ axum-keycloak-auth = "0.8.1"
 base64 = "0.22.1"
 byteorder = "1.5.0"
 chrono = { version = "0.4.40", features = ["serde"] }
-crudcrate = "0.2.1"
-# crudcrate = { path = "../crudcrate" }
+# crudcrate = "0.2.1"
+crudcrate = { path = "../crudcrate" }
 dotenvy = "0.15.7"
 futures = "0.3.31"
 gpx = "0.10.0"

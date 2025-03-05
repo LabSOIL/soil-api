@@ -26,7 +26,7 @@ crud_handlers!(Sensor, SensorUpdate, SensorCreate);
     summary = format!("Get one {}", Sensor::RESOURCE_NAME_SINGULAR),
     description = format!("Retrieves one {} by its ID.\n\n{}", Sensor::RESOURCE_NAME_SINGULAR, Sensor::RESOURCE_DESCRIPTION)
 )]
-pub async fn get_one(
+pub async fn get_one_sensor(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
     axum::extract::Query(query): axum::extract::Query<LowResolution>,
@@ -78,7 +78,7 @@ pub async fn get_one(
     summary = "Delete sensor data",
     description = "Deletes all data for a sensor by its given ID."
 )]
-pub async fn delete_data(
+pub async fn delete_sensor_data(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<axum::http::StatusCode, (axum::http::StatusCode, axum::Json<String>)> {
@@ -105,13 +105,13 @@ where
     Sensor: CRUDResource,
 {
     let mut mutating_router = OpenApiRouter::new()
-        .routes(routes!(get_one))
+        .routes(routes!(get_one_sensor))
         .routes(routes!(get_all_handler))
         .routes(routes!(create_one_handler))
         .routes(routes!(update_one_handler))
         .routes(routes!(delete_one_handler))
         .routes(routes!(delete_many_handler))
-        .routes(routes!(delete_data))
+        .routes(routes!(delete_sensor_data))
         .with_state(db.clone());
 
     if let Some(instance) = keycloak_auth_instance {
