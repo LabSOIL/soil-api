@@ -19,8 +19,31 @@ use utoipa_scalar::{Scalar, Servable};
 
 pub fn build_router(db: &DatabaseConnection) -> Router {
     #[derive(OpenApi)]
-    #[openapi()]
+    #[openapi(
+        modifiers(&SecurityAddon),
+        security(
+            ("bearerAuth" = [])
+        )
+    )]
     struct ApiDoc;
+
+    struct SecurityAddon;
+
+    impl utoipa::Modify for SecurityAddon {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            if let Some(components) = openapi.components.as_mut() {
+                components.add_security_scheme(
+                    "bearerAuth",
+                    utoipa::openapi::security::SecurityScheme::Http(
+                        utoipa::openapi::security::HttpBuilder::new()
+                            .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                            .bearer_format("JWT")
+                            .build(),
+                    ),
+                );
+            }
+        }
+    }
 
     let config: Config = Config::from_env();
 

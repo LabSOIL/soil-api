@@ -1,6 +1,6 @@
 [package]
 name = "soil-api"
-version = "2.1.1"
+version = "2.1.2"
 edition = "2024"
 description = "API for managing SOIL lab data"
 license = "MIT"
@@ -14,7 +14,7 @@ members = [".", "migration"]
 
 [dependencies]
 async-trait = "0.1.85"
-axum = { version = "0.8.0"}
+axum = { version = "0.8.0" }
 axum-keycloak-auth = "0.8.1"
 base64 = "0.22.1"
 byteorder = "1.5.0"
