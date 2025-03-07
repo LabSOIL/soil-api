@@ -19,8 +19,8 @@ axum-keycloak-auth = "0.8.1"
 base64 = "0.22.1"
 byteorder = "1.5.0"
 chrono = { version = "0.4.40", features = ["serde"] }
-crudcrate = "0.2.2"
-# crudcrate = { path = "../crudcrate" }
+# crudcrate = "0.2.2"
+crudcrate = { path = "../crudcrate" }
 dotenvy = "0.15.7"
 futures = "0.3.31"
 gpx = "0.10.0"

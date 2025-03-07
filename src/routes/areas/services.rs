@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 use sea_orm::{DatabaseConnection, DbBackend, Statement};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<Value> {
     let raw_sql = r"
@@ -42,7 +42,9 @@ pub async fn get_convex_hull(db: &DatabaseConnection, area_id: Uuid) -> Option<V
         ))
         .await
     {
-        let row = result.unwrap();
+        let Some(row) = result else {
+            return Some(json!({"type": "FeatureCollection", "features": []}));
+        };
         let convex_hull = row.try_get::<String>("", "convex_hull").unwrap();
         if let Ok(parsed_geojson) = serde_json::from_str(&convex_hull) {
             return Some(parsed_geojson); // Return the parsed GeoJSON if valid

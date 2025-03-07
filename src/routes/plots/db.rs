@@ -27,7 +27,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub name: String,
     pub area_id: Uuid,
-    pub gradient: Gradientchoices,
+    pub gradient: Option<Gradientchoices>,
     pub vegetation_type: Option<String>,
     pub topography: Option<String>,
     pub aspect: Option<String>,
