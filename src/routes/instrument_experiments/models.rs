@@ -95,7 +95,7 @@ impl CRUDResource for InstrumentExperiment {
 
         let mut experiments = Vec::new();
         for experiment in objs {
-            let mut channels = experiment
+            let channels = experiment
                 .find_related(super::channels::db::Entity)
                 .select_only()
                 .column(super::channels::db::Column::Id)
@@ -122,7 +122,7 @@ impl CRUDResource for InstrumentExperiment {
                 .count();
 
             for channel in &mut obj.channels {
-                channel.baseline_values = None;
+                channel.baseline_values = Some(serde_json::Value::Array(vec![]));
             }
 
             experiments.push(obj);
