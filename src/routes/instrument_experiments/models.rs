@@ -32,6 +32,8 @@ pub struct InstrumentExperiment {
     pub project_id: Option<Uuid>,
     #[crudcrate(update_model = false, create_model = false)]
     pub channels: Vec<super::channels::models::InstrumentExperimentChannel>,
+    #[crudcrate(non_db_attr = true, default = 0)]
+    pub channel_qty_filled: usize,
 }
 
 impl From<Model> for InstrumentExperiment {
@@ -54,6 +56,7 @@ impl From<Model> for InstrumentExperiment {
             last_updated: model.last_updated,
             project_id: model.project_id,
             channels: vec![],
+            channel_qty_filled: 0,
         }
     }
 }
@@ -83,24 +86,49 @@ impl CRUDResource for InstrumentExperiment {
         limit: u64,
     ) -> Result<Vec<Self::ApiModel>, DbErr> {
         let objs = Self::EntityType::find()
-            .find_with_related(super::channels::db::Entity)
             .filter(condition)
             .order_by(order_column, order_direction)
             .offset(offset)
             .limit(limit)
             .all(db)
-            .await?
-            .into_iter()
-            .map(|(model, channels)| {
-                let mut obj = InstrumentExperiment::from(model);
-                obj.channels = channels
-                    .into_iter()
-                    .map(super::channels::models::InstrumentExperimentChannel::from)
-                    .collect();
-                obj
-            })
-            .collect();
-        Ok(objs)
+            .await?;
+
+        let mut experiments = Vec::new();
+        for experiment in objs {
+            let mut channels = experiment
+                .find_related(super::channels::db::Entity)
+                .select_only()
+                .column(super::channels::db::Column::Id)
+                .column(super::channels::db::Column::ChannelName)
+                .column(super::channels::db::Column::ExperimentId)
+                .column(super::channels::db::Column::IntegralResults)
+                .column(super::channels::db::Column::BaselineValues)
+                .all(db)
+                .await?;
+
+            let mut obj = InstrumentExperiment::from(experiment);
+            obj.channels = channels
+                .clone()
+                .into_iter()
+                .map(super::channels::models::InstrumentExperimentChannel::from)
+                .collect();
+            // Channels filled is the number of channels that have data in baseline_values
+            // This (and removing baseline_values) is to limit amount of data
+            // sent to the client
+            obj.channel_qty_filled = obj
+                .channels
+                .iter()
+                .filter(|c| c.baseline_values.is_some())
+                .count();
+
+            for channel in &mut obj.channels {
+                channel.baseline_values = None;
+            }
+
+            experiments.push(obj);
+        }
+
+        Ok(experiments)
     }
 
     async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
