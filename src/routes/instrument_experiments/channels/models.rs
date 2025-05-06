@@ -1,7 +1,7 @@
 // instrument_experiments/channels/models.rs
 
 use async_trait::async_trait;
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     Order, QueryOrder, QuerySelect, entity::prelude::*,
@@ -51,9 +51,7 @@ impl From<Model> for InstrumentExperimentChannel {
 impl CRUDResource for InstrumentExperimentChannel {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = InstrumentExperimentChannel;
     type CreateModel = InstrumentExperimentChannelCreate;
     type UpdateModel = InstrumentExperimentChannelUpdate;
 
@@ -69,7 +67,7 @@ impl CRUDResource for InstrumentExperimentChannel {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -83,7 +81,7 @@ impl CRUDResource for InstrumentExperimentChannel {
             .collect())
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
@@ -98,7 +96,7 @@ impl CRUDResource for InstrumentExperimentChannel {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         // Fetch the original record as an ActiveModel.
         let original_model: super::db::ActiveModel = Self::EntityType::find_by_id(id)
             .one(db)

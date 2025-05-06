@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use base64;
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use gpx::read;
 use sea_orm::{
     ActiveModelTrait,
@@ -74,9 +74,7 @@ impl From<Model> for Gnss {
 impl CRUDResource for Gnss {
     type EntityType = crate::routes::gnss::db::Entity;
     type ColumnType = crate::routes::gnss::db::Column;
-    type ModelType = crate::routes::gnss::db::Model;
     type ActiveModelType = crate::routes::gnss::db::ActiveModel;
-    type ApiModel = Gnss;
     type CreateModel = GnssCreate;
     type UpdateModel = GnssUpdate;
 
@@ -92,7 +90,7 @@ impl CRUDResource for Gnss {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -103,7 +101,7 @@ impl CRUDResource for Gnss {
         Ok(models.into_iter().map(Gnss::from).collect())
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
@@ -118,7 +116,7 @@ impl CRUDResource for Gnss {
     async fn create(
         db: &DatabaseConnection,
         create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let gnss = GNSSCreateFromFile {
             data_base64: create_model.data_base64.unwrap(),
             filename: create_model.filename.unwrap(),
@@ -147,7 +145,7 @@ impl CRUDResource for Gnss {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?

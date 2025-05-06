@@ -5,7 +5,7 @@ use crate::routes::{
     transects::models::Transect,
 };
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveValue, Condition, DatabaseConnection, EntityTrait, Order, QueryOrder, entity::prelude::*,
     query::QuerySelect,
@@ -67,9 +67,9 @@ impl From<Model> for Area {
 impl CRUDResource for Area {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
+    // type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = Area;
+    // type ApiModel = Area;
     type CreateModel = AreaCreate;
     type UpdateModel = AreaUpdate;
 
@@ -85,7 +85,7 @@ impl CRUDResource for Area {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -177,7 +177,7 @@ impl CRUDResource for Area {
         Ok(areas)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
@@ -273,7 +273,7 @@ impl CRUDResource for Area {
     async fn create(
         db: &DatabaseConnection,
         create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let active_model: Self::ActiveModelType = create_model.into();
         let inserted = active_model.insert(db).await?;
         let area = Self::get_one(db, inserted.id).await.unwrap();
@@ -284,7 +284,7 @@ impl CRUDResource for Area {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?

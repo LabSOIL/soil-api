@@ -2,7 +2,7 @@ use super::db::Model;
 use crate::config::Config;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
     entity::prelude::*,
@@ -75,9 +75,7 @@ impl From<Model> for SoilProfile {
 impl CRUDResource for SoilProfile {
     type EntityType = crate::routes::soil::profiles::db::Entity;
     type ColumnType = crate::routes::soil::profiles::db::Column;
-    type ModelType = crate::routes::soil::profiles::db::Model;
     type ActiveModelType = crate::routes::soil::profiles::db::ActiveModel;
-    type ApiModel = SoilProfile;
     type CreateModel = SoilProfileCreate;
     type UpdateModel = SoilProfileUpdate;
 
@@ -93,7 +91,7 @@ impl CRUDResource for SoilProfile {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let profiles: Vec<SoilProfile> = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -107,7 +105,7 @@ impl CRUDResource for SoilProfile {
         Ok(profiles)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let profile: SoilProfile = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)
@@ -121,7 +119,7 @@ impl CRUDResource for SoilProfile {
         db: &DatabaseConnection,
         id: Uuid,
         update_data: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .one(db)

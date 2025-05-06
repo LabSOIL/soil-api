@@ -1,7 +1,7 @@
 use super::db::Model;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     Order, QueryOrder, QuerySelect, entity::prelude::*,
@@ -9,6 +9,7 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel)]
 #[active_model = "super::db::ActiveModel"]
 pub struct InstrumentExperiment {
@@ -65,9 +66,7 @@ impl From<Model> for InstrumentExperiment {
 impl CRUDResource for InstrumentExperiment {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = InstrumentExperiment;
     type CreateModel = InstrumentExperimentCreate;
     type UpdateModel = InstrumentExperimentUpdate;
 
@@ -84,7 +83,7 @@ impl CRUDResource for InstrumentExperiment {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let objs = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -131,7 +130,7 @@ impl CRUDResource for InstrumentExperiment {
         Ok(experiments)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model = Self::EntityType::find()
             .find_with_related(super::channels::db::Entity)
             .filter(Self::ColumnType::Id.eq(id))
@@ -157,7 +156,7 @@ impl CRUDResource for InstrumentExperiment {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?

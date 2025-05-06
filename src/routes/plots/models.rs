@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::routes::{plots::db::Gradientchoices, transects::models::Transect};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbBackend, DbErr,
     EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
@@ -109,9 +109,7 @@ impl
 impl CRUDResource for Plot {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = Plot;
     type CreateModel = PlotCreate;
     type UpdateModel = PlotUpdate;
 
@@ -127,7 +125,7 @@ impl CRUDResource for Plot {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let objs = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -159,7 +157,7 @@ impl CRUDResource for Plot {
         Ok(plots)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let plot = Self::EntityType::find()
             .filter(super::db::Column::Id.eq(id))
             .one(db)
@@ -236,7 +234,7 @@ impl CRUDResource for Plot {
         db: &DatabaseConnection,
         id: Uuid,
         update_data: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(super::db::Column::Id.eq(id))
             .one(db)

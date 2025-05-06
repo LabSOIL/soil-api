@@ -1,7 +1,7 @@
 use super::db::Model;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use rand::Rng;
 use sea_orm::{
     ActiveValue, Condition, DatabaseConnection, EntityTrait, FromQueryResult, Order, QueryOrder,
@@ -47,9 +47,7 @@ impl From<Model> for Project {
 impl CRUDResource for Project {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = Project;
     type CreateModel = ProjectCreate;
     type UpdateModel = ProjectUpdate;
 
@@ -65,7 +63,7 @@ impl CRUDResource for Project {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -73,10 +71,10 @@ impl CRUDResource for Project {
             .limit(limit)
             .all(db)
             .await?;
-        Ok(models.into_iter().map(Self::ApiModel::from).collect())
+        Ok(models.into_iter().map(Self::from).collect())
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model =
             Self::EntityType::find_by_id(id)
                 .one(db)
@@ -85,14 +83,14 @@ impl CRUDResource for Project {
                     "{} not found",
                     Self::RESOURCE_NAME_SINGULAR
                 )))?;
-        Ok(Self::ApiModel::from(model))
+        Ok(Self::from(model))
     }
 
     async fn update(
         db: &DatabaseConnection,
         id: Uuid,
         update_data: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find_by_id(id)
             .one(db)
             .await?
@@ -104,7 +102,7 @@ impl CRUDResource for Project {
 
         let updated_model = update_data.merge_into_activemodel(existing);
         let updated = updated_model.update(db).await?;
-        Ok(Self::ApiModel::from(updated))
+        Ok(Self::from(updated))
     }
 
     fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {

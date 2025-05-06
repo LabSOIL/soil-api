@@ -30,11 +30,7 @@ pub async fn get_one(
     State(db): State<sea_orm::DatabaseConnection>,
     Path(id): Path<uuid::Uuid>,
     Query(query): Query<LowResolution>,
-) -> Result<
-    Json<<SensorProfile as CRUDResource>::ApiModel>,
-    (axum::http::StatusCode, axum::Json<String>),
-> {
-    println!("get_one");
+) -> Result<Json<SensorProfile>, (axum::http::StatusCode, axum::Json<String>)> {
     if query.high_resolution {
         match SensorProfile::get_one_high_resolution(&db, id).await {
             Ok(item) => Ok(Json(item)),
@@ -42,13 +38,10 @@ pub async fn get_one(
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
             )),
-            Err(e) => {
-                println!("Error: {e:?}");
-                Err((
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    Json("Internal Server Error".to_string()),
-                ))
-            }
+            Err(_) => Err((
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            )),
         }
     } else {
         match SensorProfile::get_one_low_resolution(&db, id).await {
@@ -57,13 +50,10 @@ pub async fn get_one(
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
             )),
-            Err(e) => {
-                println!("Error: {e:?}");
-                Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json("Internal Server Error".to_string()),
-                ))
-            }
+            Err(_) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            )),
         }
     }
 }

@@ -29,8 +29,6 @@ impl Config {
             ))
         });
 
-        
-
         Config {
             app_name: env::var("APP_NAME").expect("APP_NAME must be set"),
             keycloak_ui_id: env::var("KEYCLOAK_UI_ID").expect("KEYCLOAK_UI_ID must be set"),

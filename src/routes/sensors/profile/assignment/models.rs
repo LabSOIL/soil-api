@@ -1,7 +1,7 @@
 use super::db::Model;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     Order, QueryOrder, QuerySelect, entity::prelude::*,
@@ -55,9 +55,7 @@ impl From<Model> for SensorProfileAssignment {
 impl CRUDResource for SensorProfileAssignment {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = SensorProfileAssignment;
     type CreateModel = SensorProfileAssignmentCreate;
     type UpdateModel = SensorProfileAssignmentUpdate;
 
@@ -73,7 +71,7 @@ impl CRUDResource for SensorProfileAssignment {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -102,7 +100,7 @@ impl CRUDResource for SensorProfileAssignment {
             .unwrap()
             .into();
 
-        let models: Vec<Self::ApiModel> = models
+        let models: Vec<Self> = models
             .into_iter()
             .map(|model| {
                 let mut model: SensorProfileAssignment = model.into();
@@ -114,7 +112,7 @@ impl CRUDResource for SensorProfileAssignment {
         Ok(models)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let model = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .all(db)
@@ -137,7 +135,7 @@ impl CRUDResource for SensorProfileAssignment {
             .unwrap()
             .unwrap()
             .into();
-        let model: Self::ApiModel = model
+        let model: Self = model
             .into_iter()
             .map(|model| {
                 let mut model: SensorProfileAssignment = model.into();
@@ -145,7 +143,7 @@ impl CRUDResource for SensorProfileAssignment {
                 model.sensor = Some(sensor.clone());
                 model
             })
-            .collect::<Vec<Self::ApiModel>>()
+            .collect::<Vec<Self>>()
             .pop()
             .ok_or(DbErr::RecordNotFound("Record not found".into()))?;
         Ok(model)
@@ -155,7 +153,7 @@ impl CRUDResource for SensorProfileAssignment {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?

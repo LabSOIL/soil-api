@@ -2,7 +2,7 @@ use super::db::Model;
 use crate::config::Config;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
@@ -33,7 +33,8 @@ pub struct SensorProfile {
     pub coord_srid: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
     #[schema(no_recursion)]
-    pub assignments: Vec<crate::routes::sensors::profile::assignment::models::SensorProfileAssignment>,
+    pub assignments:
+        Vec<crate::routes::sensors::profile::assignment::models::SensorProfileAssignment>,
     // #[crudcrate(non_db_attr = true, default = vec![])]
     // pub data: Vec<crate::routes::sensors::data::models::SensorData>,
 }
@@ -47,7 +48,9 @@ impl From<Model> for SensorProfile {
 impl SensorProfile {
     fn from_with_assignments(
         model: Model,
-        assignments: Vec<crate::routes::sensors::profile::assignment::models::SensorProfileAssignment>,
+        assignments: Vec<
+            crate::routes::sensors::profile::assignment::models::SensorProfileAssignment,
+        >,
     ) -> Self {
         Self {
             id: model.id,
@@ -69,9 +72,7 @@ impl SensorProfile {
 impl CRUDResource for SensorProfile {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    type ApiModel = SensorProfile;
     type CreateModel = SensorProfileCreate;
     type UpdateModel = SensorProfileUpdate;
 
@@ -87,7 +88,7 @@ impl CRUDResource for SensorProfile {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let models = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -110,12 +111,13 @@ impl CRUDResource for SensorProfile {
 
         for assignment in &mut assignments {
             // Get the sensor for each assignment
-            let sensor: crate::routes::sensors::models::Sensor = crate::routes::sensors::db::Entity::find()
-                .filter(crate::routes::sensors::db::Column::Id.eq(assignment.sensor_id))
-                .one(db)
-                .await?
-                .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
-                .into();
+            let sensor: crate::routes::sensors::models::Sensor =
+                crate::routes::sensors::db::Entity::find()
+                    .filter(crate::routes::sensors::db::Column::Id.eq(assignment.sensor_id))
+                    .one(db)
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
+                    .into();
             assignment.sensor = Some(sensor);
         }
 
@@ -127,7 +129,7 @@ impl CRUDResource for SensorProfile {
         Ok(sensor_profiles)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let mut models = Self::EntityType::find()
             .filter(Self::ColumnType::Id.eq(id))
             .all(db)
@@ -144,12 +146,13 @@ impl CRUDResource for SensorProfile {
 
         // As in get_all, get sensor for each assignment
         for assignment in &mut assignments {
-            let sensor: crate::routes::sensors::models::Sensor = crate::routes::sensors::db::Entity::find()
-                .filter(crate::routes::sensors::db::Column::Id.eq(assignment.sensor_id))
-                .one(db)
-                .await?
-                .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
-                .into();
+            let sensor: crate::routes::sensors::models::Sensor =
+                crate::routes::sensors::db::Entity::find()
+                    .filter(crate::routes::sensors::db::Column::Id.eq(assignment.sensor_id))
+                    .one(db)
+                    .await?
+                    .ok_or(DbErr::RecordNotFound("Sensor not found".into()))?
+                    .into();
             assignment.sensor = Some(sensor);
         }
         let model = models.pop().ok_or(DbErr::RecordNotFound(format!(
@@ -165,7 +168,7 @@ impl CRUDResource for SensorProfile {
         db: &DatabaseConnection,
         id: Uuid,
         update_model: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let db_obj: super::db::ActiveModel = super::db::Entity::find_by_id(id)
             .one(db)
             .await?

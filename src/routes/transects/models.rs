@@ -3,7 +3,7 @@ use crate::routes::transects::db;
 use crate::routes::transects::nodes::models::TransectNode;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     Order, QueryFilter, QueryOrder, QuerySelect, Set,
@@ -49,9 +49,7 @@ impl From<db::Model> for Transect {
 impl CRUDResource for Transect {
     type EntityType = db::Entity;
     type ColumnType = db::Column;
-    type ModelType = db::Model;
     type ActiveModelType = db::ActiveModel;
-    type ApiModel = Transect;
     type CreateModel = TransectCreate;
     type UpdateModel = TransectUpdate;
 
@@ -63,7 +61,7 @@ impl CRUDResource for Transect {
     async fn create(
         db: &DatabaseConnection,
         create_model: Self::CreateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         // Convert create_model into the active model without nodes
 
         let active_model: Self::ActiveModelType = create_model.clone().into();
@@ -108,7 +106,7 @@ impl CRUDResource for Transect {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         // Fetch transects along with their related transect nodes.
         let results: Vec<(db::Model, Vec<crate::routes::transects::nodes::db::Model>)> =
             Self::EntityType::find()
@@ -156,7 +154,7 @@ impl CRUDResource for Transect {
         Ok(transects)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let results: Vec<(db::Model, Vec<crate::routes::transects::nodes::db::Model>)> =
             Self::EntityType::find()
                 .filter(db::Column::Id.eq(id))
@@ -203,7 +201,7 @@ impl CRUDResource for Transect {
         db: &DatabaseConnection,
         id: Uuid,
         update_data: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         // Clone the new nodes from the update model
         let new_nodes = update_data.nodes.clone();
 

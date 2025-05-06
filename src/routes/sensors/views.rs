@@ -30,8 +30,7 @@ pub async fn get_one_sensor(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
     axum::extract::Query(query): axum::extract::Query<LowResolution>,
-) -> Result<Json<<Sensor as CRUDResource>::ApiModel>, (axum::http::StatusCode, axum::Json<String>)>
-{
+) -> Result<Json<Sensor>, (axum::http::StatusCode, axum::Json<String>)> {
     if query.high_resolution {
         match <Sensor as CRUDResource>::get_one(&db, id).await {
             Ok(item) => Ok(Json(item)),
@@ -39,13 +38,10 @@ pub async fn get_one_sensor(
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
             )),
-            Err(e) => {
-                println!("Error: {e:?}");
-                Err((
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    Json("Internal Server Error".to_string()),
-                ))
-            }
+            Err(_) => Err((
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            )),
         }
     } else {
         match Sensor::get_one_low_resolution(&db, id).await {

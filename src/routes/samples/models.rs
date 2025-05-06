@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
-use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
-// use pyo3::prelude::*;
-// use pyo3::types::PyDict;
+use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Order,
@@ -11,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-// #[pyclass]
 #[derive(ToSchema, Serialize, ToCreateModel, ToUpdateModel, Deserialize, Clone)]
 #[active_model = "super::db::ActiveModel"]
 pub struct PlotSample {
@@ -161,9 +158,7 @@ impl
 impl CRUDResource for PlotSample {
     type EntityType = crate::routes::samples::db::Entity;
     type ColumnType = crate::routes::samples::db::Column;
-    type ModelType = crate::routes::samples::db::Model;
     type ActiveModelType = crate::routes::samples::db::ActiveModel;
-    type ApiModel = PlotSample;
     type CreateModel = PlotSampleCreate;
     type UpdateModel = PlotSampleUpdate;
 
@@ -179,7 +174,7 @@ impl CRUDResource for PlotSample {
         order_direction: Order,
         offset: u64,
         limit: u64,
-    ) -> Result<Vec<Self::ApiModel>, DbErr> {
+    ) -> Result<Vec<Self>, DbErr> {
         let samples = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -213,7 +208,7 @@ impl CRUDResource for PlotSample {
         Ok(plot_samples)
     }
 
-    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self::ApiModel, DbErr> {
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
         let sample = Self::EntityType::find()
             .filter(crate::routes::samples::db::Column::Id.eq(id))
             .one(db)
@@ -246,7 +241,7 @@ impl CRUDResource for PlotSample {
         db: &DatabaseConnection,
         id: Uuid,
         update_data: Self::UpdateModel,
-    ) -> Result<Self::ApiModel, DbErr> {
+    ) -> Result<Self, DbErr> {
         let existing: Self::ActiveModelType = Self::EntityType::find()
             .filter(crate::routes::samples::db::Column::Id.eq(id))
             .one(db)
