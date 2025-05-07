@@ -33,7 +33,6 @@ where
         .routes(routes!(update_one_handler))
         .routes(routes!(delete_one_handler))
         .routes(routes!(delete_many_handler))
-        // Custom endpoints for CSV data
         .routes(routes!(get_raw_data))
         .routes(routes!(get_filtered_data))
         .routes(routes!(get_summary_data))

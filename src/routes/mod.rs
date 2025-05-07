@@ -117,7 +117,7 @@ pub fn build_router(db: &DatabaseConnection) -> Router {
             "/api/soil_profiles",
             private::soil::profiles::views::router(db, Some(keycloak_instance.clone())),
         )
-        .nest("/api/public", public::views::router(db))
+        .nest("/api/public", public::router(db))
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
         .split_for_parts();
 
