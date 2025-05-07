@@ -1,9 +1,10 @@
-use crate::routes::private::areas::db;
+use super::models::{Area, Plot};
+use crate::routes::private::areas::db as AreaDB;
 use crate::routes::private::areas::services::get_convex_hull;
-use crate::routes::public::areas::models::Area;
+use crate::routes::private::plots::db as PlotDB;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use sea_orm::DatabaseConnection;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
@@ -23,17 +24,24 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     description = "Returns a list of all available areas. If no public areas exist, an empty list is returned."
 )]
 pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoResponse {
-    match db::Entity::find()
-        .filter(db::Column::IsPublic.eq(true))
+    match AreaDB::Entity::find()
+        .filter(AreaDB::Column::IsPublic.eq(true))
         .all(&db)
         .await
     {
         Ok(objs) => {
-            let mut areas: Vec<Area> = objs.into_iter().map(From::from).collect();
-
             // Add geometry for each area
-            for area in &mut areas {
+            let mut areas: Vec<Area> = Vec::new();
+            for obj in objs {
+                let plot = obj
+                    .find_related(PlotDB::Entity)
+                    .all(&db)
+                    .await
+                    .unwrap_or_default();
+                let mut area: Area = obj.into();
+                area.plots = plot.into_iter().map(Plot::from).collect();
                 area.geom = get_convex_hull(&db, area.id).await;
+                areas.push(area);
             }
 
             Ok((StatusCode::OK, Json(areas)))
