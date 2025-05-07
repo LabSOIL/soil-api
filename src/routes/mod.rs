@@ -1,12 +1,14 @@
-mod areas;
-mod gnss;
-mod instrument_experiments;
-mod plots;
-mod projects;
-mod samples;
-mod sensors;
-mod soil;
-mod transects;
+// mod areas;
+// mod gnss;
+// mod instrument_experiments;
+// mod plots;
+// mod projects;
+mod public;
+// mod samples;
+// mod sensors;
+// mod soil;
+// mod transects;
+mod private;
 
 use crate::config::Config;
 use axum::{Router, extract::DefaultBodyLimit};
@@ -59,56 +61,63 @@ pub fn build_router(db: &DatabaseConnection) -> Router {
         .merge(crate::common::views::router(db)) // Root routes
         .nest(
             "/api/plots",
-            plots::views::router(db, Some(keycloak_instance.clone())),
+            private::plots::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/areas",
-            areas::views::router(db, Some(keycloak_instance.clone())),
+            private::areas::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/projects",
-            projects::views::router(db, Some(keycloak_instance.clone())),
+            private::projects::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/gnss",
-            gnss::views::router(db, Some(keycloak_instance.clone())),
+            private::gnss::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/plot_samples",
-            samples::views::router(db, Some(keycloak_instance.clone())),
+            private::samples::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensors",
-            sensors::views::router(db, Some(keycloak_instance.clone())),
+            private::sensors::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensor_profiles",
-            sensors::profile::views::router(db, Some(keycloak_instance.clone())),
+            private::sensors::profile::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/sensor_profile_assignments",
-            sensors::profile::assignment::views::router(db, Some(keycloak_instance.clone())),
+            private::sensors::profile::assignment::views::router(
+                db,
+                Some(keycloak_instance.clone()),
+            ),
         )
         .nest(
             "/api/transects",
-            transects::views::router(db, Some(keycloak_instance.clone())),
+            private::transects::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/instruments",
-            instrument_experiments::views::router(db, Some(keycloak_instance.clone())),
+            private::instrument_experiments::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/instrument_channels",
-            instrument_experiments::channels::views::router(db, Some(keycloak_instance.clone())),
+            private::instrument_experiments::channels::views::router(
+                db,
+                Some(keycloak_instance.clone()),
+            ),
         )
         .nest(
             "/api/soil_types",
-            soil::types::views::router(db, Some(keycloak_instance.clone())),
+            private::soil::types::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest(
             "/api/soil_profiles",
-            soil::profiles::views::router(db, Some(keycloak_instance.clone())),
+            private::soil::profiles::views::router(db, Some(keycloak_instance.clone())),
         )
+        .nest("/api/public", public::views::router(db))
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
         .split_for_parts();
 
