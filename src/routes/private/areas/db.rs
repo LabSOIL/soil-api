@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub name: Option<String>,
+    pub name: String,
     pub description: Option<String>,
     pub project_id: Uuid,
     pub last_updated: DateTime<Utc>,

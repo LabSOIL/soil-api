@@ -22,7 +22,7 @@ pub struct Area {
     pub id: Uuid,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
     pub last_updated: DateTime<Utc>,
-    pub name: Option<String>,
+    pub name: String,
     pub description: Option<String>,
     pub project_id: Uuid,
     #[crudcrate(update_model = false, create_model = false)]

@@ -1,13 +1,14 @@
 use crate::routes::private::areas::db;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct Area {
     pub id: Uuid,
-    pub name: Option<String>,
+    pub name: String,
+    pub geom: Option<Value>,
 }
 
 impl From<db::Model> for Area {
@@ -15,6 +16,7 @@ impl From<db::Model> for Area {
         Self {
             id: model.id,
             name: model.name,
+            geom: None, // Set later in func
         }
     }
 }

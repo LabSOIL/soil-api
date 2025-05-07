@@ -128,7 +128,7 @@ mod tests {
         let dummy_area = crate::routes::private::areas::db::ActiveModel {
             id: Set(dummy_area_id),
             project_id: Set(dummy_project_id),
-            name: Set(Some("Dummy Area".to_owned())),
+            name: Set("Dummy Area".to_owned()),
             description: Set(Some("Dummy area description".to_owned())),
             last_updated: Set(Utc::now()),
             is_public: Set(false),

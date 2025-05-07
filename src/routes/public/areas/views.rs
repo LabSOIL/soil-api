@@ -1,4 +1,5 @@
 use crate::routes::private::areas::db;
+use crate::routes::private::areas::services::get_convex_hull;
 use crate::routes::public::areas::models::Area;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use sea_orm::DatabaseConnection;
@@ -28,7 +29,13 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
         .await
     {
         Ok(objs) => {
-            let areas: Vec<Area> = objs.into_iter().map(From::from).collect();
+            let mut areas: Vec<Area> = objs.into_iter().map(From::from).collect();
+
+            // Add geometry for each area
+            for area in &mut areas {
+                area.geom = get_convex_hull(&db, area.id).await;
+            }
+
             Ok((StatusCode::OK, Json(areas)))
         }
         Err(_) => Err((
