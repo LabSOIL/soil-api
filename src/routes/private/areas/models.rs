@@ -43,6 +43,8 @@ pub struct Area {
     #[crudcrate(update_model = false, create_model = false)]
     #[schema(no_recursion)]
     pub geom: Option<Value>,
+    #[crudcrate(on_create = false)]
+    pub is_public: bool,
 }
 
 impl From<Model> for Area {
@@ -59,6 +61,7 @@ impl From<Model> for Area {
             sensor_profiles: vec![],
             transects: vec![],
             geom: None,
+            is_public: model.is_public,
         }
     }
 }
@@ -67,9 +70,7 @@ impl From<Model> for Area {
 impl CRUDResource for Area {
     type EntityType = super::db::Entity;
     type ColumnType = super::db::Column;
-    // type ModelType = super::db::Model;
     type ActiveModelType = super::db::ActiveModel;
-    // type ApiModel = Area;
     type CreateModel = AreaCreate;
     type UpdateModel = AreaUpdate;
 
@@ -168,6 +169,7 @@ impl CRUDResource for Area {
                 id: model.id,
                 name: model.name,
                 description: model.description,
+                is_public: model.is_public,
                 project: Some(project.into()),
                 plots: plots.into_iter().map(Into::into).collect(),
                 sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),
@@ -264,6 +266,7 @@ impl CRUDResource for Area {
             id: model.id,
             name: model.name,
             description: model.description,
+            is_public: model.is_public,
             project: Some(project.into()),
             plots: plots.into_iter().map(Into::into).collect(),
             sensor_profiles: sensor_profiles.into_iter().map(Into::into).collect(),

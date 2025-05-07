@@ -131,6 +131,7 @@ mod tests {
             name: Set(Some("Dummy Area".to_owned())),
             description: Set(Some("Dummy area description".to_owned())),
             last_updated: Set(Utc::now()),
+            is_public: Set(false),
         };
         crate::routes::private::areas::db::Entity::insert(dummy_area)
             .exec(db)
