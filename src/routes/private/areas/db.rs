@@ -17,7 +17,7 @@ pub struct Model {
     pub description: Option<String>,
     pub project_id: Uuid,
     pub last_updated: DateTime<Utc>,
-    pub is_public: bool,
+    pub is_public: bool, // Will be used to display this area to public API routes
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
