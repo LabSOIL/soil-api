@@ -55,6 +55,8 @@ pub struct PlotSample {
     pub archea_per_g: Option<f64>,
     pub methanogens_per_g: Option<f64>,
     pub methanotrophs_per_g: Option<f64>,
+    pub soc_stock_g_per_cm3: Option<f64>,
+    pub fe_abundance_g_per_cm3: Option<f64>,
     pub replicate: i32,
     #[crudcrate(update_model = false, create_model = false)]
     pub plot: Option<crate::routes::private::plots::models::Plot>,
@@ -97,6 +99,8 @@ impl From<crate::routes::private::samples::db::Model> for PlotSample {
             archea_per_g: sample.archea_per_g,
             methanogens_per_g: sample.methanogens_per_g,
             methanotrophs_per_g: sample.methanotrophs_per_g,
+            soc_stock_g_per_cm3: sample.soc_stock_g_per_cm3,
+            fe_abundance_g_per_cm3: sample.fe_abundance_g_per_cm3,
             replicate: sample.replicate,
             last_updated: sample.last_updated,
             created_on: sample.created_on,

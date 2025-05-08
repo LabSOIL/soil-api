@@ -34,6 +34,7 @@ pub struct Model {
     pub created_on: Option<NaiveDate>,
     pub weather: Option<String>,
     pub lithology: Option<String>,
+    pub slope: Option<String>,
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub coord_x: f64,

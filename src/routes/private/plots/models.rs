@@ -25,6 +25,7 @@ pub struct Plot {
     pub created_on: Option<NaiveDate>,
     pub weather: Option<String>,
     pub lithology: Option<String>,
+    pub slope: Option<String>,
     #[crudcrate(update_model = false, create_model = false, on_update = chrono::Utc::now(), on_create = chrono::Utc::now())]
     pub last_updated: DateTime<Utc>,
     pub image: Option<String>,
@@ -60,6 +61,7 @@ impl From<super::db::Model> for Plot {
             lithology: model.lithology,
             last_updated: model.last_updated,
             image: model.image,
+            slope: model.slope,
             coord_x: model.coord_x,
             coord_y: model.coord_y,
             coord_z: model.coord_z,
