@@ -100,7 +100,7 @@ impl CRUDResource for Sensor {
             )
             .await?
             .pop()
-            .unwrap()
+            .unwrap_or_default()
             .into_iter()
             .map(std::convert::Into::into)
             .collect();
