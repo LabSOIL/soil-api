@@ -75,6 +75,7 @@ pub struct Model {
     #[sea_orm(column_type = "Double", nullable)]
     pub methanotrophs_per_g: Option<f64>,
     pub replicate: i32,
+    pub soil_classification_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

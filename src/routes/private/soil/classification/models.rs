@@ -3,14 +3,12 @@ use crate::config::Config;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel};
-use sea_orm::{ActiveValue, FromQueryResult, entity::prelude::*};
+use sea_orm::{ActiveValue, Condition, Order, QueryOrder, QuerySelect, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(
-    ToSchema, Serialize, Deserialize, FromQueryResult, ToCreateModel, ToUpdateModel, Clone,
-)]
+#[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel, Clone)]
 #[active_model = "super::db::ActiveModel"]
 pub struct SoilClassification {
     #[crudcrate(update_model = false, create_model = false, on_create = Uuid::new_v4())]
@@ -32,6 +30,10 @@ pub struct SoilClassification {
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
+    #[crudcrate(update_model = false, create_model = false, default = None)]
+    pub area: Option<crate::routes::private::areas::db::Model>,
+    #[crudcrate(update_model = false, create_model = false, default = None)]
+    pub soil_type: Option<crate::routes::private::soil::types::db::Model>,
 }
 
 impl From<Model> for SoilClassification {
@@ -52,6 +54,8 @@ impl From<Model> for SoilClassification {
             coord_x: model.coord_x,
             coord_y: model.coord_y,
             coord_z: model.coord_z,
+            area: None,
+            soil_type: None,
         }
     }
 }
@@ -69,11 +73,68 @@ impl CRUDResource for SoilClassification {
     const RESOURCE_NAME_PLURAL: &'static str = "soil classifications";
     const RESOURCE_DESCRIPTION: &'static str = "A soil classification entry links a soil type, depth and area with Fe abundance to be linked to plot samples.";
 
+    async fn get_all(
+        db: &DatabaseConnection,
+        condition: Condition,
+        order_column: Self::ColumnType,
+        order_direction: Order,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<Self>, DbErr> {
+        let classifications = Self::EntityType::find()
+            .filter(condition)
+            .order_by(order_column, order_direction)
+            .offset(offset)
+            .limit(limit)
+            .all(db)
+            .await?;
+
+        let mut responses: Vec<SoilClassification> = vec![];
+        for classification in classifications {
+            let area = classification
+                .find_related(crate::routes::private::areas::db::Entity)
+                .one(db)
+                .await?;
+            let soil_type = classification
+                .find_related(crate::routes::private::soil::types::db::Entity)
+                .one(db)
+                .await?;
+            let mut obj: SoilClassification = classification.into();
+            obj.area = area;
+            obj.soil_type = soil_type;
+            responses.push(obj);
+        }
+
+        Ok(responses)
+    }
+
+    async fn get_one(db: &DatabaseConnection, id: Uuid) -> Result<Self, DbErr> {
+        let classification = Self::EntityType::find()
+            .filter(Self::ColumnType::Id.eq(id))
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound(format!(
+                "Soil classification with id {id} not found"
+            )))?;
+        let area = classification
+            .find_related(crate::routes::private::areas::db::Entity)
+            .one(db)
+            .await?;
+        let soil_type = classification
+            .find_related(crate::routes::private::soil::types::db::Entity)
+            .one(db)
+            .await?;
+        let mut obj: SoilClassification = classification.into();
+        obj.area = area;
+        obj.soil_type = soil_type;
+        Ok(obj)
+    }
     fn sortable_columns() -> Vec<(&'static str, Self::ColumnType)> {
         vec![
             ("id", Self::ColumnType::Id),
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
+            ("created_on", Self::ColumnType::CreatedOn),
         ]
     }
 

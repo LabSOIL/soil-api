@@ -7,9 +7,11 @@ use crate::routes::private::transects::db::Entity as Transect;
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Deserialize, Serialize, ToSchema)]
 #[sea_orm(table_name = "area")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
