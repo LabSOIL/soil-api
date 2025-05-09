@@ -18,11 +18,19 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "crate::routes::private::soil::profiles::db::Entity")]
     Soilprofile,
+    #[sea_orm(has_many = "crate::routes::private::soil::classification::db::Entity")]
+    SoilClassification,
 }
 
 impl Related<crate::routes::private::soil::profiles::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Soilprofile.def()
+    }
+}
+
+impl Related<crate::routes::private::soil::classification::db::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SoilClassification.def()
     }
 }
 

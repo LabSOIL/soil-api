@@ -1,6 +1,7 @@
 use crate::routes::private::plots::db::Entity as Plot;
 use crate::routes::private::projects::db::Entity as Project;
 use crate::routes::private::sensors::profile::db::Entity as SensorProfile;
+use crate::routes::private::soil::classification::db::Entity as SoilClassification;
 use crate::routes::private::soil::profiles::db::Entity as SoilProfile;
 use crate::routes::private::transects::db::Entity as Transect;
 
@@ -38,6 +39,8 @@ pub enum Relation {
     Soilprofile,
     #[sea_orm(has_many = "Transect")]
     Transect,
+    #[sea_orm(has_many = "SoilClassification")]
+    SoilClassification,
 }
 
 impl Related<Plot> for Entity {
@@ -67,6 +70,12 @@ impl Related<SoilProfile> for Entity {
 impl Related<Transect> for Entity {
     fn to() -> RelationDef {
         Relation::Transect.def()
+    }
+}
+
+impl Related<SoilClassification> for Entity {
+    fn to() -> RelationDef {
+        Relation::SoilClassification.def()
     }
 }
 

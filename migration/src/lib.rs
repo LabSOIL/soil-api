@@ -11,6 +11,7 @@ mod m20250304_110517_set_unique_transect_name_per_area;
 mod m20250307_124139_plot_remove_notnull_gradient;
 mod m20250507_101706_add_ispublic_flag_to_areas;
 mod m20250508_122136_add_additional_plot_sample_fields;
+mod m20250509_133815_add_soil_classification_table;
 
 pub struct Migrator;
 
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250307_124139_plot_remove_notnull_gradient::Migration),
             Box::new(m20250507_101706_add_ispublic_flag_to_areas::Migration),
             Box::new(m20250508_122136_add_additional_plot_sample_fields::Migration),
+            Box::new(m20250509_133815_add_soil_classification_table::Migration),
         ]
     }
 }
