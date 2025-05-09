@@ -55,8 +55,6 @@ pub struct PlotSample {
     pub archea_per_g: Option<f64>,
     pub methanogens_per_g: Option<f64>,
     pub methanotrophs_per_g: Option<f64>,
-    pub soc_stock_g_per_cm3: Option<f64>,
-    pub fe_abundance_g_per_cm3: Option<f64>,
     pub replicate: i32,
     #[crudcrate(update_model = false, create_model = false)]
     pub plot: Option<crate::routes::private::plots::models::Plot>,
@@ -99,8 +97,6 @@ impl From<crate::routes::private::samples::db::Model> for PlotSample {
             archea_per_g: sample.archea_per_g,
             methanogens_per_g: sample.methanogens_per_g,
             methanotrophs_per_g: sample.methanotrophs_per_g,
-            soc_stock_g_per_cm3: sample.soc_stock_g_per_cm3,
-            fe_abundance_g_per_cm3: sample.fe_abundance_g_per_cm3,
             replicate: sample.replicate,
             last_updated: sample.last_updated,
             created_on: sample.created_on,
@@ -269,39 +265,3 @@ impl CRUDResource for PlotSample {
         vec![("name", crate::routes::private::samples::db::Column::Name)]
     }
 }
-
-// #[pymethods]
-// impl PlotSample {
-//     #[new]
-//     fn new(id: String, name: String, upper_depth_cm: f64, lower_depth_cm: f64) -> Self {
-//         PlotSample {
-//             id,
-//             name,
-//             upper_depth_cm,
-//             lower_depth_cm,
-//             plot_id: Uuid::new_v4(),
-//             created_on: None,
-//             last_updated: Utc::now(),
-//             sample_weight: None,
-
-//         }
-//     }
-
-//     /// Convert the PlotSample into a Python dictionary
-//     fn to_dict(&self, py: Python) -> PyObject {
-//         let dict = PyDict::new(py);
-//         dict.set_item("id", &self.id).unwrap();
-//         dict.set_item("name", &self.name).unwrap();
-//         dict.set_item("upper_depth_cm", self.upper_depth_cm)
-//             .unwrap();
-//         dict.set_item("lower_depth_cm", self.lower_depth_cm)
-//             .unwrap();
-//         dict.into()
-//     }
-// }
-
-// #[pymodule]
-// fn my_api(py: Python, m: &PyModule) -> PyResult<()> {
-//     m.add_class::<PlotSample>()?;
-//     Ok(())
-// }

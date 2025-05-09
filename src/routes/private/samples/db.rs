@@ -74,10 +74,6 @@ pub struct Model {
     pub methanogens_per_g: Option<f64>,
     #[sea_orm(column_type = "Double", nullable)]
     pub methanotrophs_per_g: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub soc_stock_g_per_cm3: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub fe_abundance_g_per_cm3: Option<f64>,
     pub replicate: i32,
 }
 
