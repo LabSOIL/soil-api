@@ -13,6 +13,7 @@ mod m20250507_101706_add_ispublic_flag_to_areas;
 mod m20250508_122136_add_additional_plot_sample_fields;
 mod m20250509_133815_add_soil_classification_table;
 mod m20250509_152257_add_soil_classification_to_plot_sample;
+mod m20250512_075700_add_unique_constraint_to_soil_types;
 
 pub struct Migrator;
 
@@ -33,6 +34,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250508_122136_add_additional_plot_sample_fields::Migration),
             Box::new(m20250509_133815_add_soil_classification_table::Migration),
             Box::new(m20250509_152257_add_soil_classification_to_plot_sample::Migration),
+            Box::new(m20250512_075700_add_unique_constraint_to_soil_types::Migration),
         ]
     }
 }

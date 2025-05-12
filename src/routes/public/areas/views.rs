@@ -20,8 +20,9 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
         (status = 200, description = "List of all areas. Returns an empty list if no areas are found.", body = Vec<Area>),
         (status = 500, description = "Internal server error")
     ),
-    summary = "Get all areas",
-    description = "Returns a list of all available areas. If no public areas exist, an empty list is returned."
+    summary = "Get all areas (public)",
+    description = "Returns a list of all available areas with associated properties to display in the public UI. If no public areas exist, an empty list is returned.",
+    operation_id = "get_all_areas_public",
 )]
 pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoResponse {
     match AreaDB::Entity::find()
