@@ -52,7 +52,7 @@ pub struct Plot {
 }
 
 impl Plot {
-    fn aggregate_samples(&self) -> HashMap<i32, SampleReplicateAggregate> {
+    pub fn aggregate_samples(&self) -> HashMap<i32, SampleReplicateAggregate> {
         let mut sample_replicates: HashMap<i32, SampleReplicateAggregate> = HashMap::new();
 
         // Aggregate the samples by replicate

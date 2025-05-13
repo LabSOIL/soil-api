@@ -37,10 +37,12 @@ pub struct Plot {
     pub id: Uuid,
     pub name: String,
     pub geom: HashMap<i32, Geometry>,
+    pub aggregated_samples:
+        HashMap<i32, crate::routes::private::plots::models::SampleReplicateAggregate>,
 }
 
-impl From<crate::routes::private::plots::db::Model> for Plot {
-    fn from(model: crate::routes::private::plots::db::Model) -> Self {
+impl From<crate::routes::private::plots::models::Plot> for Plot {
+    fn from(model: crate::routes::private::plots::models::Plot) -> Self {
         let mut geom = HashMap::new();
 
         // Original SRID and coordinates
@@ -71,10 +73,11 @@ impl From<crate::routes::private::plots::db::Model> for Plot {
             },
         );
 
-        Self {
+        Plot {
             id: model.id,
             name: model.name,
             geom,
+            aggregated_samples: model.aggregated_samples,
         }
     }
 }

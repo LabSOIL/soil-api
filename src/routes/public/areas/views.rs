@@ -30,22 +30,59 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
         .all(&db)
         .await
     {
-        Ok(objs) => {
+        Ok(areas) => {
             // Add geometry for each area
-            let mut areas: Vec<Area> = Vec::new();
-            for obj in objs {
-                let plot = obj
+            let mut area_models: Vec<Area> = Vec::new();
+            for area in areas {
+                let plots = area
                     .find_related(PlotDB::Entity)
                     .all(&db)
                     .await
                     .unwrap_or_default();
-                let mut area: Area = obj.into();
-                area.plots = plot.into_iter().map(Plot::from).collect();
-                area.geom = get_convex_hull(&db, area.id).await;
-                areas.push(area);
-            }
+                let mut plot_models: Vec<Plot> = Vec::new();
+                for plot in plots {
+                    let samples = crate::routes::private::samples::db::Entity::find()
+                        .filter(crate::routes::private::samples::db::Column::PlotId.eq(plot.id))
+                        .all(&db)
+                        .await
+                        .unwrap();
+                    let mut sample_objs: Vec<crate::routes::private::samples::models::PlotSample> =
+                        Vec::new();
+                    // Get the soil classification for each sample
+                    for sample in samples {
+                        let soil_classification =
+                            crate::routes::private::soil::classification::db::Entity::find()
+                                .filter(
+                                    crate::routes::private::soil::classification::db::Column::Id
+                                        .eq(sample.soil_classification_id),
+                                )
+                                .one(&db)
+                                .await
+                                .unwrap();
 
-            Ok((StatusCode::OK, Json(areas)))
+                        let updated_sample =
+                            crate::routes::private::samples::models::PlotSample::from((
+                                sample.clone(),
+                                soil_classification,
+                            ));
+                        sample_objs.push(updated_sample);
+                    }
+                    // Use the private route Plot to get all the samples and aggregated samples
+                    let mut plot: crate::routes::private::plots::models::Plot =
+                        (plot, area.clone(), sample_objs, vec![], vec![]).into();
+                    plot.aggregated_samples = plot.aggregate_samples();
+
+                    plot_models.push(plot.into());
+                }
+
+                let mut area: Area = area.into();
+                area.plots = plot_models;
+                area.geom = get_convex_hull(&db, area.id).await;
+                area_models.push(area);
+            }
+            println!("Areas: {:?}", area_models.len());
+
+            Ok((StatusCode::OK, Json(area_models)))
         }
         Err(_) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
