@@ -81,6 +81,7 @@ impl CRUDResource for SoilClassification {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self>, DbErr> {
+        println!("Condition: {condition:?}");
         let classifications = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)
@@ -135,6 +136,15 @@ impl CRUDResource for SoilClassification {
             ("name", Self::ColumnType::Name),
             ("last_updated", Self::ColumnType::LastUpdated),
             ("created_on", Self::ColumnType::CreatedOn),
+            ("depth_upper_cm", Self::ColumnType::DepthUpperCm),
+            ("depth_lower_cm", Self::ColumnType::DepthLowerCm),
+            ("sample_date", Self::ColumnType::SampleDate),
+            (
+                "fe_abundance_g_per_cm3",
+                Self::ColumnType::FeAbundanceGPerCm3,
+            ),
+            ("area_id", Self::ColumnType::AreaId),
+            ("soil_type_id", Self::ColumnType::SoilTypeId),
         ]
     }
 
@@ -142,6 +152,17 @@ impl CRUDResource for SoilClassification {
         vec![
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
+            ("depth_upper_cm", Self::ColumnType::DepthUpperCm),
+            ("depth_lower_cm", Self::ColumnType::DepthLowerCm),
+            ("created_on", Self::ColumnType::CreatedOn),
+            ("last_updated", Self::ColumnType::LastUpdated),
+            ("sample_date", Self::ColumnType::SampleDate),
+            (
+                "fe_abundance_g_per_cm3",
+                Self::ColumnType::FeAbundanceGPerCm3,
+            ),
+            ("area_id", Self::ColumnType::AreaId),
+            ("soil_type_id", Self::ColumnType::SoilTypeId),
         ]
     }
 }

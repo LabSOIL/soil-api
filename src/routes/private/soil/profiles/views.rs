@@ -100,7 +100,7 @@ mod tests {
         let dummy_soiltype = crate::routes::private::soil::types::db::ActiveModel {
             id: Set(dummy_soil_type_id),
             name: Set("Dummy".to_owned()),
-            description: Set("Dummy soil type".to_owned()),
+            description: Set(None),
             last_updated: Set(Utc::now()),
             image: Set(None),
         };
@@ -114,7 +114,7 @@ mod tests {
         let dummy_project = crate::routes::private::projects::db::ActiveModel {
             id: Set(dummy_project_id),
             name: Set("Dummy Project".to_owned()),
-            description: Set(Some("Dummy project description".to_owned())),
+            description: Set(None),
             color: Set("#0000FF".to_owned()),
             last_updated: Set(Utc::now()),
         };

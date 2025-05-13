@@ -1,4 +1,6 @@
-use crate::routes::private::plots::db::Entity as Plot;
+use crate::routes::private::{
+    plots::db::Entity as Plot, soil::classification::db::Entity as SoilClassification,
+};
 use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -76,6 +78,7 @@ pub struct Model {
     pub methanotrophs_per_g: Option<f64>,
     pub replicate: i32,
     pub soil_classification_id: Option<Uuid>,
+    pub sampled_on: Option<NaiveDate>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -88,6 +91,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Plot,
+    #[sea_orm(has_one = "SoilClassification")]
+    SoilClassification,
 }
 
 impl Related<Plot> for Entity {
@@ -96,4 +101,9 @@ impl Related<Plot> for Entity {
     }
 }
 
+impl Related<SoilClassification> for Entity {
+    fn to() -> RelationDef {
+        Relation::SoilClassification.def()
+    }
+}
 impl ActiveModelBehavior for ActiveModel {}

@@ -1,4 +1,5 @@
 use crate::routes::private::areas::db::Entity as Area;
+use crate::routes::private::samples::db::Entity as PlotSample;
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use uuid::Uuid;
@@ -42,6 +43,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Soiltype,
+    #[sea_orm(has_many = "PlotSample")]
+    PlotSample,
 }
 
 impl Related<Area> for Entity {
@@ -53,6 +56,12 @@ impl Related<Area> for Entity {
 impl Related<crate::routes::private::soil::types::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Soiltype.def()
+    }
+}
+
+impl Related<PlotSample> for Entity {
+    fn to() -> RelationDef {
+        Relation::PlotSample.def()
     }
 }
 

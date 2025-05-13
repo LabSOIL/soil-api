@@ -18,7 +18,7 @@ pub struct SoilType {
     #[crudcrate(update_model = false, create_model = false, on_update = Utc::now(), on_create = Utc::now())]
     pub last_updated: DateTime<Utc>,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
     pub image: Option<String>,
 }
 

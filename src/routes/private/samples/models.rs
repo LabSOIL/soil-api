@@ -59,6 +59,75 @@ pub struct PlotSample {
     pub replicate: i32,
     #[crudcrate(update_model = false, create_model = false)]
     pub plot: Option<crate::routes::private::plots::models::Plot>,
+    pub sampled_on: Option<NaiveDate>,
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub fe_abundance_g_per_cm3: Option<f64>,
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub soc_stock_g_per_cm3: Option<f64>,
+}
+
+impl
+    From<(
+        crate::routes::private::samples::db::Model,
+        Option<crate::routes::private::soil::classification::db::Model>,
+    )> for PlotSample
+{
+    fn from(
+        (sample, soil_classification): (
+            crate::routes::private::samples::db::Model,
+            Option<crate::routes::private::soil::classification::db::Model>,
+        ),
+    ) -> Self {
+        let mut sample = PlotSample {
+            id: sample.id,
+            name: sample.name,
+            upper_depth_cm: sample.upper_depth_cm,
+            lower_depth_cm: sample.lower_depth_cm,
+            plot_id: sample.plot_id,
+            soil_classification_id: sample.soil_classification_id,
+            sample_weight: sample.sample_weight,
+            subsample_weight: sample.subsample_weight,
+            ph: sample.ph,
+            rh: sample.rh,
+            loi: sample.loi,
+            mfc: sample.mfc,
+            c: sample.c,
+            n: sample.n,
+            cn: sample.cn,
+            clay_percent: sample.clay_percent,
+            silt_percent: sample.silt_percent,
+            sand_percent: sample.sand_percent,
+            fe_ug_per_g: sample.fe_ug_per_g,
+            na_ug_per_g: sample.na_ug_per_g,
+            al_ug_per_g: sample.al_ug_per_g,
+            k_ug_per_g: sample.k_ug_per_g,
+            ca_ug_per_g: sample.ca_ug_per_g,
+            mg_ug_per_g: sample.mg_ug_per_g,
+            mn_ug_per_g: sample.mn_ug_per_g,
+            s_ug_per_g: sample.s_ug_per_g,
+            cl_ug_per_g: sample.cl_ug_per_g,
+            p_ug_per_g: sample.p_ug_per_g,
+            si_ug_per_g: sample.si_ug_per_g,
+            subsample_replica_weight: sample.subsample_replica_weight,
+            fungi_per_g: sample.fungi_per_g,
+            bacteria_per_g: sample.bacteria_per_g,
+            archea_per_g: sample.archea_per_g,
+            methanogens_per_g: sample.methanogens_per_g,
+            methanotrophs_per_g: sample.methanotrophs_per_g,
+            replicate: sample.replicate,
+            last_updated: sample.last_updated,
+            created_on: sample.created_on,
+            plot: None,
+            sampled_on: sample.sampled_on,
+            fe_abundance_g_per_cm3: None,
+            soc_stock_g_per_cm3: None,
+        };
+        sample.fe_abundance_g_per_cm3 =
+            soil_classification.and_then(|sc| sc.fe_abundance_g_per_cm3);
+        sample.soc_stock_g_per_cm3 = sample.calculate_soc_stock();
+
+        sample
+    }
 }
 
 impl From<crate::routes::private::samples::db::Model> for PlotSample {
@@ -103,6 +172,9 @@ impl From<crate::routes::private::samples::db::Model> for PlotSample {
             last_updated: sample.last_updated,
             created_on: sample.created_on,
             plot: None,
+            sampled_on: sample.sampled_on,
+            fe_abundance_g_per_cm3: None,
+            soc_stock_g_per_cm3: None,
         }
     }
 }
@@ -134,14 +206,16 @@ impl
         crate::routes::private::plots::db::Model,
         crate::routes::private::areas::db::Model,
         crate::routes::private::projects::db::Model,
+        Option<crate::routes::private::soil::classification::db::Model>,
     )> for PlotSample
 {
     fn from(
-        (sample, plot, area, project): (
+        (sample, plot, area, project, soil_classification): (
             crate::routes::private::samples::db::Model,
             crate::routes::private::plots::db::Model,
             crate::routes::private::areas::db::Model,
             crate::routes::private::projects::db::Model,
+            Option<crate::routes::private::soil::classification::db::Model>,
         ),
     ) -> Self {
         let mut sample: PlotSample = sample.into();
@@ -152,10 +226,24 @@ impl
         area.project = Some(project);
         plot.area = Some(area);
         sample.plot = Some(plot);
+        sample.fe_abundance_g_per_cm3 =
+            soil_classification.and_then(|sc| sc.fe_abundance_g_per_cm3);
+        sample.soc_stock_g_per_cm3 = sample.calculate_soc_stock();
         sample
     }
 }
 
+impl PlotSample {
+    fn calculate_soc_stock(&self) -> Option<f64> {
+        if self.fe_abundance_g_per_cm3.is_none() || self.c.is_none() {
+            return None;
+        }
+        let depth_m = self.lower_depth_cm - self.upper_depth_cm;
+        let soc_stock = (depth_m * self.fe_abundance_g_per_cm3.unwrap() * self.c.unwrap()) / 100.0;
+
+        Some(soc_stock)
+    }
+}
 #[async_trait]
 impl CRUDResource for PlotSample {
     type EntityType = crate::routes::private::samples::db::Entity;
@@ -205,7 +293,16 @@ impl CRUDResource for PlotSample {
                 .await?
                 .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
 
-            plot_samples.push((sample, plot, area, project).into());
+            let soil_classification =
+                crate::routes::private::soil::classification::db::Entity::find()
+                    .filter(
+                        crate::routes::private::soil::classification::db::Column::Id
+                            .eq(sample.soil_classification_id),
+                    )
+                    .one(db)
+                    .await?;
+
+            plot_samples.push((sample, plot, area, project, soil_classification).into());
         }
         Ok(plot_samples)
     }
@@ -237,7 +334,15 @@ impl CRUDResource for PlotSample {
                 .await?
                 .ok_or(DbErr::RecordNotFound("Project not found".into()))?;
 
-        Ok((sample, plot, area, project).into())
+        let soil_classification = crate::routes::private::soil::classification::db::Entity::find()
+            .filter(
+                crate::routes::private::soil::classification::db::Column::Id
+                    .eq(sample.soil_classification_id),
+            )
+            .one(db)
+            .await?;
+
+        Ok((sample, plot, area, project, soil_classification).into())
     }
 
     async fn update(

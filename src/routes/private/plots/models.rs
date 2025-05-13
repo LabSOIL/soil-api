@@ -8,6 +8,7 @@ use sea_orm::{
     EntityTrait, FromQueryResult, Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -22,6 +23,7 @@ pub struct Plot {
     pub vegetation_type: Option<String>,
     pub topography: Option<String>,
     pub aspect: Option<String>,
+    #[crudcrate(update_model = false, create_model = false, on_create = chrono::Local::now().naive_local())]
     pub created_on: Option<NaiveDate>,
     pub weather: Option<String>,
     pub lithology: Option<String>,
@@ -44,6 +46,56 @@ pub struct Plot {
     pub nearest_sensor_profiles: Vec<ClosestSensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]
     pub transects: Vec<crate::routes::private::transects::models::Transect>,
+    // Store the replicate aggregates in a hashmap where replicate ID is the key
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub aggregated_samples: HashMap<i32, SampleReplicateAggregate>,
+}
+
+impl Plot {
+    fn aggregate_samples(&self) -> HashMap<i32, SampleReplicateAggregate> {
+        let mut sample_replicates: HashMap<i32, SampleReplicateAggregate> = HashMap::new();
+
+        // Aggregate the samples by replicate
+        for sample in &self.samples {
+            let replicate = sample.replicate;
+            let depth: f64 = sample.lower_depth_cm - sample.upper_depth_cm;
+
+            let entry = sample_replicates
+                .entry(replicate)
+                .or_insert(SampleReplicateAggregate {
+                    sample_count: 0,
+                    mean_c: 0.0,
+                    total_depth: 0.0,
+                    soc_stock_to_total_depth_g_per_cm3: 0.0,
+                    soc_stock_megag_per_hectare: 0.0,
+                });
+
+            entry.sample_count += 1;
+            entry.mean_c += sample.c.unwrap_or(0.0);
+            entry.total_depth += depth;
+            entry.soc_stock_to_total_depth_g_per_cm3 += sample.soc_stock_g_per_cm3.unwrap_or(0.0);
+        }
+
+        // Finalize the calculations for each replicate
+        for aggregate in sample_replicates.values_mut() {
+            if aggregate.sample_count > 0 {
+                aggregate.mean_c /= f64::from(aggregate.sample_count);
+                aggregate.soc_stock_to_total_depth_g_per_cm3 /= f64::from(aggregate.sample_count);
+                aggregate.soc_stock_megag_per_hectare =
+                    aggregate.soc_stock_to_total_depth_g_per_cm3 * 100.0;
+            }
+        }
+
+        sample_replicates
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+pub struct SampleReplicateAggregate {
+    pub sample_count: i32,
+    pub mean_c: f64,
+    pub total_depth: f64,
+    pub soc_stock_to_total_depth_g_per_cm3: f64,
+    pub soc_stock_megag_per_hectare: f64,
 }
 
 impl From<super::db::Model> for Plot {
@@ -70,6 +122,7 @@ impl From<super::db::Model> for Plot {
             samples: vec![],
             nearest_sensor_profiles: vec![],
             transects: vec![],
+            aggregated_samples: HashMap::new(),
         }
     }
 }
@@ -77,25 +130,22 @@ impl
     From<(
         super::db::Model,
         crate::routes::private::areas::db::Model,
-        Vec<crate::routes::private::samples::db::Model>,
+        Vec<crate::routes::private::samples::models::PlotSample>,
         Vec<ClosestSensorProfile>,
         Vec<Transect>,
     )> for Plot
 {
     fn from(
-        (plot_db, area_db, samples_db, nearest_sensor_profiles, transects): (
+        (plot_db, area_db, samples, nearest_sensor_profiles, transects): (
             super::db::Model,
             crate::routes::private::areas::db::Model,
-            Vec<crate::routes::private::samples::db::Model>,
+            Vec<crate::routes::private::samples::models::PlotSample>,
             Vec<ClosestSensorProfile>,
             Vec<Transect>,
         ),
     ) -> Self {
         let area: crate::routes::private::areas::models::Area = area_db.into();
-        let samples: Vec<crate::routes::private::samples::models::PlotSample> = samples_db
-            .into_iter()
-            .map(crate::routes::private::samples::models::PlotSample::from)
-            .collect();
+
         let mut plot: Plot = plot_db.into();
 
         plot.area = Some(area);
@@ -152,8 +202,32 @@ impl CRUDResource for Plot {
                 .all(db)
                 .await
                 .unwrap();
+            let mut sample_objs = Vec::new();
+            // Get the soil classification for each sample
+            for sample in samples {
+                let soil_classification =
+                    crate::routes::private::soil::classification::db::Entity::find()
+                        .filter(
+                            crate::routes::private::soil::classification::db::Column::Id
+                                .eq(sample.soil_classification_id),
+                        )
+                        .one(db)
+                        .await
+                        .unwrap();
 
-            plots.push(Plot::from((obj, area, samples, vec![], vec![])));
+                let updated_sample = crate::routes::private::samples::models::PlotSample::from((
+                    sample.clone(),
+                    soil_classification,
+                ));
+                sample_objs.push(updated_sample);
+            }
+
+            let mut plot: Plot = (obj, area, sample_objs, vec![], vec![]).into();
+
+            // We need to aggregate the samples to get some plot specific values
+            plot.aggregated_samples = plot.aggregate_samples();
+
+            plots.push(plot);
         }
 
         Ok(plots)
@@ -179,6 +253,25 @@ impl CRUDResource for Plot {
             .all(db)
             .await
             .unwrap();
+        let mut sample_objs = Vec::new();
+        // Get the soil classification for each sample
+        for sample in samples {
+            let soil_classification =
+                crate::routes::private::soil::classification::db::Entity::find()
+                    .filter(
+                        crate::routes::private::soil::classification::db::Column::Id
+                            .eq(sample.soil_classification_id),
+                    )
+                    .one(db)
+                    .await
+                    .unwrap();
+
+            let updated_sample = crate::routes::private::samples::models::PlotSample::from((
+                sample.clone(),
+                soil_classification,
+            ));
+            sample_objs.push(updated_sample);
+        }
 
         // Search transect nodes table where the plot_id is the same as the id
         // then get the transect that it belongs to
@@ -205,11 +298,6 @@ impl CRUDResource for Plot {
 
         // Get "nearest_sensor_profiles" from the sensor profile table with a postgis spatial query
         // on the geom of the plot vs the geom of the sensor profile as nearest distance
-        // let mut nearest_sensor_profiles = vec![];
-
-        // Perform query
-        // select b.id, st_distance(a.geom, b.geom) from plot a, sensorprofile b where a.area_id = b.area_id and a.id = '0ced76e8-1526-4f28-93ad-9378926183af' order by st_distance(a.geom, b.geom);
-        println!("Plot ID: {:?}", id);
         let nearest_sensor_profiles: Vec<ClosestSensorProfile> =
             ClosestSensorProfile::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -224,14 +312,11 @@ impl CRUDResource for Plot {
             .all(db)
             .await
             .unwrap_or_else(|_| vec![]);
-        println!("Nearest Sensor Profiles: {:?}", nearest_sensor_profiles);
-        Ok(Plot::from((
-            plot,
-            area,
-            samples,
-            nearest_sensor_profiles,
-            transects,
-        )))
+
+        let mut plot = Plot::from((plot, area, sample_objs, nearest_sensor_profiles, transects));
+        plot.aggregated_samples = plot.aggregate_samples();
+
+        Ok(plot)
     }
 
     async fn update(

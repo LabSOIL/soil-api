@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[sea_orm(table_name = "soiltype")]
 pub struct Model {
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub last_updated: DateTime<Utc>,
