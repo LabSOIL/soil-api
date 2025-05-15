@@ -26,6 +26,9 @@ pub struct SensorProfileAssignment {
         on_create = chrono::Utc::now()
     )]
     pub last_updated: DateTime<Utc>,
+    pub depth_cm_sensor1: Option<i32>,
+    pub depth_cm_sensor2: Option<i32>,
+    pub depth_cm_sensor3: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
     pub sensor_profile: Option<crate::routes::private::sensors::profile::models::SensorProfile>,
     #[crudcrate(update_model = false, create_model = false)]
@@ -47,6 +50,9 @@ impl From<Model> for SensorProfileAssignment {
             sensor_profile: None,
             sensor: None,
             data: vec![],
+            depth_cm_sensor1: model.depth_cm_sensor1,
+            depth_cm_sensor2: model.depth_cm_sensor2,
+            depth_cm_sensor3: model.depth_cm_sensor3,
         }
     }
 }

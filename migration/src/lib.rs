@@ -16,6 +16,7 @@ mod m20250509_152257_add_soil_classification_to_plot_sample;
 mod m20250512_075700_add_unique_constraint_to_soil_types;
 mod m20250512_114505_remove_notnull_constraints_on_description;
 mod m20250512_123505_add_sample_date;
+mod m20250515_154112_allow_multiple_sensors_on_sample_soil_profile;
 
 pub struct Migrator;
 
@@ -39,6 +40,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250512_075700_add_unique_constraint_to_soil_types::Migration),
             Box::new(m20250512_114505_remove_notnull_constraints_on_description::Migration),
             Box::new(m20250512_123505_add_sample_date::Migration),
+            Box::new(m20250515_154112_allow_multiple_sensors_on_sample_soil_profile::Migration),
         ]
     }
 }
