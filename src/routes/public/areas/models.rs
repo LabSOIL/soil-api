@@ -1,5 +1,5 @@
+use crate::common::geometry::Geometry;
 use crate::routes::private::areas::db;
-use proj4rs::{Proj, transform};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -24,13 +24,6 @@ impl From<db::Model> for Area {
         }
     }
 }
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct Geometry {
-    pub srid: i32,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-}
 
 #[derive(ToSchema, Serialize, Deserialize)]
 pub struct Plot {
@@ -43,35 +36,13 @@ pub struct Plot {
 
 impl From<crate::routes::private::plots::models::Plot> for Plot {
     fn from(model: crate::routes::private::plots::models::Plot) -> Self {
-        let mut geom = HashMap::new();
-
-        // Original SRID and coordinates
-        geom.insert(
-            model.coord_srid,
-            Geometry {
-                srid: model.coord_srid,
-                x: model.coord_x,
-                y: model.coord_y,
-                z: model.coord_z,
-            },
-        );
-
-        // Transform coordinates to supply also WGS84 for mapping
-        let wgs84: Proj = Proj::from_epsg_code(4326).unwrap();
-        let model_srid: Proj = Proj::from_epsg_code(model.coord_srid.try_into().unwrap()).unwrap();
-        let mut coordinates = (model.coord_x, model.coord_y, model.coord_z);
-
-        transform::transform(&model_srid, &wgs84, &mut coordinates).unwrap();
-
-        geom.insert(
-            4326,
-            Geometry {
-                srid: 4326,
-                x: coordinates.0.to_degrees(),
-                y: coordinates.1.to_degrees(),
-                z: coordinates.2,
-            },
-        );
+        let geom = Geometry {
+            srid: model.coord_srid,
+            x: model.coord_x,
+            y: model.coord_y,
+            z: model.coord_z,
+        }
+        .to_hashmap(vec![4326]);
 
         Plot {
             id: model.id,

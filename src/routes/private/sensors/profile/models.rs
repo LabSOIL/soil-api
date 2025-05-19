@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::db::Model;
 use crate::config::Config;
 use async_trait::async_trait;
@@ -10,6 +12,12 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+#[derive(ToSchema, Serialize, Deserialize, Debug, Clone)]
+pub struct DepthAverageData {
+    pub time_utc: DateTime<Utc>,
+    pub y: f64,
+}
 
 #[derive(ToSchema, Serialize, Deserialize, ToCreateModel, ToUpdateModel, Clone)]
 #[active_model = "super::db::ActiveModel"]
@@ -35,8 +43,9 @@ pub struct SensorProfile {
     #[schema(no_recursion)]
     pub assignments:
         Vec<crate::routes::private::sensors::profile::assignment::models::SensorProfileAssignment>,
-    // #[crudcrate(non_db_attr = true, default = vec![])]
-    // pub data: Vec<crate::routes::private::sensors::data::models::SensorData>,
+    // This is a struct that carries the average data over an assigned depth, keyed by depth in cm
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub average_temperature_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
 }
 
 impl From<Model> for SensorProfile {
@@ -63,7 +72,7 @@ impl SensorProfile {
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
             assignments,
-            // data: vec![],
+            average_temperature_by_depth_cm: HashMap::new(),
         }
     }
 }
@@ -213,34 +222,34 @@ impl SensorProfile {
         // For each assignment, fetch aggregated sensor data and store it in the assignment’s data field
         for assignment in &mut sensor_profile.assignments {
             let sql = format!(
-                "WITH buckets AS (
+                    "WITH buckets AS (
+                        SELECT
+                            sensor_id,
+                            to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24))::timestamptz AS bucket,
+                            temperature_1,
+                            temperature_2,
+                            temperature_3,
+                            temperature_average,
+                            soil_moisture_count
+                        FROM sensordata
+                        WHERE sensor_id = '{}' AND time_utc BETWEEN '{}' AND '{}'
+                    )
                     SELECT
                         sensor_id,
-                        to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24))::timestamptz AS bucket,
-                        temperature_1,
-                        temperature_2,
-                        temperature_3,
-                        temperature_average,
-                        soil_moisture_count
-                    FROM sensordata
-                    WHERE sensor_id = '{}' AND time_utc BETWEEN '{}' AND '{}'
-                )
-                SELECT
-                    sensor_id,
-                    bucket AS time_utc,
-                    min(temperature_1) AS temperature_1,
-                    min(temperature_2) AS temperature_2,
-                    min(temperature_3) AS temperature_3,
-                    min(temperature_average) AS temperature_average,
-                    round(avg(soil_moisture_count))::integer AS soil_moisture_count,
-                    count(*) AS record_count
-                FROM buckets
-                GROUP BY sensor_id, bucket
-                ORDER BY bucket",
-                assignment.sensor_id,
-                assignment.date_from,
-                assignment.date_to
-            );
+                        bucket AS time_utc,
+                        min(temperature_1) AS temperature_1,
+                        min(temperature_2) AS temperature_2,
+                        min(temperature_3) AS temperature_3,
+                        min(temperature_average) AS temperature_average,
+                        round(avg(soil_moisture_count))::integer AS soil_moisture_count,
+                        count(*) AS record_count
+                    FROM buckets
+                    GROUP BY sensor_id, bucket
+                    ORDER BY bucket",
+                    assignment.sensor_id,
+                    assignment.date_from,
+                    assignment.date_to
+                );
             let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
             let rows = db.query_all(stmt).await?;
             let mut data_vec = Vec::new();
@@ -311,5 +320,98 @@ impl SensorProfile {
         all_data.sort_by_key(|d| d.time_utc);
         // sensor_profile.data = all_data;
         Ok(sensor_profile)
+    }
+
+    /// Load average (or raw) temperature by depth.
+    ///
+    /// - `window_hours = Some(h)`: bucket into h-hour windows and average.
+    /// - `window_hours = None`: return every datapoint (full resolution).
+    pub async fn load_average_temperature_by_depth_cm(
+        &self,
+        db: &DatabaseConnection,
+        window_hours: Option<i64>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        // 1. Run the appropriate SQL and collect rows
+        let rows = if let Some(hours) = window_hours {
+            // Bucketing SQL
+            let sql = r"
+                WITH depths AS (
+                    SELECT
+                    unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
+                    sensor_id, date_from, date_to
+                    FROM sensorprofile_assignment
+                    WHERE sensorprofile_id = $1
+                ),
+                buckets AS (
+                    SELECT
+                    d.depth_cm,
+                    to_timestamp(
+                        floor(extract(epoch from sd.time_utc) / ($2 * 3600))
+                        * ($2 * 3600)
+                    )::timestamptz AS time_utc,
+                    sd.temperature_average
+                    FROM depths d
+                    JOIN sensordata sd
+                    ON sd.sensor_id = d.sensor_id
+                    AND sd.time_utc BETWEEN d.date_from AND d.date_to
+                )
+                SELECT
+                depth_cm,
+                time_utc,
+                AVG(temperature_average) AS y
+                FROM buckets
+                GROUP BY depth_cm, time_utc
+                ORDER BY depth_cm, time_utc;
+            ";
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![
+                    self.id.into(), // $1 → profile ID
+                    hours.into(),   // $2 → window in hours
+                ],
+            );
+            db.query_all(stmt).await?
+        } else {
+            // Full-resolution SQL
+            let sql = r"
+                WITH depths AS (
+                    SELECT
+                    unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
+                    sensor_id, date_from, date_to
+                    FROM sensorprofile_assignment
+                    WHERE sensorprofile_id = $1
+                )
+                SELECT
+                d.depth_cm,
+                sd.time_utc     AS time_utc,
+                sd.temperature_average AS y
+                FROM depths d
+                JOIN sensordata sd
+                ON sd.sensor_id = d.sensor_id
+                AND sd.time_utc BETWEEN d.date_from AND d.date_to
+                ORDER BY d.depth_cm, sd.time_utc;
+            ";
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![self.id.into()], // $1 → profile ID
+            );
+            db.query_all(stmt).await?
+        };
+
+        // 2. Build HashMap<depth_cm, Vec<DepthAverageData>>
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let y: f64 = row.try_get("", "y")?;
+
+            map.entry(depth_cm)
+                .or_insert_with(Vec::new)
+                .push(DepthAverageData { time_utc, y });
+        }
+
+        Ok(map)
     }
 }
