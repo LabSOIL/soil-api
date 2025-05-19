@@ -1,5 +1,6 @@
 use crate::common::geometry::Geometry;
 use crate::routes::private::areas::db;
+use crate::routes::public::sensors::models::SensorProfileSimple;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ pub struct Area {
     pub name: String,
     pub geom: Option<Value>,
     pub plots: Vec<Plot>,
+    pub sensors: Vec<SensorProfileSimple>,
 }
 
 impl From<db::Model> for Area {
@@ -19,8 +21,9 @@ impl From<db::Model> for Area {
         Self {
             id: model.id,
             name: model.name,
-            geom: None,    // Set later in func
-            plots: vec![], // Set later in func
+            geom: None,      // Set later in func
+            plots: vec![],   // Set later in func
+            sensors: vec![], // Set later in func
         }
     }
 }

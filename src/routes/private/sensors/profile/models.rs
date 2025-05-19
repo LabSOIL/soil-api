@@ -408,7 +408,7 @@ impl SensorProfile {
             let y: f64 = row.try_get("", "y")?;
 
             map.entry(depth_cm)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(DepthAverageData { time_utc, y });
         }
 

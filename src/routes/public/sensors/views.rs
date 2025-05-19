@@ -41,7 +41,19 @@ pub async fn get_one(
 ) -> impl IntoResponse {
     match ProfileDB::Entity::find_by_id(id).one(&db).await {
         Ok(Some(profile)) => {
-            let profile: crate::routes::public::sensors::models::SensorProfile = profile.into();
+            // First convert to the private model to use the temp function
+            let profile: crate::routes::private::sensors::profile::models::SensorProfile =
+                profile.into();
+
+            // Get the average temperature by depth cm
+            let hour_average = Some(1);
+            let average_temperature = profile
+                .load_average_temperature_by_depth_cm(&db, hour_average)
+                .await;
+            // println!("Average temperature: {average_temperature:?}");
+
+            let mut profile: super::models::SensorProfile = profile.into();
+            profile.average_temperature_by_depth_cm = average_temperature.unwrap();
 
             Ok((StatusCode::OK, Json(profile)))
         }

@@ -39,6 +39,18 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
                     .all(&db)
                     .await
                     .unwrap_or_default();
+
+                let sensor_profiles: Vec<
+                    crate::routes::private::sensors::profile::models::SensorProfile,
+                > = area
+                    .find_related(crate::routes::private::sensors::profile::db::Entity)
+                    .all(&db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(std::convert::Into::into)
+                    .collect();
+
                 let mut plot_models: Vec<Plot> = Vec::new();
                 for plot in plots {
                     let samples = crate::routes::private::samples::db::Entity::find()
@@ -76,11 +88,14 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
                 }
 
                 let mut area: Area = area.into();
+                area.sensors = sensor_profiles
+                    .into_iter()
+                    .map(crate::routes::public::sensors::models::SensorProfileSimple::from)
+                    .collect();
                 area.plots = plot_models;
                 area.geom = get_convex_hull(&db, area.id).await;
                 area_models.push(area);
             }
-            println!("Areas: {:?}", area_models.len());
 
             Ok((StatusCode::OK, Json(area_models)))
         }
