@@ -47,11 +47,11 @@ impl Geometry {
                 continue;
             }
             // Transform coordinates to supply also WGS84 for mapping
-            let wgs84: Proj = Proj::from_epsg_code(4326).unwrap();
-            let model_srid: Proj = Proj::from_epsg_code(srid.try_into().unwrap()).unwrap();
+            let dst_srid: Proj = Proj::from_epsg_code(srid.try_into().unwrap()).unwrap();
+            let src_srid: Proj = Proj::from_epsg_code(self.srid.try_into().unwrap()).unwrap();
             let mut coordinates = (self.x, self.y, self.z);
 
-            transform::transform(&model_srid, &wgs84, &mut coordinates).unwrap();
+            transform::transform(&src_srid, &dst_srid, &mut coordinates).unwrap();
 
             geom.insert(
                 srid,
