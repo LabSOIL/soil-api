@@ -65,11 +65,15 @@ impl Plot {
                 .or_insert(SampleReplicateAggregate {
                     sample_count: 0,
                     mean_c: 0.0,
+                    ph: None,
                     total_depth: 0.0,
                     soc_stock_to_total_depth_g_per_cm3: 0.0,
                     soc_stock_megag_per_hectare: 0.0,
                 });
 
+            if sample.upper_depth_cm == 0.0 && sample.ph.is_some() {
+                entry.ph = sample.ph;
+            }
             entry.sample_count += 1;
             entry.mean_c += sample.c.unwrap_or(0.0);
             entry.total_depth += depth;
@@ -93,6 +97,7 @@ impl Plot {
 pub struct SampleReplicateAggregate {
     pub sample_count: i32,
     pub mean_c: f64,
+    pub ph: Option<f64>,
     pub total_depth: f64,
     pub soc_stock_to_total_depth_g_per_cm3: f64,
     pub soc_stock_megag_per_hectare: f64,
