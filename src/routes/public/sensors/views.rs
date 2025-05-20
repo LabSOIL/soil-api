@@ -48,9 +48,8 @@ pub async fn get_one(
             // Get the average temperature by depth cm
             let hour_average = Some(1);
             let average_temperature = profile
-                .load_average_temperature_by_depth_cm(&db, hour_average)
+                .load_average_temperature_series_by_depth_cm(&db, hour_average)
                 .await;
-            // println!("Average temperature: {average_temperature:?}");
 
             let mut profile: super::models::SensorProfile = profile.into();
             profile.average_temperature_by_depth_cm = average_temperature.unwrap();

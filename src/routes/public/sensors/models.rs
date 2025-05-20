@@ -62,6 +62,7 @@ pub struct SensorProfileSimple {
     pub id: Uuid,
     pub name: String,
     pub geom: HashMap<i32, Geometry>,
+    pub average_temperature: HashMap<i32, f64>,
 }
 
 impl From<crate::routes::private::sensors::profile::models::SensorProfile> for SensorProfileSimple {
@@ -77,6 +78,7 @@ impl From<crate::routes::private::sensors::profile::models::SensorProfile> for S
         Self {
             id: model.id,
             name: model.name,
+            average_temperature: HashMap::new(), // Set later in func
             geom,
         }
     }

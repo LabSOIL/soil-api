@@ -51,6 +51,20 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
                     .map(std::convert::Into::into)
                     .collect();
 
+                let mut simplified_sensor_profiles: Vec<
+                    crate::routes::public::sensors::models::SensorProfileSimple,
+                > = vec![];
+                for sensor_profile in &sensor_profiles {
+                    // Get the average temperature at 20cm depth
+                    let average_temperatures = sensor_profile
+                        .average_temperature_values_by_depth_cm(&db, None)
+                        .await;
+                    let mut sensor_profile: crate::routes::public::sensors::models::SensorProfileSimple =
+                        sensor_profile.clone().into();
+                    sensor_profile.average_temperature = average_temperatures.unwrap();
+                    simplified_sensor_profiles.push(sensor_profile);
+                }
+
                 let mut plot_models: Vec<Plot> = Vec::new();
                 for plot in plots {
                     let samples = crate::routes::private::samples::db::Entity::find()
@@ -88,10 +102,9 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
                 }
 
                 let mut area: Area = area.into();
-                area.sensors = sensor_profiles
-                    .into_iter()
-                    .map(crate::routes::public::sensors::models::SensorProfileSimple::from)
-                    .collect();
+
+                area.sensors = simplified_sensor_profiles;
+
                 area.plots = plot_models;
                 area.geom = get_convex_hull(&db, area.id).await;
                 area_models.push(area);
