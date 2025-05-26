@@ -13,9 +13,10 @@ pub struct Model {
     pub date_from: DateTime<Utc>,
     pub date_to: DateTime<Utc>,
     pub last_updated: DateTime<Utc>,
-    pub depth_cm_sensor1: Option<i32>,
-    pub depth_cm_sensor2: Option<i32>,
-    pub depth_cm_sensor3: Option<i32>,
+    pub depth_cm_sensor1: i32,
+    pub depth_cm_sensor2: i32,
+    pub depth_cm_sensor3: i32,
+    pub depth_cm_moisture: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

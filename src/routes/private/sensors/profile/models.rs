@@ -46,6 +46,8 @@ pub struct SensorProfile {
     // This is a struct that carries the average data over an assigned depth, keyed by depth in cm
     #[crudcrate(non_db_attr = true, default = HashMap::new())]
     pub average_temperature_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub average_moisture_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
 }
 
 impl From<Model> for SensorProfile {
@@ -73,6 +75,7 @@ impl SensorProfile {
             coord_srid: model.coord_srid,
             assignments,
             average_temperature_by_depth_cm: HashMap::new(),
+            average_moisture_by_depth_cm: HashMap::new(),
         }
     }
 }
@@ -416,6 +419,99 @@ impl SensorProfile {
         };
 
         // 2. Build HashMap<depth_cm, Vec<DepthAverageData>>
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let y: f64 = row.try_get("", "y")?;
+
+            map.entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y });
+        }
+
+        Ok(map)
+    }
+    /// Load average (or raw) soil-moisture by the `depth_cm_moisture` assignment.
+    ///
+    /// - `window_hours = Some(h)`: bucket into h-hour windows and average.
+    /// - `window_hours = None`: return every datapoint (full resolution).
+    pub async fn load_average_moisture_series_by_depth_cm(
+        &self,
+        db: &DatabaseConnection,
+        window_hours: Option<i64>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        // 1) Build the SQL
+        let rows = if let Some(hours) = window_hours {
+            let sql = r#"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1
+            ), buckets AS (
+                SELECT
+                    d.depth_cm,
+                    to_timestamp(
+                        floor(extract(epoch FROM sd.time_utc) / ($2 * 3600))
+                        * ($2 * 3600)
+                    )::timestamptz AS time_utc,
+                    sd.soil_moisture_count::double precision AS y
+                FROM depths AS d
+                JOIN sensordata AS sd
+                  ON sd.sensor_id = d.sensor_id
+                 AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            )
+            SELECT
+                depth_cm,
+                time_utc,
+                AVG(y) AS y
+            FROM buckets
+            GROUP BY depth_cm, time_utc
+            ORDER BY depth_cm, time_utc;
+        "#;
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![
+                    self.id.into(), // $1 → profile ID
+                    hours.into(),   // $2 → window in hours
+                ],
+            );
+            db.query_all(stmt).await?
+        } else {
+            let sql = r#"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1
+            )
+            SELECT
+                d.depth_cm,
+                sd.time_utc                     AS time_utc,
+                sd.soil_moisture_count::double precision AS y
+            FROM depths AS d
+            JOIN sensordata AS sd
+              ON sd.sensor_id = d.sensor_id
+             AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            ORDER BY d.depth_cm, sd.time_utc;
+        "#;
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![self.id.into()], // $1 → profile ID
+            );
+            db.query_all(stmt).await?
+        };
+
+        // 2) Turn the rows into a depth→[time,y] map
         let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
         for row in rows {
             let depth_cm: i32 = row.try_get("", "depth_cm")?;

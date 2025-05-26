@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // use super::models::{Area, Plot};
 // use crate::routes::private::areas::services::get_convex_hull;
 // use crate::routes::private::plots::db as PlotDB;
@@ -42,17 +44,23 @@ pub async fn get_one(
     match ProfileDB::Entity::find_by_id(id).one(&db).await {
         Ok(Some(profile)) => {
             // First convert to the private model to use the temp function
-            let profile: crate::routes::private::sensors::profile::models::SensorProfile =
+            let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
                 profile.into();
 
             // Get the average temperature by depth cm
             let hour_average = Some(1);
-            let average_temperature = profile
+            profile.average_temperature_by_depth_cm = profile
                 .load_average_temperature_series_by_depth_cm(&db, hour_average)
-                .await;
+                .await
+                .unwrap_or(HashMap::new());
 
-            let mut profile: super::models::SensorProfile = profile.into();
-            profile.average_temperature_by_depth_cm = average_temperature.unwrap();
+            // Get the average moisture by depth cm
+            profile.average_moisture_by_depth_cm = profile
+                .load_average_moisture_series_by_depth_cm(&db, hour_average)
+                .await
+                .unwrap_or(HashMap::new());
+
+            let profile: super::models::SensorProfile = profile.into();
 
             Ok((StatusCode::OK, Json(profile)))
         }

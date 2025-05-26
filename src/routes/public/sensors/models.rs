@@ -13,6 +13,7 @@ pub struct SensorProfile {
     pub name: String,
     pub geom: HashMap<i32, Geometry>,
     pub average_temperature_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    pub average_moisture_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
 }
 
 impl From<crate::routes::private::sensors::profile::models::SensorProfile> for SensorProfile {
@@ -31,7 +32,8 @@ impl From<crate::routes::private::sensors::profile::models::SensorProfile> for S
             area_id: model.area_id,
             name: model.name,
             geom,
-            average_temperature_by_depth_cm: HashMap::new(), // Set later in func
+            average_temperature_by_depth_cm: model.average_temperature_by_depth_cm,
+            average_moisture_by_depth_cm: model.average_moisture_by_depth_cm,
         }
     }
 }
@@ -53,6 +55,7 @@ impl From<db::Model> for SensorProfile {
             name: model.name,
             geom,
             average_temperature_by_depth_cm: HashMap::new(), // Set later in func
+            average_moisture_by_depth_cm: HashMap::new(),    // Set later in func
         }
     }
 }
