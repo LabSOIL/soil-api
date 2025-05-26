@@ -1,11 +1,21 @@
 use super::models::{Area, Plot};
 use crate::routes::private::areas::db as AreaDB;
-use crate::routes::private::areas::services::get_convex_hull;
 use crate::routes::private::plots::db as PlotDB;
+use crate::routes::private::samples::models::PlotSample;
+use crate::routes::private::{
+    samples::db as SampleDB, sensors::profile::db as SensorProfileDB,
+    soil::classification::db as SoilClassDB,
+};
+use crate::routes::public::sensors::models::SensorProfileSimple;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use sea_orm::DatabaseConnection;
-use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
+use sea_orm::Statement;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use std::collections::HashMap;
 use utoipa_axum::{router::OpenApiRouter, routes};
+use uuid::Uuid;
+
+use sea_orm::ConnectionTrait;
 
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
@@ -25,96 +35,213 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     operation_id = "get_all_areas_public",
 )]
 pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoResponse {
-    match AreaDB::Entity::find()
+    // 1) Load all public areas
+    let Ok(areas) = AreaDB::Entity::find()
         .filter(AreaDB::Column::IsPublic.eq(true))
         .all(&db)
         .await
-    {
-        Ok(areas) => {
-            // Add geometry for each area
-            let mut area_models: Vec<Area> = Vec::new();
-            for area in areas {
-                let plots = area
-                    .find_related(PlotDB::Entity)
-                    .all(&db)
-                    .await
-                    .unwrap_or_default();
-
-                let sensor_profiles: Vec<
-                    crate::routes::private::sensors::profile::models::SensorProfile,
-                > = area
-                    .find_related(crate::routes::private::sensors::profile::db::Entity)
-                    .all(&db)
-                    .await
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(std::convert::Into::into)
-                    .collect();
-
-                let mut simplified_sensor_profiles: Vec<
-                    crate::routes::public::sensors::models::SensorProfileSimple,
-                > = vec![];
-                for sensor_profile in &sensor_profiles {
-                    // Get the average temperature at 20cm depth
-                    let average_temperatures = sensor_profile
-                        .average_temperature_values_by_depth_cm(&db, None)
-                        .await;
-                    let mut sensor_profile: crate::routes::public::sensors::models::SensorProfileSimple =
-                        sensor_profile.clone().into();
-                    sensor_profile.average_temperature = average_temperatures.unwrap();
-                    simplified_sensor_profiles.push(sensor_profile);
-                }
-
-                let mut plot_models: Vec<Plot> = Vec::new();
-                for plot in plots {
-                    let samples = crate::routes::private::samples::db::Entity::find()
-                        .filter(crate::routes::private::samples::db::Column::PlotId.eq(plot.id))
-                        .all(&db)
-                        .await
-                        .unwrap();
-                    let mut sample_objs: Vec<crate::routes::private::samples::models::PlotSample> =
-                        Vec::new();
-                    // Get the soil classification for each sample
-                    for sample in samples {
-                        let soil_classification =
-                            crate::routes::private::soil::classification::db::Entity::find()
-                                .filter(
-                                    crate::routes::private::soil::classification::db::Column::Id
-                                        .eq(sample.soil_classification_id),
-                                )
-                                .one(&db)
-                                .await
-                                .unwrap();
-
-                        let updated_sample =
-                            crate::routes::private::samples::models::PlotSample::from((
-                                sample.clone(),
-                                soil_classification,
-                            ));
-                        sample_objs.push(updated_sample);
-                    }
-                    // Use the private route Plot to get all the samples and aggregated samples
-                    let mut plot: crate::routes::private::plots::models::Plot =
-                        (plot, area.clone(), sample_objs, vec![], vec![]).into();
-                    plot.aggregated_samples = plot.aggregate_samples();
-
-                    plot_models.push(plot.into());
-                }
-
-                let mut area: Area = area.into();
-
-                area.sensors = simplified_sensor_profiles;
-
-                area.plots = plot_models;
-                area.geom = get_convex_hull(&db, area.id).await;
-                area_models.push(area);
-            }
-
-            Ok((StatusCode::OK, Json(area_models)))
-        }
-        Err(_) => Err((
+    else {
+        return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json("Internal server error".to_string()),
-        )),
+        ));
+    };
+    let area_ids: Vec<Uuid> = areas.iter().map(|a| a.id).collect();
+
+    // 2) Bulk‐fetch plots
+    let plots = PlotDB::Entity::find()
+        .filter(PlotDB::Column::AreaId.is_in(area_ids.clone()))
+        .all(&db)
+        .await
+        .unwrap_or_default();
+    let mut plots_by_area: HashMap<Uuid, Vec<_>> = HashMap::new();
+    for plot in plots {
+        plots_by_area.entry(plot.area_id).or_default().push(plot);
     }
+
+    // 3) Bulk‐fetch samples
+    let plot_ids: Vec<Uuid> = plots_by_area.values().flatten().map(|p| p.id).collect();
+    let samples = SampleDB::Entity::find()
+        .filter(SampleDB::Column::PlotId.is_in(plot_ids.clone()))
+        .all(&db)
+        .await
+        .unwrap_or_default();
+
+    // 4) Bulk‐fetch soils and index by ID
+    let soil_ids: Vec<Uuid> = samples
+        .iter()
+        .filter_map(|s| s.soil_classification_id) // drop any None
+        .collect();
+    let soil_classes = SoilClassDB::Entity::find()
+        .filter(SoilClassDB::Column::Id.is_in(soil_ids.clone()))
+        .all(&db)
+        .await
+        .unwrap_or_default();
+    let soil_map: HashMap<Uuid, _> = soil_classes.into_iter().map(|c| (c.id, c)).collect();
+
+    // group samples by plot, enriching with soil
+    let mut samples_by_plot: HashMap<Uuid, Vec<PlotSample>> = HashMap::new();
+    for s in samples {
+        let Some(soil_id) = s.soil_classification_id else {
+            continue;
+        };
+        let Some(soil) = soil_map.get(&soil_id) else {
+            continue;
+        };
+        let enriched = PlotSample::from((s.clone(), Some(soil.clone())));
+        samples_by_plot
+            .entry(enriched.plot_id)
+            .or_default()
+            .push(enriched);
+    }
+
+    // 5) Bulk‐fetch sensor profiles
+    let sensor_models = SensorProfileDB::Entity::find()
+        .filter(SensorProfileDB::Column::AreaId.is_in(area_ids.clone()))
+        .all(&db)
+        .await
+        .unwrap_or_default();
+
+    // Compute all averages in one SQL pass
+    let avg_map = fetch_all_average_temps(&db, &sensor_models)
+        .await
+        .unwrap_or_default();
+
+    // Compute all convex hulls in one SQL pass
+    let hull_map = fetch_all_hulls(&db, &area_ids).await.unwrap_or_default();
+
+    // 6) Assemble result
+    let mut area_models = Vec::with_capacity(areas.len());
+    for area in areas {
+        let mut am: Area = area.clone().into();
+
+        // plots → attach samples, aggregate, convert
+        am.plots = plots_by_area
+            .remove(&area.id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|p| {
+                let mut private_plot = crate::routes::private::plots::models::Plot::from((
+                    p.clone(),
+                    area.clone(),
+                    samples_by_plot.remove(&p.id).unwrap_or_default(),
+                    vec![],
+                    vec![],
+                ));
+                private_plot.aggregated_samples = private_plot.aggregate_samples();
+                Plot::from(private_plot)
+            })
+            .collect();
+
+        // sensors → convert via SensorProfile then into Simple, inject avg
+        am.sensors = sensor_models
+            .iter()
+            .filter(|m| m.area_id == area.id)
+            .map(|m| {
+                // first convert the raw DB model into your full SensorProfile
+                let full: crate::routes::private::sensors::profile::models::SensorProfile =
+                    m.clone().into();
+                // then to the public-simple type
+                let mut simple: SensorProfileSimple = full.into();
+                simple.average_temperature = avg_map.get(&m.id).cloned().unwrap_or_default();
+                simple
+            })
+            .collect();
+
+        // convex hull
+        am.geom = hull_map.get(&area.id).cloned();
+
+        area_models.push(am);
+    }
+
+    Ok((StatusCode::OK, Json(area_models)))
+}
+
+/// Helper: fetch all averages in one SQL query
+async fn fetch_all_average_temps(
+    db: &DatabaseConnection,
+    profiles: &[crate::routes::private::sensors::profile::db::Model],
+) -> Result<HashMap<Uuid, HashMap<i32, f64>>, sea_orm::DbErr> {
+    let ids = profiles
+        .iter()
+        .map(|p| p.id.to_string())
+        .collect::<Vec<_>>()
+        .join("','");
+    let sql = format!(
+        r"
+        WITH depths AS (
+          SELECT
+            sensorprofile_id,
+            unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
+            sensor_id, date_from, date_to
+          FROM sensorprofile_assignment
+          WHERE sensorprofile_id IN ('{ids}')
+        ),
+        buckets AS (
+          SELECT
+            d.sensorprofile_id,
+            d.depth_cm,
+            sd.temperature_average
+          FROM depths d
+          JOIN sensordata sd
+            ON sd.sensor_id = d.sensor_id
+           AND sd.time_utc BETWEEN d.date_from AND d.date_to
+        )
+        SELECT
+          sensorprofile_id,
+          depth_cm,
+          AVG(temperature_average) AS avg_temp
+        FROM buckets
+        GROUP BY sensorprofile_id, depth_cm;
+    "
+    );
+    let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
+    let rows = db.query_all(stmt).await?;
+    let mut map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
+    for row in rows {
+        let pid: Uuid = row.try_get("", "sensorprofile_id")?;
+        let depth: i32 = row.try_get("", "depth_cm")?;
+        let avg: f64 = row.try_get("", "avg_temp")?;
+        map.entry(pid).or_default().insert(depth, avg);
+    }
+    Ok(map)
+}
+
+/// Helper: fetch one convex hull per area in one SQL query
+async fn fetch_all_hulls(
+    db: &DatabaseConnection,
+    area_ids: &[Uuid],
+) -> Result<HashMap<Uuid, serde_json::Value>, sea_orm::DbErr> {
+    let ids = area_ids
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("','");
+
+    // Build the convex hulls in EPSG:2056, then transform to 4326
+    let sql = format!(
+        r"
+        SELECT
+          area_id,
+          ST_AsGeoJSON(
+            ST_Transform(
+              ST_ConvexHull(ST_Collect(geom)),
+              4326
+            )
+          )::json AS hull
+        FROM plot
+        WHERE area_id IN ('{ids}')
+        GROUP BY area_id;
+        "
+    );
+
+    let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
+    let rows = db.query_all(stmt).await?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let aid: Uuid = row.try_get("", "area_id")?;
+        let hull: serde_json::Value = row.try_get("", "hull")?;
+        map.insert(aid, hull);
+    }
+    Ok(map)
 }

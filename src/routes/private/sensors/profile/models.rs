@@ -414,33 +414,4 @@ impl SensorProfile {
 
         Ok(map)
     }
-    /// Get the overall average temperature for all depths (in cm).
-    ///
-    /// - `window_hours`: if `Some(h)` you’ll get one datapoint per h-hour bucket,
-    ///   otherwise you’ll average every raw datapoint.
-    ///
-    /// Returns a `HashMap` where the key is the depth (in cm) and the value is the
-    /// average temperature at that depth.
-    pub async fn average_temperature_values_by_depth_cm(
-        &self,
-        db: &DatabaseConnection,
-        window_hours: Option<i64>,
-    ) -> Result<HashMap<i32, f64>, DbErr> {
-        // Load all the bucketed (or raw) averages, grouped by depth
-        let by_depth = self
-            .load_average_temperature_series_by_depth_cm(db, window_hours)
-            .await?;
-
-        // Calculate the average for each depth and store it in a HashMap
-        let mut averages = HashMap::new();
-        for (depth_cm, records) in by_depth {
-            if !records.is_empty() {
-                let sum: f64 = records.iter().map(|d| d.y).sum();
-                let avg = sum / (records.len() as f64);
-                averages.insert(depth_cm, avg);
-            }
-        }
-
-        Ok(averages)
-    }
 }
