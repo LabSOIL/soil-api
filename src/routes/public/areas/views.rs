@@ -212,26 +212,52 @@ async fn fetch_all_hulls(
     db: &DatabaseConnection,
     area_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, serde_json::Value>, sea_orm::DbErr> {
+    use sea_orm::ConnectionTrait;
+
     let ids = area_ids
         .iter()
-        .map(std::string::ToString::to_string)
+        .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("','");
 
-    // Build the convex hulls in EPSG:2056, then transform to 4326
+    // Union plots, soilprofiles and sensorprofiles (all in EPSG:2056),
+    // then buffer, convex‐hull, transform to 4326.
     let sql = format!(
         r"
         SELECT
-          area_id,
+          id AS area_id,
           ST_AsGeoJSON(
             ST_Transform(
-              ST_ConvexHull(ST_Collect(geom)),
+              ST_Buffer(
+                ST_ConvexHull(
+                  ST_Collect(geom)
+                ),
+                10
+              ),
               4326
             )
           )::json AS hull
-        FROM plot
-        WHERE area_id IN ('{ids}')
-        GROUP BY area_id;
+        FROM (
+          SELECT area.id, ST_Transform(plot.geom, 2056) AS geom
+          FROM area
+          JOIN plot ON plot.area_id = area.id
+          WHERE area.id IN ('{ids}')
+
+          UNION ALL
+
+          SELECT area.id, ST_Transform(soilprofile.geom, 2056) AS geom
+          FROM area
+          JOIN soilprofile ON soilprofile.area_id = area.id
+          WHERE area.id IN ('{ids}')
+
+          UNION ALL
+
+          SELECT area.id, ST_Transform(sensorprofile.geom, 2056) AS geom
+          FROM area
+          JOIN sensorprofile ON sensorprofile.area_id = area.id
+          WHERE area.id IN ('{ids}')
+        ) AS all_geoms
+        GROUP BY id;
         "
     );
 
