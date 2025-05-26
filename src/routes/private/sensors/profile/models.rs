@@ -335,34 +335,32 @@ impl SensorProfile {
         let rows = if let Some(hours) = window_hours {
             // Bucketing SQL
             let sql = r"
-                WITH depths AS (
-                    SELECT
-                    unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
-                    sensor_id, date_from, date_to
-                    FROM sensorprofile_assignment
-                    WHERE sensorprofile_id = $1
-                ),
-                buckets AS (
-                    SELECT
+            WITH depths AS (
+                SELECT u.depth_cm, u.idx, spa.sensor_id, spa.date_from, spa.date_to
+                FROM sensorprofile_assignment AS spa
+                CROSS JOIN LATERAL
+                    unnest(array[spa.depth_cm_sensor1, spa.depth_cm_sensor2, spa.depth_cm_sensor3]) WITH ORDINALITY
+                    AS u(depth_cm, idx)
+                WHERE spa.sensorprofile_id = $1
+            ), buckets AS (
+                SELECT
                     d.depth_cm,
                     to_timestamp(
-                        floor(extract(epoch from sd.time_utc) / ($2 * 3600))
+                        floor(extract(epoch FROM sd.time_utc) / ($2 * 3600))
                         * ($2 * 3600)
                     )::timestamptz AS time_utc,
-                    sd.temperature_average
-                    FROM depths d
-                    JOIN sensordata sd
-                    ON sd.sensor_id = d.sensor_id
-                    AND sd.time_utc BETWEEN d.date_from AND d.date_to
-                )
-                SELECT
-                depth_cm,
-                time_utc,
-                AVG(temperature_average) AS y
-                FROM buckets
-                GROUP BY depth_cm, time_utc
-                ORDER BY depth_cm, time_utc;
-            ";
+                    (array[sd.temperature_1, sd.temperature_2, sd.temperature_3])[d.idx] AS temp
+                FROM depths AS d
+                JOIN sensordata AS sd
+                  ON sd.sensor_id = d.sensor_id
+                 AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            )
+            SELECT depth_cm, time_utc, AVG(temp) AS y
+            FROM buckets
+            GROUP BY depth_cm, time_utc
+            ORDER BY depth_cm, time_utc;
+        ";
+
             let stmt = Statement::from_sql_and_values(
                 db.get_database_backend(),
                 sql,
@@ -375,23 +373,40 @@ impl SensorProfile {
         } else {
             // Full-resolution SQL
             let sql = r"
-                WITH depths AS (
-                    SELECT
-                    unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
-                    sensor_id, date_from, date_to
-                    FROM sensorprofile_assignment
-                    WHERE sensorprofile_id = $1
-                )
+            WITH depths AS (
                 SELECT
+                    u.depth_cm,
+                    u.idx,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                CROSS JOIN LATERAL
+                    unnest(
+                        array[
+                            spa.depth_cm_sensor1,
+                            spa.depth_cm_sensor2,
+                            spa.depth_cm_sensor3
+                        ]
+                    ) WITH ORDINALITY
+                    AS u(depth_cm, idx)
+                WHERE spa.sensorprofile_id = $1
+            )
+            SELECT
                 d.depth_cm,
-                sd.time_utc     AS time_utc,
-                sd.temperature_average AS y
-                FROM depths d
-                JOIN sensordata sd
-                ON sd.sensor_id = d.sensor_id
-                AND sd.time_utc BETWEEN d.date_from AND d.date_to
-                ORDER BY d.depth_cm, sd.time_utc;
-            ";
+                sd.time_utc       AS time_utc,
+                (array[
+                    sd.temperature_1,
+                    sd.temperature_2,
+                    sd.temperature_3
+                ])[d.idx]       AS y
+            FROM depths AS d
+            JOIN sensordata AS sd
+              ON sd.sensor_id = d.sensor_id
+             AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            ORDER BY d.depth_cm, sd.time_utc;
+        ";
+
             let stmt = Statement::from_sql_and_values(
                 db.get_database_backend(),
                 sql,
