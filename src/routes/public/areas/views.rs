@@ -70,7 +70,7 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
     // 4) Bulk‐fetch soils and index by ID
     let soil_ids: Vec<Uuid> = samples
         .iter()
-        .filter_map(|s| s.soil_classification_id) // drop any None
+        .filter_map(|s| s.soil_classification_id)
         .collect();
     let soil_classes = SoilClassDB::Entity::find()
         .filter(SoilClassDB::Column::Id.is_in(soil_ids.clone()))
@@ -102,8 +102,13 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
         .await
         .unwrap_or_default();
 
-    // Compute all averages in one SQL pass
-    let avg_map = fetch_all_average_temps(&db, &sensor_models)
+    // Compute all average temperatures in one SQL pass
+    let avg_temp_map = fetch_all_average_temps(&db, &sensor_models)
+        .await
+        .unwrap_or_default();
+
+    // Compute all average moisture counts in one SQL pass
+    let avg_moisture_map = fetch_all_average_moisture(&db, &sensor_models)
         .await
         .unwrap_or_default();
 
@@ -133,17 +138,16 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
             })
             .collect();
 
-        // sensors → convert via SensorProfile then into Simple, inject avg
+        // sensors → convert via SensorProfile then into Simple, inject averages
         am.sensors = sensor_models
             .iter()
             .filter(|m| m.area_id == area.id)
             .map(|m| {
-                // first convert the raw DB model into your full SensorProfile
                 let full: crate::routes::private::sensors::profile::models::SensorProfile =
                     m.clone().into();
-                // then to the public-simple type
                 let mut simple: SensorProfileSimple = full.into();
-                simple.average_temperature = avg_map.get(&m.id).cloned().unwrap_or_default();
+                simple.average_temperature = avg_temp_map.get(&m.id).cloned().unwrap_or_default();
+                simple.average_moisture = avg_moisture_map.get(&m.id).cloned().unwrap_or_default();
                 simple
             })
             .collect();
@@ -155,6 +159,86 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
     }
 
     Ok((StatusCode::OK, Json(area_models)))
+}
+
+/// Helper: fetch all average moisture counts in one SQL query
+async fn fetch_all_average_moisture(
+    db: &DatabaseConnection,
+    profiles: &[crate::routes::private::sensors::profile::db::Model],
+) -> Result<HashMap<Uuid, HashMap<i32, f64>>, sea_orm::DbErr> {
+    // 1) Debug: entry + profile count
+    eprintln!(
+        "🌀 GETTING AVERAGE MOISTURE for {} profiles",
+        profiles.len()
+    );
+
+    // 2) Build quoted ID list: 'id1','id2',...
+    let ids_csv = profiles
+        .iter()
+        .map(|p| format!("'{}'", p.id))
+        .collect::<Vec<_>>()
+        .join(",");
+    eprintln!("   IDs in IN-clause: [{}]", ids_csv);
+
+    // 3) SQL: select the one depth_cm_moisture per assignment row
+    let sql = format!(
+        r#"
+        WITH depths AS (
+          SELECT
+            sensorprofile_id,
+            depth_cm_moisture   AS depth_cm,
+            sensor_id,
+            date_from,
+            date_to
+          FROM sensorprofile_assignment
+          WHERE sensorprofile_id IN ({ids})
+        ), buckets AS (
+          SELECT
+            d.sensorprofile_id,
+            d.depth_cm,
+            sd.soil_moisture_count
+          FROM depths AS d
+          JOIN sensordata AS sd
+            ON sd.sensor_id = d.sensor_id
+           AND sd.time_utc >= d.date_from
+           AND sd.time_utc <= d.date_to
+        )
+        SELECT
+          sensorprofile_id,
+          depth_cm,
+          AVG(soil_moisture_count)::double precision AS avg_moisture
+        FROM buckets
+        GROUP BY sensorprofile_id, depth_cm
+        "#,
+        ids = ids_csv
+    );
+    eprintln!("   Executing SQL:\n{}", sql);
+
+    // 4) Run the query, logging any error
+    let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
+    let rows = match db.query_all(stmt).await {
+        Ok(r) => {
+            eprintln!("   Query succeeded, {} rows returned", r.len());
+            r
+        }
+        Err(err) => {
+            eprintln!("❌ Error running moisture query: {:?}", err);
+            return Err(err);
+        }
+    };
+
+    // 5) Build the nested map
+    let mut map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
+    for row in rows {
+        let pid: Uuid = row.try_get("", "sensorprofile_id")?;
+        let depth: i32 = row.try_get("", "depth_cm")?;
+        let avg: f64 = row.try_get("", "avg_moisture")?;
+        map.entry(pid).or_default().insert(depth, avg);
+    }
+
+    // 6) Final debug: always printed
+    eprintln!("✅ Average moisture map: {:#?}", map);
+    Ok(map)
 }
 
 /// Helper: fetch all averages in one SQL query

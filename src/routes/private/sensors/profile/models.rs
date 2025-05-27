@@ -45,9 +45,7 @@ pub struct SensorProfile {
         Vec<crate::routes::private::sensors::profile::assignment::models::SensorProfileAssignment>,
     // This is a struct that carries the average data over an assigned depth, keyed by depth in cm
     #[crudcrate(non_db_attr = true, default = HashMap::new())]
-    pub average_temperature_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
-    #[crudcrate(non_db_attr = true, default = HashMap::new())]
-    pub average_moisture_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    pub data_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
 }
 
 impl From<Model> for SensorProfile {
@@ -74,8 +72,7 @@ impl SensorProfile {
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
             assignments,
-            average_temperature_by_depth_cm: HashMap::new(),
-            average_moisture_by_depth_cm: HashMap::new(),
+            data_by_depth_cm: HashMap::new(),
         }
     }
 }
