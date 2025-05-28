@@ -1,4 +1,5 @@
 use super::models::{Area, Plot};
+use crate::config::Config;
 use crate::routes::private::areas::db as AreaDB;
 use crate::routes::private::plots::db as PlotDB;
 use crate::routes::private::samples::models::PlotSample;
@@ -8,6 +9,8 @@ use crate::routes::private::{
 };
 use crate::routes::public::sensors::models::SensorProfileSimple;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum_response_cache::CacheLayer;
+use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
 use sea_orm::Statement;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -15,11 +18,13 @@ use std::collections::HashMap;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use sea_orm::ConnectionTrait;
-
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_all_areas))
+        .layer(
+            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
+                .use_stale_on_failure(),
+        )
         .with_state(db.clone())
 }
 

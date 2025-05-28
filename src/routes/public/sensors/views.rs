@@ -1,8 +1,4 @@
-use std::collections::HashMap;
-
-// use super::models::{Area, Plot};
-// use crate::routes::private::areas::services::get_convex_hull;
-// use crate::routes::private::plots::db as PlotDB;
+use crate::config::Config;
 use crate::routes::private::sensors::profile::db as ProfileDB;
 use axum::{
     Json,
@@ -10,12 +6,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use axum_response_cache::CacheLayer;
 use sea_orm::DatabaseConnection;
-use sea_orm::{
-    // ColumnTrait,
-    EntityTrait,
-    //   ModelTrait, QueryFilter
-};
+use sea_orm::EntityTrait;
+use std::collections::HashMap;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
@@ -23,6 +17,10 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_one_temperature))
         .routes(routes!(get_one_moisture))
+        .layer(
+            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
+                .use_stale_on_failure(),
+        )
         .with_state(db.clone())
 }
 

@@ -11,12 +11,15 @@ pub struct Config {
     pub keycloak_realm: String,
     pub deployment: String,
     pub srid: i32,
+    pub public_cache_timeout_seconds: u64,
 }
 
 impl Config {
     pub fn from_env() -> Self {
         dotenv().ok(); // Load from .env file if available
         let srid: i32 = 2056;
+        let public_cache_timeout_seconds: u64 = 900; // 15 minutes
+
         let db_url = env::var("DB_URL").ok().or_else(|| {
             Some(format!(
                 "{}://{}:{}@{}:{}/{}",
@@ -38,6 +41,7 @@ impl Config {
                 .expect("DEPLOYMENT must be set, this can be local, dev, stage, or prod"),
             db_url,
             srid,
+            public_cache_timeout_seconds,
         }
     }
 }
