@@ -84,7 +84,6 @@ impl Plot {
         for aggregate in sample_replicates.values_mut() {
             if aggregate.sample_count > 0 {
                 aggregate.mean_c /= f64::from(aggregate.sample_count);
-                aggregate.soc_stock_to_total_depth_g_per_cm3 /= f64::from(aggregate.sample_count);
                 aggregate.soc_stock_megag_per_hectare =
                     aggregate.soc_stock_to_total_depth_g_per_cm3 * 100.0;
             }
