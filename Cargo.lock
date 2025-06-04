@@ -3219,7 +3219,7 @@ dependencies = [
 
 [[package]]
 name = "soil-api"
-version = "2.1.10"
+version = "2.1.11"
 dependencies = [
  "async-std",
  "async-trait",
