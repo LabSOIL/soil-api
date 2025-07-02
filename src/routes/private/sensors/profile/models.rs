@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::db::Model;
-use crate::config::Config;
+use crate::{config::Config, routes::private::sensors::profile::db::SoilTypeEnum};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
@@ -10,6 +10,7 @@ use sea_orm::{
     Order, QueryOrder, QuerySelect, Statement, entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
+use soil_sensor_toolbox::mc_calc_vwc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -39,6 +40,7 @@ pub struct SensorProfile {
     pub coord_z: Option<f64>,
     #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: Option<i32>,
+    pub soil_type_vwc: SoilTypeEnum,
     #[crudcrate(update_model = false, create_model = false)]
     #[schema(no_recursion)]
     pub assignments:
@@ -67,6 +69,7 @@ impl SensorProfile {
             name: model.name,
             description: model.description,
             area_id: model.area_id,
+            soil_type_vwc: model.soil_type_vwc,
             coord_x: model.coord_x,
             coord_y: model.coord_y,
             coord_z: model.coord_z,
@@ -438,9 +441,12 @@ impl SensorProfile {
         db: &DatabaseConnection,
         window_hours: Option<i64>,
     ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
-        // 1) Build the SQL
+        // Convert SoilTypeEnum to SoilType for VWC calculation
+        let soil_type: soil_sensor_toolbox::SoilType = self.soil_type_vwc.clone().into();
+
+        // 1) Build the SQL to include both moisture and temperature data
         let rows = if let Some(hours) = window_hours {
-            let sql = r#"
+            let sql = r"
             WITH depths AS (
                 SELECT
                     spa.depth_cm_moisture AS depth_cm,
@@ -456,7 +462,8 @@ impl SensorProfile {
                         floor(extract(epoch FROM sd.time_utc) / ($2 * 3600))
                         * ($2 * 3600)
                     )::timestamptz AS time_utc,
-                    sd.soil_moisture_count::double precision AS y
+                    sd.soil_moisture_count::double precision AS moisture_count,
+                    sd.temperature_1 AS temperature
                 FROM depths AS d
                 JOIN sensordata AS sd
                   ON sd.sensor_id = d.sensor_id
@@ -465,11 +472,12 @@ impl SensorProfile {
             SELECT
                 depth_cm,
                 time_utc,
-                AVG(y) AS y
+                AVG(moisture_count) AS moisture_count,
+                AVG(temperature) AS temperature
             FROM buckets
             GROUP BY depth_cm, time_utc
             ORDER BY depth_cm, time_utc;
-        "#;
+        ";
             let stmt = Statement::from_sql_and_values(
                 db.get_database_backend(),
                 sql,
@@ -480,7 +488,7 @@ impl SensorProfile {
             );
             db.query_all(stmt).await?
         } else {
-            let sql = r#"
+            let sql = r"
             WITH depths AS (
                 SELECT
                     spa.depth_cm_moisture AS depth_cm,
@@ -492,14 +500,15 @@ impl SensorProfile {
             )
             SELECT
                 d.depth_cm,
-                sd.time_utc                     AS time_utc,
-                sd.soil_moisture_count::double precision AS y
+                sd.time_utc AS time_utc,
+                sd.soil_moisture_count::double precision AS moisture_count,
+                sd.temperature_1 AS temperature
             FROM depths AS d
             JOIN sensordata AS sd
               ON sd.sensor_id = d.sensor_id
              AND sd.time_utc BETWEEN d.date_from AND d.date_to
             ORDER BY d.depth_cm, sd.time_utc;
-        "#;
+        ";
             let stmt = Statement::from_sql_and_values(
                 db.get_database_backend(),
                 sql,
@@ -508,16 +517,20 @@ impl SensorProfile {
             db.query_all(stmt).await?
         };
 
-        // 2) Turn the rows into a depth→[time,y] map
+        // 2) Process the rows and apply VWC calculation
         let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
         for row in rows {
             let depth_cm: i32 = row.try_get("", "depth_cm")?;
             let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
-            let y: f64 = row.try_get("", "y")?;
+            let moisture_count: f64 = row.try_get("", "moisture_count")?;
+            let temperature: f64 = row.try_get("", "temperature")?;
+
+            // Calculate VWC using the mc_calc_vwc function
+            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
 
             map.entry(depth_cm)
                 .or_default()
-                .push(DepthAverageData { time_utc, y });
+                .push(DepthAverageData { time_utc, y: vwc });
         }
 
         Ok(map)

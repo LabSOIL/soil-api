@@ -171,6 +171,9 @@ async fn fetch_all_average_moisture(
     db: &DatabaseConnection,
     profiles: &[crate::routes::private::sensors::profile::db::Model],
 ) -> Result<HashMap<Uuid, HashMap<i32, f64>>, sea_orm::DbErr> {
+    use soil_sensor_toolbox::mc_calc_vwc;
+    use std::collections::BTreeMap;
+
     // 1) Debug: entry + profile count
     eprintln!(
         "🌀 GETTING AVERAGE MOISTURE for {} profiles",
@@ -183,11 +186,17 @@ async fn fetch_all_average_moisture(
         .map(|p| format!("'{}'", p.id))
         .collect::<Vec<_>>()
         .join(",");
-    eprintln!("   IDs in IN-clause: [{}]", ids_csv);
+    eprintln!("   IDs in IN-clause: [{ids_csv}]",);
 
-    // 3) SQL: select the one depth_cm_moisture per assignment row
+    // 3) Create a map of profile_id -> soil_type for VWC calculations
+    let profile_soil_types: HashMap<Uuid, soil_sensor_toolbox::SoilType> = profiles
+        .iter()
+        .map(|p| (p.id, p.soil_type_vwc.clone().into()))
+        .collect();
+
+    // 4) SQL: fetch individual readings (not averaged) with temperature
     let sql = format!(
-        r#"
+        r"
         WITH depths AS (
           SELECT
             sensorprofile_id,
@@ -196,30 +205,23 @@ async fn fetch_all_average_moisture(
             date_from,
             date_to
           FROM sensorprofile_assignment
-          WHERE sensorprofile_id IN ({ids})
-        ), buckets AS (
-          SELECT
-            d.sensorprofile_id,
-            d.depth_cm,
-            sd.soil_moisture_count
-          FROM depths AS d
-          JOIN sensordata AS sd
-            ON sd.sensor_id = d.sensor_id
-           AND sd.time_utc >= d.date_from
-           AND sd.time_utc <= d.date_to
+          WHERE sensorprofile_id IN ({ids_csv})
         )
         SELECT
-          sensorprofile_id,
-          depth_cm,
-          AVG(soil_moisture_count)::double precision AS avg_moisture
-        FROM buckets
-        GROUP BY sensorprofile_id, depth_cm
-        "#,
-        ids = ids_csv
+          d.sensorprofile_id,
+          d.depth_cm,
+          sd.soil_moisture_count::double precision AS moisture_count,
+          sd.temperature_1 AS temperature
+        FROM depths AS d
+        JOIN sensordata AS sd
+          ON sd.sensor_id = d.sensor_id
+         AND sd.time_utc >= d.date_from
+         AND sd.time_utc <= d.date_to
+        ",
     );
-    eprintln!("   Executing SQL:\n{}", sql);
+    eprintln!("   Executing SQL:\n{sql}",);
 
-    // 4) Run the query, logging any error
+    // 5) Run the query, logging any error
     let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
     let rows = match db.query_all(stmt).await {
         Ok(r) => {
@@ -227,22 +229,51 @@ async fn fetch_all_average_moisture(
             r
         }
         Err(err) => {
-            eprintln!("❌ Error running moisture query: {:?}", err);
+            eprintln!("❌ Error running moisture query: {err:?}",);
             return Err(err);
         }
     };
 
-    // 5) Build the nested map
-    let mut map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
+    // 6) Process rows: apply VWC conversion then group and average
+    let mut grouped_vwc: HashMap<Uuid, BTreeMap<i32, Vec<f64>>> = HashMap::new();
+
     for row in rows {
         let pid: Uuid = row.try_get("", "sensorprofile_id")?;
         let depth: i32 = row.try_get("", "depth_cm")?;
-        let avg: f64 = row.try_get("", "avg_moisture")?;
-        map.entry(pid).or_default().insert(depth, avg);
+        let moisture_count: f64 = row.try_get("", "moisture_count")?;
+        let temperature: f64 = row.try_get("", "temperature")?;
+
+        // Get soil type for this profile
+        if let Some(&soil_type) = profile_soil_types.get(&pid) {
+            // Calculate VWC using mc_calc_vwc
+            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
+
+            // Group by profile_id and depth
+            grouped_vwc
+                .entry(pid)
+                .or_default()
+                .entry(depth)
+                .or_default()
+                .push(vwc);
+        }
     }
 
-    // 6) Final debug: always printed
-    eprintln!("✅ Average moisture map: {:#?}", map);
+    // 7) Calculate averages for each profile/depth combination
+    let mut map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
+    for (pid, depths) in grouped_vwc {
+        let mut depth_averages = HashMap::new();
+        for (depth, vwc_values) in depths {
+            if !vwc_values.is_empty() {
+                #[allow(clippy::cast_precision_loss)]
+                let average = vwc_values.iter().sum::<f64>() / vwc_values.len() as f64;
+                depth_averages.insert(depth, average);
+            }
+        }
+        map.insert(pid, depth_averages);
+    }
+
+    // 8) Final debug: always printed
+    eprintln!("✅ Average VWC map: {map:#?}",);
     Ok(map)
 }
 

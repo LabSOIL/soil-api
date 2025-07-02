@@ -1,8 +1,83 @@
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use soil_sensor_toolbox::SoilType;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, ToSchema,
+)]
+#[serde(rename_all = "lowercase")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "gradientchoices")]
+pub enum SoilTypeEnum {
+    #[sea_orm(string_value = "sand")]
+    Sand,
+    #[sea_orm(string_value = "loamysanda")]
+    LoamySandA,
+    #[sea_orm(string_value = "loamysandb")]
+    LoamySandB,
+    #[sea_orm(string_value = "sandyloama")]
+    SandyLoamA,
+    #[sea_orm(string_value = "sandyloamb")]
+    SandyLoamB,
+    #[sea_orm(string_value = "loam")]
+    Loam,
+    #[sea_orm(string_value = "siltloam")]
+    SiltLoam,
+    #[sea_orm(string_value = "peat")]
+    Peat,
+    #[sea_orm(string_value = "water")]
+    Water,
+    #[sea_orm(string_value = "universal")]
+    Universal,
+    #[sea_orm(string_value = "sandtms1")]
+    SandTMS1,
+    #[sea_orm(string_value = "loamysandtms1")]
+    LoamySandTMS1,
+    #[sea_orm(string_value = "siltloamtms1")]
+    SiltLoamTMS1,
+}
+
+impl From<SoilType> for SoilTypeEnum {
+    fn from(soil_type: SoilType) -> Self {
+        match soil_type {
+            SoilType::Sand => SoilTypeEnum::Sand,
+            SoilType::LoamySandA => SoilTypeEnum::LoamySandA,
+            SoilType::LoamySandB => SoilTypeEnum::LoamySandB,
+            SoilType::SandyLoamA => SoilTypeEnum::SandyLoamA,
+            SoilType::SandyLoamB => SoilTypeEnum::SandyLoamB,
+            SoilType::Loam => SoilTypeEnum::Loam,
+            SoilType::SiltLoam => SoilTypeEnum::SiltLoam,
+            SoilType::Peat => SoilTypeEnum::Peat,
+            SoilType::Water => SoilTypeEnum::Water,
+            SoilType::Universal => SoilTypeEnum::Universal,
+            SoilType::SandTMS1 => SoilTypeEnum::SandTMS1,
+            SoilType::LoamySandTMS1 => SoilTypeEnum::LoamySandTMS1,
+            SoilType::SiltLoamTMS1 => SoilTypeEnum::SiltLoamTMS1,
+        }
+    }
+}
+
+impl From<SoilTypeEnum> for SoilType {
+    fn from(soil_type_enum: SoilTypeEnum) -> Self {
+        match soil_type_enum {
+            SoilTypeEnum::Sand => SoilType::Sand,
+            SoilTypeEnum::LoamySandA => SoilType::LoamySandA,
+            SoilTypeEnum::LoamySandB => SoilType::LoamySandB,
+            SoilTypeEnum::SandyLoamA => SoilType::SandyLoamA,
+            SoilTypeEnum::SandyLoamB => SoilType::SandyLoamB,
+            SoilTypeEnum::Loam => SoilType::Loam,
+            SoilTypeEnum::SiltLoam => SoilType::SiltLoam,
+            SoilTypeEnum::Peat => SoilType::Peat,
+            SoilTypeEnum::Water => SoilType::Water,
+            SoilTypeEnum::Universal => SoilType::Universal,
+            SoilTypeEnum::SandTMS1 => SoilType::SandTMS1,
+            SoilTypeEnum::LoamySandTMS1 => SoilType::LoamySandTMS1,
+            SoilTypeEnum::SiltLoamTMS1 => SoilType::SiltLoamTMS1,
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "sensorprofile")]
 pub struct Model {
@@ -11,6 +86,7 @@ pub struct Model {
     pub name: String,
     pub description: Option<String>,
     pub area_id: Uuid,
+    pub soil_type_vwc: SoilTypeEnum,
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
