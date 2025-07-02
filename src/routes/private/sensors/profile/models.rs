@@ -45,7 +45,16 @@ pub struct SensorProfile {
     #[schema(no_recursion)]
     pub assignments:
         Vec<crate::routes::private::sensors::profile::assignment::models::SensorProfileAssignment>,
-    // This is a struct that carries the average data over an assigned depth, keyed by depth in cm
+    // Temperature data grouped by depth in cm
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub temperature_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    // VWC moisture data grouped by depth in cm
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub moisture_vwc_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    // Raw moisture counts grouped by depth in cm (for reference)
+    #[crudcrate(non_db_attr = true, default = HashMap::new())]
+    pub moisture_raw_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    // Legacy field for backward compatibility
     #[crudcrate(non_db_attr = true, default = HashMap::new())]
     pub data_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
 }
@@ -75,6 +84,9 @@ impl SensorProfile {
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
             assignments,
+            temperature_by_depth_cm: HashMap::new(),
+            moisture_vwc_by_depth_cm: HashMap::new(),
+            moisture_raw_by_depth_cm: HashMap::new(),
             data_by_depth_cm: HashMap::new(),
         }
     }
@@ -222,71 +234,23 @@ impl SensorProfile {
         id: Uuid,
     ) -> Result<SensorProfile, DbErr> {
         let mut sensor_profile = Self::get_one(db, id).await?;
-        // For each assignment, fetch aggregated sensor data and store it in the assignment’s data field
-        for assignment in &mut sensor_profile.assignments {
-            let sql = format!(
-                    "WITH buckets AS (
-                        SELECT
-                            sensor_id,
-                            to_timestamp(floor(extract('epoch' from time_utc) / (60*60*24)) * (60*60*24))::timestamptz AS bucket,
-                            temperature_1,
-                            temperature_2,
-                            temperature_3,
-                            temperature_average,
-                            soil_moisture_count
-                        FROM sensordata
-                        WHERE sensor_id = '{}' AND time_utc BETWEEN '{}' AND '{}'
-                    )
-                    SELECT
-                        sensor_id,
-                        bucket AS time_utc,
-                        min(temperature_1) AS temperature_1,
-                        min(temperature_2) AS temperature_2,
-                        min(temperature_3) AS temperature_3,
-                        min(temperature_average) AS temperature_average,
-                        round(avg(soil_moisture_count))::integer AS soil_moisture_count,
-                        count(*) AS record_count
-                    FROM buckets
-                    GROUP BY sensor_id, bucket
-                    ORDER BY bucket",
-                    assignment.sensor_id,
-                    assignment.date_from,
-                    assignment.date_to
-                );
-            let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
-            let rows = db.query_all(stmt).await?;
-            let mut data_vec = Vec::new();
-            for row in rows {
-                let sensor_id: Uuid = row.try_get("", "sensor_id")?;
-                let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
-                let temperature_1: f64 = row.try_get("", "temperature_1")?;
-                let temperature_2: f64 = row.try_get("", "temperature_2")?;
-                let temperature_3: f64 = row.try_get("", "temperature_3")?;
-                let temperature_average: f64 = row.try_get("", "temperature_average")?;
-                let soil_moisture_count: i32 = row.try_get("", "soil_moisture_count")?;
-                let sensor_data = crate::routes::private::sensors::data::models::SensorData {
-                    instrument_seq: 0,
-                    time_utc,
-                    temperature_1,
-                    temperature_2,
-                    temperature_3,
-                    temperature_average,
-                    soil_moisture_count,
-                    shake: 0,
-                    error_flat: 0,
-                    sensor_id,
-                };
-                data_vec.push(sensor_data);
-            }
-            assignment.data = data_vec;
-        }
-        // Also merge all assignments’ data into sensor_profile.data (if needed for overall view)
-        let mut all_data = Vec::new();
-        for assignment in &sensor_profile.assignments {
-            all_data.extend(assignment.data.clone());
-        }
-        all_data.sort_by_key(|d| d.time_utc);
-        // sensor_profile.data = all_data;
+
+        // Load temperature data grouped by depth
+        let temperature_data = sensor_profile
+            .load_average_temperature_series_by_depth_cm(db, Some(24)) // 24-hour windows for low resolution
+            .await?;
+
+        // Load moisture data (both VWC and raw) grouped by depth
+        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
+            .load_moisture_data_by_depth_cm(db, Some(24))
+            .await?;
+
+        // Populate all the data fields
+        sensor_profile.temperature_by_depth_cm = temperature_data;
+        sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+        sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
+        sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone(); // Legacy compatibility
+
         Ok(sensor_profile)
     }
 
@@ -295,34 +259,167 @@ impl SensorProfile {
         id: Uuid,
     ) -> Result<SensorProfile, DbErr> {
         let mut sensor_profile = Self::get_one(db, id).await?;
-        for assignment in &mut sensor_profile.assignments {
-            let sensor_data_records = crate::routes::private::sensors::data::db::Entity::find()
-                .filter(
-                    crate::routes::private::sensors::data::db::Column::SensorId
-                        .eq(assignment.sensor_id),
-                )
-                .filter(
-                    crate::routes::private::sensors::data::db::Column::TimeUtc
-                        .between(assignment.date_from, assignment.date_to),
-                )
-                .order_by_asc(crate::routes::private::sensors::data::db::Column::TimeUtc)
-                .all(db)
-                .await?;
-            let mut data_vec = Vec::new();
-            for record in sensor_data_records {
-                let sensor_data: crate::routes::private::sensors::data::models::SensorData =
-                    record.into();
-                data_vec.push(sensor_data);
-            }
-            assignment.data = data_vec;
-        }
-        let mut all_data = Vec::new();
-        for assignment in &sensor_profile.assignments {
-            all_data.extend(assignment.data.clone());
-        }
-        all_data.sort_by_key(|d| d.time_utc);
-        // sensor_profile.data = all_data;
+
+        // Load temperature data grouped by depth (full resolution)
+        let temperature_data = sensor_profile
+            .load_average_temperature_series_by_depth_cm(db, None) // No windowing for high resolution
+            .await?;
+
+        // Load moisture data (both VWC and raw) grouped by depth (full resolution)
+        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
+            .load_moisture_data_by_depth_cm(db, None)
+            .await?;
+
+        // Populate all the data fields
+        sensor_profile.temperature_by_depth_cm = temperature_data;
+        sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+        sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
+        sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone(); // Legacy compatibility
+
         Ok(sensor_profile)
+    }
+
+    /// Load both VWC and raw moisture data grouped by depth
+    pub async fn load_moisture_data_by_depth_cm(
+        &self,
+        db: &DatabaseConnection,
+        window_hours: Option<i64>,
+    ) -> Result<
+        (
+            HashMap<i32, Vec<DepthAverageData>>,
+            HashMap<i32, Vec<DepthAverageData>>,
+        ),
+        DbErr,
+    > {
+        // Convert SoilTypeEnum to SoilType for VWC calculation
+        let soil_type: soil_sensor_toolbox::SoilType = self.soil_type_vwc.clone().into();
+
+        // Build the SQL to include both moisture and temperature data
+        let rows = if let Some(hours) = window_hours {
+            let sql = r"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1 AND spa.depth_cm_moisture IS NOT NULL
+            ), buckets AS (
+                SELECT
+                    d.depth_cm,
+                    to_timestamp(
+                        floor(extract(epoch FROM sd.time_utc) / ($2 * 3600))
+                        * ($2 * 3600)
+                    )::timestamptz AS time_utc,
+                    sd.soil_moisture_count::double precision AS moisture_count,
+                    sd.temperature_1 AS temperature
+                FROM depths AS d
+                JOIN sensordata AS sd
+                  ON sd.sensor_id = d.sensor_id
+                 AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            )
+            SELECT
+                depth_cm,
+                time_utc,
+                AVG(moisture_count) AS moisture_count,
+                AVG(temperature) AS temperature
+            FROM buckets
+            GROUP BY depth_cm, time_utc
+            ORDER BY depth_cm, time_utc;
+        ";
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![
+                    self.id.into(), // $1 → profile ID
+                    hours.into(),   // $2 → window in hours
+                ],
+            );
+            db.query_all(stmt).await?
+        } else {
+            let sql = r"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1 AND spa.depth_cm_moisture IS NOT NULL
+            )
+            SELECT
+                d.depth_cm,
+                sd.time_utc AS time_utc,
+                sd.soil_moisture_count::double precision AS moisture_count,
+                sd.temperature_1 AS temperature
+            FROM depths AS d
+            JOIN sensordata AS sd
+              ON sd.sensor_id = d.sensor_id
+             AND sd.time_utc BETWEEN d.date_from AND d.date_to
+            ORDER BY d.depth_cm, sd.time_utc;
+        ";
+            let stmt = Statement::from_sql_and_values(
+                db.get_database_backend(),
+                sql,
+                vec![self.id.into()], // $1 → profile ID
+            );
+            db.query_all(stmt).await?
+        };
+
+        // Process the rows and create both VWC and raw moisture data
+        let mut vwc_map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        let mut raw_map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let moisture_count: f64 = row.try_get("", "moisture_count")?;
+            let temperature: f64 = row.try_get("", "temperature")?;
+
+            // Calculate VWC using the mc_calc_vwc function
+            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
+
+            // Add VWC data
+            vwc_map
+                .entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y: vwc });
+
+            // Add raw moisture count data
+            raw_map.entry(depth_cm).or_default().push(DepthAverageData {
+                time_utc,
+                y: moisture_count,
+            });
+        }
+
+        Ok((vwc_map, raw_map))
+    }
+
+    /// Helper method to get VWC (moisture) data by depth for API consumers
+    /// This provides easy access to the converted moisture values
+    #[allow(dead_code)]
+    pub async fn get_moisture_data_by_depth_cm(
+        &self,
+        db: &DatabaseConnection,
+        window_hours: Option<i64>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        let (vwc_data, _raw_data) = self
+            .load_moisture_data_by_depth_cm(db, window_hours)
+            .await?;
+        Ok(vwc_data)
+    }
+
+    /// Helper method to get temperature data by depth for API consumers  
+    /// This provides easy access to the grouped temperature values
+    #[allow(dead_code)]
+    pub async fn get_temperature_data_by_depth_cm(
+        &self,
+        db: &DatabaseConnection,
+        window_hours: Option<i64>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        self.load_average_temperature_series_by_depth_cm(db, window_hours)
+            .await
     }
 
     /// Load average (or raw) temperature by depth.
@@ -432,6 +529,7 @@ impl SensorProfile {
 
         Ok(map)
     }
+
     /// Load average (or raw) soil-moisture by the `depth_cm_moisture` assignment.
     ///
     /// - `window_hours = Some(h)`: bucket into h-hour windows and average.
@@ -441,98 +539,9 @@ impl SensorProfile {
         db: &DatabaseConnection,
         window_hours: Option<i64>,
     ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
-        // Convert SoilTypeEnum to SoilType for VWC calculation
-        let soil_type: soil_sensor_toolbox::SoilType = self.soil_type_vwc.clone().into();
-
-        // 1) Build the SQL to include both moisture and temperature data
-        let rows = if let Some(hours) = window_hours {
-            let sql = r"
-            WITH depths AS (
-                SELECT
-                    spa.depth_cm_moisture AS depth_cm,
-                    spa.sensor_id,
-                    spa.date_from,
-                    spa.date_to
-                FROM sensorprofile_assignment AS spa
-                WHERE spa.sensorprofile_id = $1
-            ), buckets AS (
-                SELECT
-                    d.depth_cm,
-                    to_timestamp(
-                        floor(extract(epoch FROM sd.time_utc) / ($2 * 3600))
-                        * ($2 * 3600)
-                    )::timestamptz AS time_utc,
-                    sd.soil_moisture_count::double precision AS moisture_count,
-                    sd.temperature_1 AS temperature
-                FROM depths AS d
-                JOIN sensordata AS sd
-                  ON sd.sensor_id = d.sensor_id
-                 AND sd.time_utc BETWEEN d.date_from AND d.date_to
-            )
-            SELECT
-                depth_cm,
-                time_utc,
-                AVG(moisture_count) AS moisture_count,
-                AVG(temperature) AS temperature
-            FROM buckets
-            GROUP BY depth_cm, time_utc
-            ORDER BY depth_cm, time_utc;
-        ";
-            let stmt = Statement::from_sql_and_values(
-                db.get_database_backend(),
-                sql,
-                vec![
-                    self.id.into(), // $1 → profile ID
-                    hours.into(),   // $2 → window in hours
-                ],
-            );
-            db.query_all(stmt).await?
-        } else {
-            let sql = r"
-            WITH depths AS (
-                SELECT
-                    spa.depth_cm_moisture AS depth_cm,
-                    spa.sensor_id,
-                    spa.date_from,
-                    spa.date_to
-                FROM sensorprofile_assignment AS spa
-                WHERE spa.sensorprofile_id = $1
-            )
-            SELECT
-                d.depth_cm,
-                sd.time_utc AS time_utc,
-                sd.soil_moisture_count::double precision AS moisture_count,
-                sd.temperature_1 AS temperature
-            FROM depths AS d
-            JOIN sensordata AS sd
-              ON sd.sensor_id = d.sensor_id
-             AND sd.time_utc BETWEEN d.date_from AND d.date_to
-            ORDER BY d.depth_cm, sd.time_utc;
-        ";
-            let stmt = Statement::from_sql_and_values(
-                db.get_database_backend(),
-                sql,
-                vec![self.id.into()], // $1 → profile ID
-            );
-            db.query_all(stmt).await?
-        };
-
-        // 2) Process the rows and apply VWC calculation
-        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
-        for row in rows {
-            let depth_cm: i32 = row.try_get("", "depth_cm")?;
-            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
-            let moisture_count: f64 = row.try_get("", "moisture_count")?;
-            let temperature: f64 = row.try_get("", "temperature")?;
-
-            // Calculate VWC using the mc_calc_vwc function
-            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
-
-            map.entry(depth_cm)
-                .or_default()
-                .push(DepthAverageData { time_utc, y: vwc });
-        }
-
-        Ok(map)
+        let (vwc_data, _raw_data) = self
+            .load_moisture_data_by_depth_cm(db, window_hours)
+            .await?;
+        Ok(vwc_data)
     }
 }

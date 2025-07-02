@@ -174,27 +174,20 @@ async fn fetch_all_average_moisture(
     use soil_sensor_toolbox::mc_calc_vwc;
     use std::collections::BTreeMap;
 
-    // 1) Debug: entry + profile count
-    eprintln!(
-        "🌀 GETTING AVERAGE MOISTURE for {} profiles",
-        profiles.len()
-    );
-
-    // 2) Build quoted ID list: 'id1','id2',...
+    // Build quoted ID list: 'id1','id2',...
     let ids_csv = profiles
         .iter()
         .map(|p| format!("'{}'", p.id))
         .collect::<Vec<_>>()
         .join(",");
-    eprintln!("   IDs in IN-clause: [{ids_csv}]",);
 
-    // 3) Create a map of profile_id -> soil_type for VWC calculations
+    // Create a map of profile_id -> soil_type for VWC calculations
     let profile_soil_types: HashMap<Uuid, soil_sensor_toolbox::SoilType> = profiles
         .iter()
         .map(|p| (p.id, p.soil_type_vwc.clone().into()))
         .collect();
 
-    // 4) SQL: fetch individual readings (not averaged) with temperature
+    // SQL: fetch individual readings (not averaged) with temperature
     let sql = format!(
         r"
         WITH depths AS (
@@ -219,22 +212,17 @@ async fn fetch_all_average_moisture(
          AND sd.time_utc <= d.date_to
         ",
     );
-    eprintln!("   Executing SQL:\n{sql}",);
 
-    // 5) Run the query, logging any error
+    //Run the query, logging any error
     let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
     let rows = match db.query_all(stmt).await {
-        Ok(r) => {
-            eprintln!("   Query succeeded, {} rows returned", r.len());
-            r
-        }
+        Ok(r) => r,
         Err(err) => {
-            eprintln!("❌ Error running moisture query: {err:?}",);
             return Err(err);
         }
     };
 
-    // 6) Process rows: apply VWC conversion then group and average
+    // Process rows: apply VWC conversion then group and average
     let mut grouped_vwc: HashMap<Uuid, BTreeMap<i32, Vec<f64>>> = HashMap::new();
 
     for row in rows {
@@ -258,7 +246,7 @@ async fn fetch_all_average_moisture(
         }
     }
 
-    // 7) Calculate averages for each profile/depth combination
+    // Calculate averages for each profile/depth combination
     let mut map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
     for (pid, depths) in grouped_vwc {
         let mut depth_averages = HashMap::new();
@@ -272,8 +260,7 @@ async fn fetch_all_average_moisture(
         map.insert(pid, depth_averages);
     }
 
-    // 8) Final debug: always printed
-    eprintln!("✅ Average VWC map: {map:#?}",);
+    // Final debug: always printed
     Ok(map)
 }
 

@@ -50,13 +50,10 @@ pub async fn get_one_sensor(
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
             )),
-            Err(e) => {
-                println!("Error: {e:?}");
-                Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json("Internal Server Error".to_string()),
-                ))
-            }
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            )),
         }
     }
 }
@@ -82,8 +79,7 @@ pub async fn delete_sensor_data(
         .filter(crate::routes::private::sensors::data::db::Column::SensorId.eq(id))
         .exec(&db)
         .await
-        .map_err(|e| {
-            println!("Error: {e:?}");
+        .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json("Internal Server Error".to_string()),

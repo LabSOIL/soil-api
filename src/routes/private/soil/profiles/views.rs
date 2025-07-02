@@ -193,7 +193,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("{:?}", response.body());
+
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // Retrieve all soil profiles via GET.
@@ -268,7 +268,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("{:?}", response.body());
+
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // Get the created profile to extract its ID.
@@ -379,7 +379,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("{:?}", response.body());
+
         assert_eq!(response.status(), StatusCode::CREATED,);
 
         // Retrieve the created profile to get its ID.

@@ -9,7 +9,7 @@ use uuid::Uuid;
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "gradientchoices")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "soil_type_enum")]
 pub enum SoilTypeEnum {
     #[sea_orm(string_value = "sand")]
     Sand,

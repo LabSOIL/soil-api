@@ -40,7 +40,7 @@ fn ingest_csv_data(
                 continue; // Skip malformed lines
             }
             let instrument_seq = parts[0].parse::<i32>().unwrap_or(0);
-            // println!("Date: {}", parts[1]);
+
             let time_str = format!("{}:00 +0000", parts[1]);
             let time_utc = match DateTime::parse_from_str(&time_str, "%Y.%m.%d %H:%M:%S %z") {
                 Ok(dt) => dt.with_timezone(&Utc),

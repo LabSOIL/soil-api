@@ -98,7 +98,7 @@ mod tests {
             )
             .await
             .unwrap();
-        println!("{response:?}");
+
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // Retrieve all soil types via GET
@@ -128,7 +128,7 @@ mod tests {
 
         // Verify the soil type details (ignoring the "image" field in the GET response)
         let soil_type_obj = soil_types[0].as_object().unwrap();
-        println!("{soil_type_obj:?}");
+
         assert_eq!(soil_type_obj.get("name").unwrap(), "Clay");
         assert_eq!(soil_type_obj.get("description").unwrap(), "Clay soil type");
         assert_eq!(

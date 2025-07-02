@@ -81,7 +81,6 @@ impl CRUDResource for SoilClassification {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<Self>, DbErr> {
-        println!("Condition: {condition:?}");
         let classifications = Self::EntityType::find()
             .filter(condition)
             .order_by(order_column, order_direction)

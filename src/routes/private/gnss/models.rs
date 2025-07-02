@@ -132,8 +132,6 @@ impl CRUDResource for Gnss {
             active_model.coord_y = NotSet;
             active_model.coord_srid = NotSet;
 
-            println!("Creates: {active_model:?}");
-
             let response_obj = active_model.insert(db).await?;
             response_objs.push(response_obj);
         }
@@ -209,9 +207,6 @@ impl GNSSCreateFromFile {
         let cursor = Cursor::new(gpx_data.as_bytes());
         let gpx = read(cursor)?;
 
-        // Prepare transformation from EPSG:4326 (lat/lon) to the target SRID
-        // let to_proj = Proj::new(&format!("EPSG:{}", srid))?;
-        // println!("GPX: {:?}", gpx.metadata);
         let mut creates = Vec::new();
         for wpt in gpx.waypoints {
             // Time is structured as: 2023-07-20T09:32:34.000000000Z convert to Date
