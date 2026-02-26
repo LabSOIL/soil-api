@@ -43,7 +43,7 @@ pub struct ServiceStatus {
 }
 
 #[derive(Deserialize)]
-pub struct LowResolution {
-    #[serde(default)]
-    pub high_resolution: bool,
+pub struct DateRangeQuery {
+    pub start: Option<chrono::DateTime<chrono::Utc>>,
+    pub end: Option<chrono::DateTime<chrono::Utc>>,
 }

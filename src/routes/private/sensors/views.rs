@@ -1,6 +1,6 @@
 use super::models::{Sensor, SensorCreate, SensorUpdate};
 use crate::common::auth::Role;
-use crate::common::models::LowResolution;
+use crate::common::models::DateRangeQuery;
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
@@ -21,7 +21,8 @@ crud_handlers!(Sensor, SensorUpdate, SensorCreate);
     ),
     params(
         ("id" = Uuid, description = "Sensor ID"),
-        ("high_resolution" = bool, Query, description = "High resolution data flag")
+        ("start" = Option<String>, Query, description = "Start of date range (ISO 8601)"),
+        ("end" = Option<String>, Query, description = "End of date range (ISO 8601)")
     ),
     summary = format!("Get one {}", Sensor::RESOURCE_NAME_SINGULAR),
     description = format!("Retrieves one {} by its ID.\n\n{}", Sensor::RESOURCE_NAME_SINGULAR, Sensor::RESOURCE_DESCRIPTION)
@@ -29,11 +30,25 @@ crud_handlers!(Sensor, SensorUpdate, SensorCreate);
 pub async fn get_one_sensor(
     axum::extract::State(db): axum::extract::State<sea_orm::DatabaseConnection>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
-    axum::extract::Query(query): axum::extract::Query<LowResolution>,
+    axum::extract::Query(query): axum::extract::Query<DateRangeQuery>,
 ) -> Result<Json<Sensor>, (axum::http::StatusCode, axum::Json<String>)> {
-    if query.high_resolution {
+    // Compute span from start/end or fall back to full data range
+    let span_days = Sensor::compute_span_days(&db, id, query.start, query.end).await;
+
+    if span_days <= 14 {
+        // Raw data with optional date filtering
         match <Sensor as CRUDResource>::get_one(&db, id).await {
-            Ok(item) => Ok(Json(item)),
+            Ok(mut item) => {
+                // Apply date filtering if start/end provided
+                if query.start.is_some() || query.end.is_some() {
+                    item.data.retain(|d| {
+                        query.start.is_none_or(|s| d.time_utc >= s)
+                            && query.end.is_none_or(|e| d.time_utc <= e)
+                    });
+                }
+                item.resolution = Some("raw".to_string());
+                Ok(Json(item))
+            }
             Err(DbErr::RecordNotFound(_)) => Err((
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
@@ -44,13 +59,14 @@ pub async fn get_one_sensor(
             )),
         }
     } else {
-        match Sensor::get_one_low_resolution(&db, id).await {
+        // Aggregated low-resolution data
+        match Sensor::get_one_low_resolution(&db, id, query.start, query.end).await {
             Ok(item) => Ok(Json(item)),
             Err(DbErr::RecordNotFound(_)) => Err((
                 axum::http::StatusCode::NOT_FOUND,
                 Json("Not Found".to_string()),
             )),
-            Err(e) => Err((
+            Err(_) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json("Internal Server Error".to_string()),
             )),

@@ -65,9 +65,12 @@ pub struct SensorProfile {
     // Raw moisture counts grouped by depth in cm (for reference)
     #[crudcrate(non_db_attr = true, default = HashMap::new())]
     pub moisture_raw_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
-    // Legacy field for backward compatibility
+    // Temperature data used by the public API response
     #[crudcrate(non_db_attr = true, default = HashMap::new())]
     pub data_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    // Resolution label for the data returned (e.g. "raw", "hourly", "daily", "weekly")
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub resolution: Option<String>,
 }
 
 impl From<Model> for SensorProfile {
@@ -105,6 +108,7 @@ impl SensorProfile {
             moisture_vwc_by_depth_cm: HashMap::new(),
             moisture_raw_by_depth_cm: HashMap::new(),
             data_by_depth_cm: HashMap::new(),
+            resolution: None,
         }
     }
 }
@@ -248,54 +252,121 @@ impl CRUDResource for SensorProfile {
 }
 
 impl SensorProfile {
-    pub async fn get_one_low_resolution(
+    /// Load sensor profile data with automatic resolution based on start/end date range.
+    pub async fn get_one_with_date_range(
         db: &DatabaseConnection,
         id: Uuid,
+        start: Option<DateTime<Utc>>,
+        end: Option<DateTime<Utc>>,
     ) -> Result<SensorProfile, DbErr> {
         let mut sensor_profile = Self::get_one(db, id).await?;
 
-        // Load temperature data grouped by depth
-        let temperature_data = sensor_profile
-            .load_average_temperature_series_by_depth_cm(db, Some(24)) // 24-hour windows for low resolution
-            .await?;
+        // Compute effective span from start/end or assignment dates
+        let span_days = Self::compute_span_days(db, id, start, end).await;
+        let resolution = if span_days <= 14 {
+            "raw"
+        } else if span_days <= 120 {
+            "hourly"
+        } else if span_days <= 1095 {
+            "6-hourly"
+        } else {
+            "weekly"
+        };
 
-        // Load moisture data (both VWC and raw) grouped by depth
-        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
-            .load_moisture_data_by_depth_cm(db, Some(24))
-            .await?;
+        match resolution {
+            "raw" => {
+                let temperature_data = sensor_profile
+                    .load_average_temperature_series_by_depth_cm(db, None)
+                    .await?;
+                let (moisture_vwc_data, moisture_raw_data) = sensor_profile
+                    .load_moisture_data_by_depth_cm(db, None)
+                    .await?;
 
-        // Populate all the data fields
-        sensor_profile.temperature_by_depth_cm = temperature_data;
-        sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
-        sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
-        sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone(); // Legacy compatibility
+                sensor_profile.temperature_by_depth_cm = temperature_data;
+                sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+                sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
 
+                // Apply date filtering for raw data
+                if start.is_some() || end.is_some() {
+                    let filter = |data: &mut HashMap<i32, Vec<DepthAverageData>>| {
+                        for values in data.values_mut() {
+                            values.retain(|d| {
+                                start.is_none_or(|s| d.time_utc >= s)
+                                    && end.is_none_or(|e| d.time_utc <= e)
+                            });
+                        }
+                    };
+                    filter(&mut sensor_profile.temperature_by_depth_cm);
+                    filter(&mut sensor_profile.moisture_vwc_by_depth_cm);
+                    filter(&mut sensor_profile.moisture_raw_by_depth_cm);
+                }
+            }
+            "6-hourly" => {
+                let temperature_data = sensor_profile
+                    .load_temperature_from_aggregate_grouped(
+                        db, "sensordata_hourly", 6, start, end,
+                    )
+                    .await?;
+                let moisture_vwc_data = sensor_profile
+                    .load_moisture_from_aggregate_grouped(
+                        db, "sensordata_hourly", 6, start, end,
+                    )
+                    .await?;
+
+                sensor_profile.temperature_by_depth_cm = temperature_data;
+                sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+            }
+            aggregate_table_suffix => {
+                let table = format!("sensordata_{aggregate_table_suffix}");
+                let temperature_data = sensor_profile
+                    .load_temperature_from_aggregate(db, &table, start, end)
+                    .await?;
+                let moisture_vwc_data = sensor_profile
+                    .load_moisture_from_aggregate(db, &table, start, end)
+                    .await?;
+
+                sensor_profile.temperature_by_depth_cm = temperature_data;
+                sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+            }
+        }
+
+        sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone();
+        sensor_profile.resolution = Some(resolution.to_string());
         Ok(sensor_profile)
     }
 
-    pub async fn get_one_high_resolution(
+    /// Compute span in days from optional start/end or assignment dates.
+    async fn compute_span_days(
         db: &DatabaseConnection,
-        id: Uuid,
-    ) -> Result<SensorProfile, DbErr> {
-        let mut sensor_profile = Self::get_one(db, id).await?;
-
-        // Load temperature data grouped by depth (full resolution)
-        let temperature_data = sensor_profile
-            .load_average_temperature_series_by_depth_cm(db, None) // No windowing for high resolution
-            .await?;
-
-        // Load moisture data (both VWC and raw) grouped by depth (full resolution)
-        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
-            .load_moisture_data_by_depth_cm(db, None)
-            .await?;
-
-        // Populate all the data fields
-        sensor_profile.temperature_by_depth_cm = temperature_data;
-        sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
-        sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
-        sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone(); // Legacy compatibility
-
-        Ok(sensor_profile)
+        profile_id: Uuid,
+        start: Option<DateTime<Utc>>,
+        end: Option<DateTime<Utc>>,
+    ) -> i64 {
+        if let (Some(s), Some(e)) = (start, end) {
+            return (e - s).num_days();
+        }
+        let sql = r"
+            SELECT MIN(date_from) AS min_from, MAX(date_to) AS max_to
+            FROM sensorprofile_assignment
+            WHERE sensorprofile_id = $1
+        ";
+        let stmt = Statement::from_sql_and_values(
+            db.get_database_backend(),
+            sql,
+            vec![profile_id.into()],
+        );
+        if let Ok(Some(row)) = db.query_one(stmt).await {
+            let assign_from: Option<DateTime<Utc>> = row.try_get("", "min_from").ok();
+            let assign_to: Option<DateTime<Utc>> = row.try_get("", "max_to").ok();
+            let effective_from = start.or(assign_from);
+            let effective_to = end.or(assign_to);
+            match (effective_from, effective_to) {
+                (Some(f), Some(t)) => (t - f).num_days(),
+                _ => 365,
+            }
+        } else {
+            365
+        }
     }
 
     /// Load both VWC and raw moisture data grouped by depth
@@ -614,6 +685,71 @@ impl SensorProfile {
         Ok(map)
     }
 
+    /// Load temperature data from a continuous aggregate, re-grouped into N-hour buckets.
+    /// Reads from `aggregate_table` (e.g. `sensordata_hourly`) and averages into wider windows.
+    pub async fn load_temperature_from_aggregate_grouped(
+        &self,
+        db: &DatabaseConnection,
+        aggregate_table: &str,
+        group_hours: i64,
+        date_from: Option<DateTime<Utc>>,
+        date_to: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        let mut conditions = String::new();
+        let mut params: Vec<sea_orm::Value> = vec![self.id.into(), group_hours.into()];
+        let mut idx = 3usize;
+
+        if let Some(df) = date_from {
+            conditions.push_str(&format!(" AND h.bucket >= ${idx}"));
+            params.push(df.into());
+            idx += 1;
+        }
+        if let Some(dt) = date_to {
+            conditions.push_str(&format!(" AND h.bucket <= ${idx}"));
+            params.push(dt.into());
+        }
+
+        let sql = format!(
+            r"
+            WITH depths AS (
+                SELECT u.depth_cm, u.idx, spa.sensor_id, spa.date_from, spa.date_to
+                FROM sensorprofile_assignment AS spa
+                CROSS JOIN LATERAL
+                    unnest(array[spa.depth_cm_sensor1, spa.depth_cm_sensor2, spa.depth_cm_sensor3]) WITH ORDINALITY
+                    AS u(depth_cm, idx)
+                WHERE spa.sensorprofile_id = $1
+            )
+            SELECT
+                d.depth_cm,
+                to_timestamp(
+                    floor(extract(epoch FROM h.bucket) / ($2 * 3600)) * ($2 * 3600)
+                )::timestamptz AS time_utc,
+                AVG((array[h.avg_temp_1, h.avg_temp_2, h.avg_temp_3])[d.idx]) AS y
+            FROM depths AS d
+            JOIN {aggregate_table} AS h
+              ON h.sensor_id = d.sensor_id
+             AND h.bucket BETWEEN d.date_from AND d.date_to
+             {conditions}
+            GROUP BY d.depth_cm, time_utc
+            ORDER BY d.depth_cm, time_utc
+            "
+        );
+
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, params);
+        let rows = db.query_all(stmt).await?;
+
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let y: f64 = row.try_get("", "y")?;
+            map.entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y });
+        }
+        Ok(map)
+    }
+
     /// Load moisture data from a continuous aggregate (sensordata_hourly or sensordata_daily).
     /// Returns VWC-converted values using mc_calc_vwc on the aggregated counts/temperature.
     pub async fn load_moisture_from_aggregate(
@@ -665,6 +801,83 @@ impl SensorProfile {
              AND h.bucket BETWEEN d.date_from AND d.date_to
              {conditions}
             ORDER BY d.depth_cm, h.bucket
+            "
+        );
+
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, params);
+        let rows = db.query_all(stmt).await?;
+
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let moisture_count: f64 = row.try_get("", "moisture_count")?;
+            let temperature: f64 = row.try_get("", "temperature")?;
+
+            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
+            map.entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y: vwc });
+        }
+        Ok(map)
+    }
+
+    /// Load moisture data from a continuous aggregate, re-grouped into N-hour buckets.
+    /// Reads from `aggregate_table` (e.g. `sensordata_hourly`) and averages into wider windows.
+    /// Returns VWC-converted values using mc_calc_vwc on the re-aggregated counts/temperature.
+    pub async fn load_moisture_from_aggregate_grouped(
+        &self,
+        db: &DatabaseConnection,
+        aggregate_table: &str,
+        group_hours: i64,
+        date_from: Option<DateTime<Utc>>,
+        date_to: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        let soil_type: soil_sensor_toolbox::SoilType = self
+            .soil_type_vwc
+            .clone()
+            .unwrap_or(SoilTypeEnum::Universal)
+            .into();
+
+        let mut conditions = String::new();
+        let mut params: Vec<sea_orm::Value> = vec![self.id.into(), group_hours.into()];
+        let mut idx = 3usize;
+
+        if let Some(df) = date_from {
+            conditions.push_str(&format!(" AND h.bucket >= ${idx}"));
+            params.push(df.into());
+            idx += 1;
+        }
+        if let Some(dt) = date_to {
+            conditions.push_str(&format!(" AND h.bucket <= ${idx}"));
+            params.push(dt.into());
+        }
+
+        let sql = format!(
+            r"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1 AND spa.depth_cm_moisture IS NOT NULL
+            )
+            SELECT
+                d.depth_cm,
+                to_timestamp(
+                    floor(extract(epoch FROM h.bucket) / ($2 * 3600)) * ($2 * 3600)
+                )::timestamptz AS time_utc,
+                AVG(h.avg_moisture_count) AS moisture_count,
+                AVG(h.avg_temp_1) AS temperature
+            FROM depths AS d
+            JOIN {aggregate_table} AS h
+              ON h.sensor_id = d.sensor_id
+             AND h.bucket BETWEEN d.date_from AND d.date_to
+             {conditions}
+            GROUP BY d.depth_cm, time_utc
+            ORDER BY d.depth_cm, time_utc
             "
         );
 

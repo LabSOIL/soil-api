@@ -40,6 +40,9 @@ pub struct Sensor {
     #[schema(no_recursion)]
     pub assignments:
         Vec<crate::routes::private::sensors::profile::assignment::models::SensorProfileAssignment>,
+    // Resolution label for the data returned (e.g. "raw", "daily")
+    #[crudcrate(non_db_attr = true, default = None)]
+    pub resolution: Option<String>,
 }
 
 impl From<Model> for Sensor {
@@ -58,6 +61,7 @@ impl From<Model> for Sensor {
             assignments: vec![],
             data_from: None,
             data_to: None,
+            resolution: None,
         }
     }
 }
@@ -390,15 +394,42 @@ impl CRUDResource for Sensor {
 }
 
 impl Sensor {
+    /// Compute the span in days for a sensor, using optional start/end or falling back to data range.
+    pub async fn compute_span_days(
+        db: &DatabaseConnection,
+        id: Uuid,
+        start: Option<DateTime<Utc>>,
+        end: Option<DateTime<Utc>>,
+    ) -> i64 {
+        if let (Some(s), Some(e)) = (start, end) {
+            return (e - s).num_days();
+        }
+        // Fall back to full data range
+        let (data_from, data_to) = get_data_range(db, id).await.unwrap_or((None, None));
+        let effective_from = start.or(data_from);
+        let effective_to = end.or(data_to);
+        match (effective_from, effective_to) {
+            (Some(f), Some(t)) => (t - f).num_days(),
+            _ => 365,
+        }
+    }
+
     pub async fn get_one_low_resolution(
         db: &DatabaseConnection,
         id: Uuid,
+        start: Option<DateTime<Utc>>,
+        end: Option<DateTime<Utc>>,
     ) -> Result<Sensor, DbErr> {
-        // Fetch the sensor record from the sensor table.
         let mut sensor = Self::get_one(db, id).await?;
 
-        // Construct the raw SQL query using the provided script.
-        // (Here the bucket interval is set to 24hr.)
+        let mut conditions = String::new();
+        if let Some(s) = start {
+            conditions.push_str(&format!(" AND time_utc >= '{}'", s.to_rfc3339()));
+        }
+        if let Some(e) = end {
+            conditions.push_str(&format!(" AND time_utc <= '{}'", e.to_rfc3339()));
+        }
+
         let sql = format!(
             "WITH buckets AS (
                 SELECT
@@ -410,7 +441,7 @@ impl Sensor {
                   temperature_average,
                   soil_moisture_count
                 FROM sensordata
-                WHERE sensor_id = '{id}'
+                WHERE sensor_id = '{id}'{conditions}
               )
               SELECT
                 sensor_id,
@@ -435,11 +466,8 @@ impl Sensor {
         );
 
         let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
-
-        // Execute the raw SQL query.
         let rows = db.query_all(stmt).await?;
 
-        // Map each row into a SensorData object.
         let mut aggregated_data = Vec::new();
         for row in rows {
             let sensor_id: Uuid = row.try_get("", "sensor_id")?;
@@ -450,7 +478,7 @@ impl Sensor {
             let avg_temp_avg: f64 = row.try_get("", "avg_temp_avg")?;
             let avg_soil_moisture_count: i32 = row.try_get("", "avg_soil_moisture_count")?;
 
-            let sensor_data = crate::routes::private::sensors::data::models::SensorData {
+            aggregated_data.push(crate::routes::private::sensors::data::models::SensorData {
                 instrument_seq: 0,
                 time_utc: bucket,
                 temperature_1: avg_temp_1,
@@ -461,8 +489,7 @@ impl Sensor {
                 shake: 0,
                 error_flat: 0,
                 sensor_id,
-            };
-            aggregated_data.push(sensor_data);
+            });
         }
 
         // Insert gap rows if there's a large gap between consecutive buckets.
@@ -472,7 +499,6 @@ impl Sensor {
         for window in aggregated_data.windows(2) {
             processed_data.push(window[0].clone());
             if window[1].time_utc - window[0].time_utc > gap_threshold {
-                // Insert a gap row with NaN values to break the line in Plotly.
                 processed_data.push(crate::routes::private::sensors::data::models::SensorData {
                     instrument_seq: 0,
                     time_utc: window[0].time_utc + gap_threshold,
@@ -480,7 +506,6 @@ impl Sensor {
                     temperature_2: f64::NAN,
                     temperature_3: f64::NAN,
                     temperature_average: f64::NAN,
-                    // For soil_moisture_count, using -1 as a sentinel; adjust if needed.
                     soil_moisture_count: -1,
                     shake: 0,
                     error_flat: 0,
@@ -492,7 +517,8 @@ impl Sensor {
             processed_data.push(last.clone());
         }
 
-        sensor.data = processed_data.into_iter().collect();
+        sensor.data = processed_data;
+        sensor.resolution = Some("daily".to_string());
         Ok(sensor)
     }
 }

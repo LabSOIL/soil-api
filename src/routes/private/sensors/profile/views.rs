@@ -1,6 +1,6 @@
 use super::models::{SensorProfile, SensorProfileCreate, SensorProfileUpdate};
 use crate::common::auth::Role;
-use crate::common::models::LowResolution;
+use crate::common::models::DateRangeQuery;
 use axum_keycloak_auth::{
     PassthroughMode, instance::KeycloakAuthInstance, layer::KeycloakAuthLayer,
 };
@@ -21,7 +21,8 @@ crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
     ),
     params(
         ("id" = Uuid, description = "SensorProfile ID"),
-        ("high_resolution" = bool, Query, description = "High resolution data flag")
+        ("start" = Option<String>, Query, description = "Start of date range (ISO 8601)"),
+        ("end" = Option<String>, Query, description = "End of date range (ISO 8601)")
     ),
     summary = format!("Get one {}", SensorProfile::RESOURCE_NAME_SINGULAR),
     description = format!("Retrieves one {} by its ID.\n\n{}", SensorProfile::RESOURCE_NAME_SINGULAR, SensorProfile::RESOURCE_DESCRIPTION)
@@ -29,32 +30,18 @@ crud_handlers!(SensorProfile, SensorProfileUpdate, SensorProfileCreate);
 pub async fn get_one(
     State(db): State<sea_orm::DatabaseConnection>,
     Path(id): Path<uuid::Uuid>,
-    Query(query): Query<LowResolution>,
+    Query(query): Query<DateRangeQuery>,
 ) -> Result<Json<SensorProfile>, (axum::http::StatusCode, axum::Json<String>)> {
-    if query.high_resolution {
-        match SensorProfile::get_one_high_resolution(&db, id).await {
-            Ok(item) => Ok(Json(item)),
-            Err(DbErr::RecordNotFound(_)) => Err((
-                axum::http::StatusCode::NOT_FOUND,
-                Json("Not Found".to_string()),
-            )),
-            Err(_) => Err((
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json("Internal Server Error".to_string()),
-            )),
-        }
-    } else {
-        match SensorProfile::get_one_low_resolution(&db, id).await {
-            Ok(item) => Ok(Json(item)),
-            Err(DbErr::RecordNotFound(_)) => Err((
-                axum::http::StatusCode::NOT_FOUND,
-                Json("Not Found".to_string()),
-            )),
-            Err(_) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json("Internal Server Error".to_string()),
-            )),
-        }
+    match SensorProfile::get_one_with_date_range(&db, id, query.start, query.end).await {
+        Ok(item) => Ok(Json(item)),
+        Err(DbErr::RecordNotFound(_)) => Err((
+            axum::http::StatusCode::NOT_FOUND,
+            Json("Not Found".to_string()),
+        )),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json("Internal Server Error".to_string()),
+        )),
     }
 }
 

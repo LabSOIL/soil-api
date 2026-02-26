@@ -8,15 +8,16 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
 
+        // 1. Profile types, new columns, flux/redox/website tables
         db.execute_unprepared(
             r#"
-            -- 1. profile_type enum
+            -- profile_type enum
             DO $$ BEGIN
                 CREATE TYPE profile_type_enum AS ENUM ('tms', 'chamber', 'redox');
             EXCEPTION WHEN duplicate_object THEN null;
             END $$;
 
-            -- 2. New columns on sensorprofile (all idempotent)
+            -- New columns on sensorprofile
             DO $$ BEGIN ALTER TABLE sensorprofile ADD COLUMN profile_type profile_type_enum DEFAULT 'tms' NOT NULL;
             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
             ALTER TABLE sensorprofile ALTER COLUMN soil_type_vwc DROP NOT NULL;
@@ -31,7 +32,7 @@ impl MigrationTrait for Migration {
             DO $$ BEGIN ALTER TABLE sensorprofile ADD COLUMN position INTEGER;
             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
-            -- 3. flux_data table (includes raw_readings from the start)
+            -- flux_data table
             CREATE TABLE IF NOT EXISTS flux_data (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 sensorprofile_id UUID NOT NULL REFERENCES sensorprofile(id) ON DELETE CASCADE,
@@ -49,11 +50,10 @@ impl MigrationTrait for Migration {
                 raw_readings JSONB,
                 UNIQUE(sensorprofile_id, measured_on, replicate)
             );
-            -- If table existed without raw_readings (from old migration 20)
             DO $$ BEGIN ALTER TABLE flux_data ADD COLUMN raw_readings JSONB;
             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
-            -- 4. redox_data table
+            -- redox_data table
             CREATE TABLE IF NOT EXISTS redox_data (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 sensorprofile_id UUID NOT NULL REFERENCES sensorprofile(id) ON DELETE CASCADE,
@@ -66,7 +66,7 @@ impl MigrationTrait for Migration {
                 UNIQUE(sensorprofile_id, measured_on)
             );
 
-            -- 5. Website visibility tables
+            -- Website visibility tables
             CREATE TABLE IF NOT EXISTS website (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 name VARCHAR NOT NULL,
@@ -98,18 +98,15 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
-        // TimescaleDB: hypertable, continuous aggregates, compression
+        // 2. TimescaleDB: hypertable, continuous aggregates (with min/max), compression
         db.execute_unprepared(
             r#"
-            -- Enable TimescaleDB
             CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-            -- Drop unique constraint incompatible with hypertables
-            -- (doesn't include the time dimension column)
+            -- Drop constraints/indexes incompatible with hypertables
             ALTER TABLE sensordata
               DROP CONSTRAINT IF EXISTS sensordata_instrument_seq_sensor_id_key;
 
-            -- Drop redundant single-column indexes
             DROP INDEX IF EXISTS idx_sensordata_time_utc;
             DROP INDEX IF EXISTS idx_sensordata_instrument_seq;
             DROP INDEX IF EXISTS idx_sensordata_error_flat;
@@ -130,36 +127,82 @@ impl MigrationTrait for Migration {
             ON sensordata (sensor_id, time_utc DESC)
             INCLUDE (temperature_average, soil_moisture_count, temperature_1);
 
-            -- Hourly continuous aggregate
+            -- Hourly continuous aggregate (with min/max)
             CREATE MATERIALIZED VIEW sensordata_hourly
             WITH (timescaledb.continuous) AS
             SELECT
                 time_bucket('1 hour', time_utc) AS bucket,
                 sensor_id,
                 AVG(temperature_1) AS avg_temp_1,
+                MIN(temperature_1) AS min_temp_1,
+                MAX(temperature_1) AS max_temp_1,
                 AVG(temperature_2) AS avg_temp_2,
+                MIN(temperature_2) AS min_temp_2,
+                MAX(temperature_2) AS max_temp_2,
                 AVG(temperature_3) AS avg_temp_3,
+                MIN(temperature_3) AS min_temp_3,
+                MAX(temperature_3) AS max_temp_3,
                 AVG(temperature_average) AS avg_temp,
+                MIN(temperature_average) AS min_temp,
+                MAX(temperature_average) AS max_temp,
                 AVG(soil_moisture_count::double precision) AS avg_moisture_count,
+                MIN(soil_moisture_count) AS min_moisture_count,
+                MAX(soil_moisture_count) AS max_moisture_count,
                 COUNT(*) AS sample_count
             FROM sensordata
             GROUP BY time_bucket('1 hour', time_utc), sensor_id
             WITH NO DATA;
 
-            -- Daily continuous aggregate
+            -- Daily continuous aggregate (with min/max)
             CREATE MATERIALIZED VIEW sensordata_daily
             WITH (timescaledb.continuous) AS
             SELECT
                 time_bucket('1 day', time_utc) AS bucket,
                 sensor_id,
                 AVG(temperature_1) AS avg_temp_1,
+                MIN(temperature_1) AS min_temp_1,
+                MAX(temperature_1) AS max_temp_1,
                 AVG(temperature_2) AS avg_temp_2,
+                MIN(temperature_2) AS min_temp_2,
+                MAX(temperature_2) AS max_temp_2,
                 AVG(temperature_3) AS avg_temp_3,
+                MIN(temperature_3) AS min_temp_3,
+                MAX(temperature_3) AS max_temp_3,
                 AVG(temperature_average) AS avg_temp,
+                MIN(temperature_average) AS min_temp,
+                MAX(temperature_average) AS max_temp,
                 AVG(soil_moisture_count::double precision) AS avg_moisture_count,
+                MIN(soil_moisture_count) AS min_moisture_count,
+                MAX(soil_moisture_count) AS max_moisture_count,
                 COUNT(*) AS sample_count
             FROM sensordata
             GROUP BY time_bucket('1 day', time_utc), sensor_id
+            WITH NO DATA;
+
+            -- Weekly continuous aggregate (with min/max)
+            CREATE MATERIALIZED VIEW sensordata_weekly
+            WITH (timescaledb.continuous) AS
+            SELECT
+                time_bucket('1 week', time_utc) AS bucket,
+                sensor_id,
+                AVG(temperature_1) AS avg_temp_1,
+                MIN(temperature_1) AS min_temp_1,
+                MAX(temperature_1) AS max_temp_1,
+                AVG(temperature_2) AS avg_temp_2,
+                MIN(temperature_2) AS min_temp_2,
+                MAX(temperature_2) AS max_temp_2,
+                AVG(temperature_3) AS avg_temp_3,
+                MIN(temperature_3) AS min_temp_3,
+                MAX(temperature_3) AS max_temp_3,
+                AVG(temperature_average) AS avg_temp,
+                MIN(temperature_average) AS min_temp,
+                MAX(temperature_average) AS max_temp,
+                AVG(soil_moisture_count::double precision) AS avg_moisture_count,
+                MIN(soil_moisture_count) AS min_moisture_count,
+                MAX(soil_moisture_count) AS max_moisture_count,
+                COUNT(*) AS sample_count
+            FROM sensordata
+            GROUP BY time_bucket('1 week', time_utc), sensor_id
             WITH NO DATA;
 
             -- Auto-refresh policies
@@ -173,6 +216,11 @@ impl MigrationTrait for Migration {
                 end_offset => INTERVAL '1 day',
                 schedule_interval => INTERVAL '1 day');
 
+            SELECT add_continuous_aggregate_policy('sensordata_weekly',
+                start_offset => INTERVAL '3 weeks',
+                end_offset => INTERVAL '1 week',
+                schedule_interval => INTERVAL '1 week');
+
             -- Compression (data older than 30 days)
             ALTER TABLE sensordata SET (
                 timescaledb.compress,
@@ -183,11 +231,89 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
-        // NOTE: To populate aggregates with existing data after a DB restore, run manually:
+        // 3. Area hull precomputation
+        db.execute_unprepared(
+            r#"
+            -- hull_geom column
+            ALTER TABLE area ADD COLUMN hull_geom GEOMETRY(Geometry, 4326);
+
+            -- PL/pgSQL function to recompute hull for a given area
+            CREATE OR REPLACE FUNCTION recompute_area_hull(target_area_id UUID)
+            RETURNS VOID AS $$
+            DECLARE
+              collected GEOMETRY;
+            BEGIN
+              SELECT ST_Collect(geom_2056) INTO collected
+              FROM (
+                SELECT ST_Transform(geom, 2056) AS geom_2056
+                  FROM plot WHERE area_id = target_area_id AND geom IS NOT NULL
+                UNION ALL
+                SELECT ST_Transform(geom, 2056) AS geom_2056
+                  FROM soilprofile WHERE area_id = target_area_id AND geom IS NOT NULL
+                UNION ALL
+                SELECT ST_Transform(geom, 2056) AS geom_2056
+                  FROM sensorprofile WHERE area_id = target_area_id AND geom IS NOT NULL
+              ) AS pts;
+
+              IF collected IS NULL THEN
+                UPDATE area SET hull_geom = NULL WHERE id = target_area_id;
+              ELSE
+                UPDATE area SET hull_geom = ST_Transform(
+                  ST_Buffer(ST_ConvexHull(collected), 10), 4326
+                ) WHERE id = target_area_id;
+              END IF;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            -- Trigger function
+            CREATE OR REPLACE FUNCTION trigger_recompute_area_hull()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              IF TG_OP = 'DELETE' THEN
+                PERFORM recompute_area_hull(OLD.area_id);
+              ELSIF TG_OP = 'UPDATE' AND OLD.area_id IS DISTINCT FROM NEW.area_id THEN
+                PERFORM recompute_area_hull(OLD.area_id);
+                PERFORM recompute_area_hull(NEW.area_id);
+              ELSE
+                PERFORM recompute_area_hull(NEW.area_id);
+              END IF;
+              RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            -- Triggers on child tables
+            CREATE TRIGGER trg_plot_hull
+              AFTER INSERT OR UPDATE OF coord_x, coord_y, coord_z, coord_srid, area_id
+                 OR DELETE ON plot
+              FOR EACH ROW EXECUTE FUNCTION trigger_recompute_area_hull();
+
+            CREATE TRIGGER trg_soilprofile_hull
+              AFTER INSERT OR UPDATE OF coord_x, coord_y, coord_z, coord_srid, area_id
+                 OR DELETE ON soilprofile
+              FOR EACH ROW EXECUTE FUNCTION trigger_recompute_area_hull();
+
+            CREATE TRIGGER trg_sensorprofile_hull
+              AFTER INSERT OR UPDATE OF coord_x, coord_y, coord_z, coord_srid, area_id
+                 OR DELETE ON sensorprofile
+              FOR EACH ROW EXECUTE FUNCTION trigger_recompute_area_hull();
+
+            -- Backfill existing areas
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+              FOR r IN SELECT id FROM area LOOP
+                PERFORM recompute_area_hull(r.id);
+              END LOOP;
+            END $$;
+            "#,
+        )
+        .await?;
+
+        // NOTE: To populate aggregates with existing data after migration, run manually:
         //   CALL refresh_continuous_aggregate('sensordata_hourly', NULL, NULL);
         //   CALL refresh_continuous_aggregate('sensordata_daily', NULL, NULL);
+        //   CALL refresh_continuous_aggregate('sensordata_weekly', NULL, NULL);
         // These cannot run inside a transaction (which SeaORM migrations use).
-        // The auto-refresh policies will populate new data on schedule.
 
         Ok(())
     }
@@ -195,38 +321,45 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
 
-        // Drop TimescaleDB objects first (before dropping tables they depend on)
+        // Drop hull triggers/functions
         db.execute_unprepared(
             r#"
+            DROP TRIGGER IF EXISTS trg_plot_hull ON plot;
+            DROP TRIGGER IF EXISTS trg_soilprofile_hull ON soilprofile;
+            DROP TRIGGER IF EXISTS trg_sensorprofile_hull ON sensorprofile;
+            DROP FUNCTION IF EXISTS trigger_recompute_area_hull();
+            DROP FUNCTION IF EXISTS recompute_area_hull(UUID);
+            ALTER TABLE area DROP COLUMN IF EXISTS hull_geom;
+            "#,
+        )
+        .await?;
+
+        // Drop TimescaleDB objects
+        db.execute_unprepared(
+            r#"
+            DROP MATERIALIZED VIEW IF EXISTS sensordata_weekly CASCADE;
             DROP MATERIALIZED VIEW IF EXISTS sensordata_daily CASCADE;
             DROP MATERIALIZED VIEW IF EXISTS sensordata_hourly CASCADE;
             "#,
         )
         .await?;
 
+        // Drop tables and columns
         db.execute_unprepared(
             r#"
-            -- 1. Drop website visibility tables
             DROP TABLE IF EXISTS website_sensor_exclusion;
             DROP TABLE IF EXISTS website_plot_exclusion;
             DROP TABLE IF EXISTS area_website;
             DROP TABLE IF EXISTS website;
-
-            -- 2. Drop flux_data and redox_data
             DROP TABLE IF EXISTS flux_data;
             DROP TABLE IF EXISTS redox_data;
 
-            -- 3. Drop new columns from sensorprofile
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS position;
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS chamber_id_external;
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS instrument_model;
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS area_cm2;
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS volume_ml;
-
-            -- 4. Re-add NOT NULL to soil_type_vwc
             ALTER TABLE sensorprofile ALTER COLUMN soil_type_vwc SET NOT NULL;
-
-            -- 5. Drop profile_type column and enum
             ALTER TABLE sensorprofile DROP COLUMN IF EXISTS profile_type;
             DROP TYPE IF EXISTS profile_type_enum;
             "#,

@@ -3,7 +3,7 @@ mod config;
 mod routes;
 
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{Database, DatabaseConnection};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 
 #[tokio::main]
 async fn main() {
@@ -35,6 +35,15 @@ async fn main() {
     //     .expect("Failed to run downgrade migration");
 
     println!("DB migrations complete");
+
+    // Refresh continuous aggregates (can't run inside migration transactions)
+    for view in ["sensordata_hourly", "sensordata_daily", "sensordata_weekly"] {
+        let sql = format!("CALL refresh_continuous_aggregate('{view}', NULL, NULL)");
+        match db.execute(Statement::from_string(db.get_database_backend(), sql)).await {
+            Ok(_) => println!("Refreshed {view}"),
+            Err(e) => println!("Could not refresh {view}: {e}"),
+        }
+    }
 
     println!(
         "Starting server {} ({} deployment) ...",

@@ -22,6 +22,8 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 pub struct SensorQueryParams {
     pub website: Option<String>,
+    pub start: Option<DateTime<Utc>>,
+    pub end: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Debug, Clone, ToSchema)]
@@ -97,41 +99,48 @@ pub async fn get_one_temperature(
             let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
                 profile.into();
 
-            let (date_from, date_to) = date_range;
-            let span_days = effective_date_span_days(&db, id, date_from, date_to).await;
+            let (website_from, website_to) = date_range;
+            let (date_from, date_to, span_days) = effective_date_range(
+                &db, id, website_from, website_to, params.start, params.end,
+            ).await;
 
-            profile.data_by_depth_cm = if span_days < 7 {
-                // Full resolution from raw sensordata
-                profile
-                    .load_average_temperature_series_by_depth_cm(&db, None)
-                    .await
-                    .unwrap_or_default()
-            } else if span_days <= 90 {
-                // Hourly aggregate
-                profile
-                    .load_temperature_from_aggregate(
-                        &db,
-                        "sensordata_hourly",
-                        date_from,
-                        date_to,
-                    )
-                    .await
-                    .unwrap_or_default()
-            } else {
-                // Daily aggregate
-                profile
-                    .load_temperature_from_aggregate(
-                        &db,
-                        "sensordata_daily",
-                        date_from,
-                        date_to,
-                    )
-                    .await
-                    .unwrap_or_default()
+            let resolution = resolution_for_span(span_days);
+
+            profile.data_by_depth_cm = match resolution {
+                "raw" => {
+                    profile
+                        .load_average_temperature_series_by_depth_cm(&db, None)
+                        .await
+                        .unwrap_or_default()
+                }
+                "hourly" => {
+                    profile
+                        .load_temperature_from_aggregate(
+                            &db, "sensordata_hourly", date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
+                "6-hourly" => {
+                    profile
+                        .load_temperature_from_aggregate_grouped(
+                            &db, "sensordata_hourly", 6, date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
+                _ => {
+                    profile
+                        .load_temperature_from_aggregate(
+                            &db, "sensordata_weekly", date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
             };
 
             // Apply date filtering for raw data path (aggregates already filtered)
-            if span_days < 7 && (date_from.is_some() || date_to.is_some()) {
+            if resolution == "raw" && (date_from.is_some() || date_to.is_some()) {
                 for data in profile.data_by_depth_cm.values_mut() {
                     data.retain(|d| {
                         date_from.is_none_or(|df| d.time_utc >= df)
@@ -140,6 +149,7 @@ pub async fn get_one_temperature(
                 }
             }
 
+            profile.resolution = Some(resolution.to_string());
             let profile: super::models::SensorProfile = profile.into();
 
             Ok((StatusCode::OK, Json(profile)))
@@ -201,41 +211,48 @@ pub async fn get_one_moisture(
             let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
                 profile.into();
 
-            let (date_from, date_to) = date_range;
-            let span_days = effective_date_span_days(&db, id, date_from, date_to).await;
+            let (website_from, website_to) = date_range;
+            let (date_from, date_to, span_days) = effective_date_range(
+                &db, id, website_from, website_to, params.start, params.end,
+            ).await;
 
-            profile.data_by_depth_cm = if span_days < 7 {
-                // Full resolution from raw sensordata
-                profile
-                    .load_average_moisture_series_by_depth_cm(&db, None)
-                    .await
-                    .unwrap_or_default()
-            } else if span_days <= 90 {
-                // Hourly aggregate
-                profile
-                    .load_moisture_from_aggregate(
-                        &db,
-                        "sensordata_hourly",
-                        date_from,
-                        date_to,
-                    )
-                    .await
-                    .unwrap_or_default()
-            } else {
-                // Daily aggregate
-                profile
-                    .load_moisture_from_aggregate(
-                        &db,
-                        "sensordata_daily",
-                        date_from,
-                        date_to,
-                    )
-                    .await
-                    .unwrap_or_default()
+            let resolution = resolution_for_span(span_days);
+
+            profile.data_by_depth_cm = match resolution {
+                "raw" => {
+                    profile
+                        .load_average_moisture_series_by_depth_cm(&db, None)
+                        .await
+                        .unwrap_or_default()
+                }
+                "hourly" => {
+                    profile
+                        .load_moisture_from_aggregate(
+                            &db, "sensordata_hourly", date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
+                "6-hourly" => {
+                    profile
+                        .load_moisture_from_aggregate_grouped(
+                            &db, "sensordata_hourly", 6, date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
+                _ => {
+                    profile
+                        .load_moisture_from_aggregate(
+                            &db, "sensordata_weekly", date_from, date_to,
+                        )
+                        .await
+                        .unwrap_or_default()
+                }
             };
 
             // Apply date filtering for raw data path (aggregates already filtered)
-            if span_days < 7 && (date_from.is_some() || date_to.is_some()) {
+            if resolution == "raw" && (date_from.is_some() || date_to.is_some()) {
                 for data in profile.data_by_depth_cm.values_mut() {
                     data.retain(|d| {
                         date_from.is_none_or(|df| d.time_utc >= df)
@@ -244,6 +261,7 @@ pub async fn get_one_moisture(
                 }
             }
 
+            profile.resolution = Some(resolution.to_string());
             let profile: super::models::SensorProfile = profile.into();
 
             Ok((StatusCode::OK, Json(profile)))
@@ -491,14 +509,17 @@ pub async fn get_soil_types() -> impl IntoResponse {
     (StatusCode::OK, Json(soil_types))
 }
 
-/// Compute the effective date span in days for a sensor profile.
-/// Uses the website access date range clipped by the sensor's assignment dates.
-async fn effective_date_span_days(
+/// Compute the effective date range and span in days for a sensor profile.
+/// If the user provides start/end, those are clipped to the website access range.
+/// Returns (effective_from, effective_to, span_days).
+async fn effective_date_range(
     db: &DatabaseConnection,
     profile_id: Uuid,
     website_from: Option<DateTime<Utc>>,
     website_to: Option<DateTime<Utc>>,
-) -> i64 {
+    requested_start: Option<DateTime<Utc>>,
+    requested_end: Option<DateTime<Utc>>,
+) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>, i64) {
     let sql = r"
         SELECT MIN(date_from) AS min_from, MAX(date_to) AS max_to
         FROM sensorprofile_assignment
@@ -510,18 +531,47 @@ async fn effective_date_span_days(
         vec![profile_id.into()],
     );
 
-    if let Ok(Some(row)) = db.query_one(stmt).await {
-        let assign_from: Option<DateTime<Utc>> = row.try_get("", "min_from").ok();
-        let assign_to: Option<DateTime<Utc>> = row.try_get("", "max_to").ok();
-
-        let effective_from = website_from.or(assign_from);
-        let effective_to = website_to.or(assign_to);
-
-        match (effective_from, effective_to) {
-            (Some(from), Some(to)) => (to - from).num_days(),
-            _ => 365, // Unknown range → default to daily aggregate
-        }
+    let (assign_from, assign_to) = if let Ok(Some(row)) = db.query_one(stmt).await {
+        let af: Option<DateTime<Utc>> = row.try_get("", "min_from").ok();
+        let at: Option<DateTime<Utc>> = row.try_get("", "max_to").ok();
+        (af, at)
     } else {
-        365
+        (None, None)
+    };
+
+    // Base range: website access clipped by assignment dates
+    let base_from = website_from.or(assign_from);
+    let base_to = website_to.or(assign_to);
+
+    // If user provided start/end, intersect with base range
+    let effective_from = match (requested_start, base_from) {
+        (Some(req), Some(base)) => Some(req.max(base)),
+        (Some(req), None) => Some(req),
+        (None, base) => base,
+    };
+    let effective_to = match (requested_end, base_to) {
+        (Some(req), Some(base)) => Some(req.min(base)),
+        (Some(req), None) => Some(req),
+        (None, base) => base,
+    };
+
+    let span_days = match (effective_from, effective_to) {
+        (Some(from), Some(to)) => (to - from).num_days(),
+        _ => 365, // Unknown range -> default to daily aggregate
+    };
+
+    (effective_from, effective_to, span_days)
+}
+
+/// Select the resolution label for a given span in days.
+fn resolution_for_span(span_days: i64) -> &'static str {
+    if span_days <= 14 {
+        "raw"
+    } else if span_days <= 120 {
+        "hourly"
+    } else if span_days <= 1095 {
+        "6-hourly"
+    } else {
+        "weekly"
     }
 }

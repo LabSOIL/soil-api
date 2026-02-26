@@ -15,6 +15,7 @@ pub struct SensorProfile {
     pub name: String,
     pub geom: HashMap<i32, Geometry>,
     pub data_by_depth_cm: HashMap<i32, Vec<DepthAverageData>>,
+    pub resolution: Option<String>,
 }
 
 impl From<crate::routes::private::sensors::profile::models::SensorProfile> for SensorProfile {
@@ -34,6 +35,7 @@ impl From<crate::routes::private::sensors::profile::models::SensorProfile> for S
             name: model.name,
             geom,
             data_by_depth_cm: model.data_by_depth_cm,
+            resolution: model.resolution,
         }
     }
 }
@@ -55,6 +57,7 @@ impl From<db::Model> for SensorProfile {
             name: model.name,
             geom,
             data_by_depth_cm: HashMap::new(),
+            resolution: None,
         }
     }
 }
