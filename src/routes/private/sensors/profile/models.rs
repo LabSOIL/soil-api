@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use super::db::Model;
-use crate::{config::Config, routes::private::sensors::profile::db::SoilTypeEnum};
+use crate::{
+    config::Config,
+    routes::private::sensors::profile::db::{ProfileTypeEnum, SoilTypeEnum},
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crudcrate::{CRUDResource, ToCreateModel, ToUpdateModel, traits::MergeIntoActiveModel};
@@ -35,12 +38,20 @@ pub struct SensorProfile {
     pub name: String,
     pub description: Option<String>,
     pub area_id: Uuid,
+    pub profile_type: ProfileTypeEnum,
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
     #[crudcrate(update_model = false, create_model = false, on_create = Config::from_env().srid)]
     pub coord_srid: Option<i32>,
-    pub soil_type_vwc: SoilTypeEnum,
+    pub soil_type_vwc: Option<SoilTypeEnum>,
+    // Chamber-specific fields
+    pub volume_ml: Option<f64>,
+    pub area_cm2: Option<f64>,
+    pub instrument_model: Option<String>,
+    pub chamber_id_external: Option<String>,
+    // Redox/chamber position number
+    pub position: Option<i32>,
     #[crudcrate(update_model = false, create_model = false)]
     #[schema(no_recursion)]
     pub assignments:
@@ -78,11 +89,17 @@ impl SensorProfile {
             name: model.name,
             description: model.description,
             area_id: model.area_id,
+            profile_type: model.profile_type,
             soil_type_vwc: model.soil_type_vwc,
             coord_x: model.coord_x,
             coord_y: model.coord_y,
             coord_z: model.coord_z,
             coord_srid: model.coord_srid,
+            volume_ml: model.volume_ml,
+            area_cm2: model.area_cm2,
+            instrument_model: model.instrument_model,
+            chamber_id_external: model.chamber_id_external,
+            position: model.position,
             assignments,
             temperature_by_depth_cm: HashMap::new(),
             moisture_vwc_by_depth_cm: HashMap::new(),
@@ -224,6 +241,8 @@ impl CRUDResource for SensorProfile {
         vec![
             ("name", Self::ColumnType::Name),
             ("description", Self::ColumnType::Description),
+            ("profile_type", Self::ColumnType::ProfileType),
+            ("area_id", Self::ColumnType::AreaId),
         ]
     }
 }
@@ -292,7 +311,12 @@ impl SensorProfile {
         DbErr,
     > {
         // Convert SoilTypeEnum to SoilType for VWC calculation
-        let soil_type: soil_sensor_toolbox::SoilType = self.soil_type_vwc.clone().into();
+        // Default to Universal if soil_type_vwc is None (chamber/redox profiles)
+        let soil_type: soil_sensor_toolbox::SoilType = self
+            .soil_type_vwc
+            .clone()
+            .unwrap_or(SoilTypeEnum::Universal)
+            .into();
 
         // Build the SQL to include both moisture and temperature data
         let rows = if let Some(hours) = window_hours {

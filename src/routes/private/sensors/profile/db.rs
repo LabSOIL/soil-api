@@ -78,6 +78,21 @@ impl From<SoilTypeEnum> for SoilType {
         }
     }
 }
+
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, ToSchema,
+)]
+#[serde(rename_all = "lowercase")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "profile_type_enum")]
+pub enum ProfileTypeEnum {
+    #[sea_orm(string_value = "tms")]
+    Tms,
+    #[sea_orm(string_value = "chamber")]
+    Chamber,
+    #[sea_orm(string_value = "redox")]
+    Redox,
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "sensorprofile")]
 pub struct Model {
@@ -86,11 +101,17 @@ pub struct Model {
     pub name: String,
     pub description: Option<String>,
     pub area_id: Uuid,
-    pub soil_type_vwc: SoilTypeEnum,
+    pub profile_type: ProfileTypeEnum,
+    pub soil_type_vwc: Option<SoilTypeEnum>,
     pub coord_x: Option<f64>,
     pub coord_y: Option<f64>,
     pub coord_z: Option<f64>,
     pub coord_srid: Option<i32>,
+    pub volume_ml: Option<f64>,
+    pub area_cm2: Option<f64>,
+    pub instrument_model: Option<String>,
+    pub chamber_id_external: Option<String>,
+    pub position: Option<i32>,
     pub last_updated: DateTime<Utc>,
 }
 
@@ -106,6 +127,10 @@ pub enum Relation {
     Area,
     #[sea_orm(has_many = "crate::routes::private::sensors::profile::assignment::db::Entity")]
     SensorprofileAssignment,
+    #[sea_orm(has_many = "crate::routes::private::sensors::flux_data::db::Entity")]
+    FluxData,
+    #[sea_orm(has_many = "crate::routes::private::sensors::redox_data::db::Entity")]
+    RedoxData,
 }
 
 impl Related<crate::routes::private::areas::db::Entity> for Entity {
@@ -117,6 +142,18 @@ impl Related<crate::routes::private::areas::db::Entity> for Entity {
 impl Related<crate::routes::private::sensors::profile::assignment::db::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SensorprofileAssignment.def()
+    }
+}
+
+impl Related<crate::routes::private::sensors::flux_data::db::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::FluxData.def()
+    }
+}
+
+impl Related<crate::routes::private::sensors::redox_data::db::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RedoxData.def()
     }
 }
 

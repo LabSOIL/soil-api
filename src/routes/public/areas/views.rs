@@ -8,12 +8,19 @@ use crate::routes::private::{
     soil::classification::db as SoilClassDB,
 };
 use crate::routes::public::sensors::models::SensorProfileSimple;
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use crate::routes::public::website_access::resolve_website_access;
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use axum_response_cache::CacheLayer;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
 use sea_orm::Statement;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use serde::Deserialize;
 use std::collections::HashMap;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
@@ -21,11 +28,12 @@ use uuid::Uuid;
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_all_areas))
-        .layer(
-            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
-                .use_stale_on_failure(),
-        )
         .with_state(db.clone())
+}
+
+#[derive(Deserialize)]
+pub struct AreaQueryParams {
+    pub website: String,
 }
 
 #[utoipa::path(
@@ -39,10 +47,29 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     description = "Returns a list of all available areas with associated properties to display in the public UI. If no public areas exist, an empty list is returned.",
     operation_id = "get_all_areas_public",
 )]
-pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoResponse {
-    // 1) Load all public areas
+pub async fn get_all_areas(
+    State(db): State<DatabaseConnection>,
+    Query(params): Query<AreaQueryParams>,
+) -> impl IntoResponse {
+    // 1) Resolve website access from slug
+    let website_access = match resolve_website_access(&db, &params.website).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return Ok((StatusCode::OK, Json(vec![]))), // unknown slug = empty
+        Err(_) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal server error".to_string()),
+            ));
+        }
+    };
+
+    // Load areas assigned to this website
+    if website_access.area_ids.is_empty() {
+        return Ok((StatusCode::OK, Json(vec![])));
+    }
+
     let Ok(areas) = AreaDB::Entity::find()
-        .filter(AreaDB::Column::IsPublic.eq(true))
+        .filter(AreaDB::Column::Id.is_in(website_access.area_ids.iter().copied()))
         .all(&db)
         .await
     else {
@@ -157,6 +184,12 @@ pub async fn get_all_areas(State(db): State<DatabaseConnection>) -> impl IntoRes
             })
             .collect();
 
+        // Apply website exclusions
+        am.plots
+            .retain(|p| !website_access.excluded_plot_ids.contains(&p.id));
+        am.sensors
+            .retain(|s| !website_access.excluded_sensor_ids.contains(&s.id));
+
         // convex hull
         am.geom = hull_map.get(&area.id).cloned();
 
@@ -182,9 +215,17 @@ async fn fetch_all_average_moisture(
         .join(",");
 
     // Create a map of profile_id -> soil_type for VWC calculations
+    // Default to Universal for profiles without a soil type (chamber/redox)
     let profile_soil_types: HashMap<Uuid, soil_sensor_toolbox::SoilType> = profiles
         .iter()
-        .map(|p| (p.id, p.soil_type_vwc.clone().into()))
+        .map(|p| {
+            let soil_type = p
+                .soil_type_vwc
+                .clone()
+                .unwrap_or(crate::routes::private::sensors::profile::db::SoilTypeEnum::Universal)
+                .into();
+            (p.id, soil_type)
+        })
         .collect();
 
     // SQL: fetch individual readings (not averaged) with temperature

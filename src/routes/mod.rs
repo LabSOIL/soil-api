@@ -95,6 +95,14 @@ pub fn build_router(db: &DatabaseConnection) -> Router {
             ),
         )
         .nest(
+            "/api/flux_data",
+            private::sensors::flux_data::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/redox_data",
+            private::sensors::redox_data::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
             "/api/transects",
             private::transects::views::router(db, Some(keycloak_instance.clone())),
         )
@@ -120,6 +128,22 @@ pub fn build_router(db: &DatabaseConnection) -> Router {
         .nest(
             "/api/soil_classifications",
             private::soil::classification::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/websites",
+            private::websites::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/area_websites",
+            private::area_websites::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/website_plot_exclusions",
+            private::website_plot_exclusions::views::router(db, Some(keycloak_instance.clone())),
+        )
+        .nest(
+            "/api/website_sensor_exclusions",
+            private::website_sensor_exclusions::views::router(db, Some(keycloak_instance.clone())),
         )
         .nest("/api/public", public::router(db))
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024))

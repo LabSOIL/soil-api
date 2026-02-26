@@ -19,6 +19,7 @@ mod m20250512_123505_add_sample_date;
 mod m20250515_154112_allow_multiple_sensors_on_sample_soil_profile;
 mod m20250526_133243_add_depth_for_sensor_moisture;
 mod m20250702_115754_create_enum_soil_type_sensor_profile;
+mod m20260226_000000_add_flux_redox_websites;
 
 pub struct Migrator;
 
@@ -45,6 +46,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250515_154112_allow_multiple_sensors_on_sample_soil_profile::Migration),
             Box::new(m20250526_133243_add_depth_for_sensor_moisture::Migration),
             Box::new(m20250702_115754_create_enum_soil_type_sensor_profile::Migration),
+            Box::new(m20260226_000000_add_flux_redox_websites::Migration),
         ]
     }
 }

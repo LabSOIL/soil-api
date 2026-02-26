@@ -25,7 +25,7 @@ impl UIConfiguration {
         Self {
             client_id: config.keycloak_ui_id,
             realm: config.keycloak_realm,
-            url: config.keycloak_url,
+            url: config.keycloak_browser_url,
             deployment: config.deployment,
         }
     }

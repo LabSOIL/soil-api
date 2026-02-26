@@ -1,5 +1,6 @@
 pub mod areas;
 pub mod sensors;
+pub mod website_access;
 
 use sea_orm::DatabaseConnection;
 use utoipa_axum::router::OpenApiRouter;

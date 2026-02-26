@@ -1,6 +1,8 @@
 use crate::common::geometry::Geometry;
 use crate::routes::private::sensors::profile::db;
+use crate::routes::private::sensors::profile::db::ProfileTypeEnum;
 use crate::routes::private::sensors::profile::models::DepthAverageData;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
@@ -61,6 +63,7 @@ impl From<db::Model> for SensorProfile {
 pub struct SensorProfileSimple {
     pub id: Uuid,
     pub name: String,
+    pub profile_type: ProfileTypeEnum,
     pub geom: HashMap<i32, Geometry>,
     pub average_temperature: HashMap<i32, f64>,
     pub average_moisture: HashMap<i32, f64>,
@@ -79,9 +82,52 @@ impl From<crate::routes::private::sensors::profile::models::SensorProfile> for S
         Self {
             id: model.id,
             name: model.name,
+            profile_type: model.profile_type,
             average_temperature: HashMap::new(), // Set later in func
             average_moisture: HashMap::new(),    // Set later in func
             geom,
         }
     }
+}
+
+/// Public flux data time series response
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct FluxDataPoint {
+    pub measured_on: DateTime<Utc>,
+    pub replicate: String,
+    pub setting: Option<String>,
+    pub flux_co2_umol_m2_s: Option<f64>,
+    pub flux_ch4_nmol_m2_s: Option<f64>,
+    pub flux_h2o_umol_m2_s: Option<f64>,
+    pub r2_co2: Option<f64>,
+    pub r2_ch4: Option<f64>,
+    pub r2_h2o: Option<f64>,
+    pub swc: Option<f64>,
+}
+
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct SensorProfileFlux {
+    pub id: Uuid,
+    pub name: String,
+    pub geom: HashMap<i32, Geometry>,
+    pub flux_data: Vec<FluxDataPoint>,
+}
+
+/// Public redox data time series response
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct RedoxDataPoint {
+    pub measured_on: DateTime<Utc>,
+    pub ch1_5cm_mv: Option<f64>,
+    pub ch2_15cm_mv: Option<f64>,
+    pub ch3_25cm_mv: Option<f64>,
+    pub ch4_35cm_mv: Option<f64>,
+    pub temp_c: Option<f64>,
+}
+
+#[derive(ToSchema, Serialize, Deserialize)]
+pub struct SensorProfileRedox {
+    pub id: Uuid,
+    pub name: String,
+    pub geom: HashMap<i32, Geometry>,
+    pub redox_data: Vec<RedoxDataPoint>,
 }
