@@ -98,11 +98,111 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
+        // TimescaleDB: hypertable, continuous aggregates, compression
+        db.execute_unprepared(
+            r#"
+            -- Enable TimescaleDB
+            CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+            -- Drop unique constraint incompatible with hypertables
+            -- (doesn't include the time dimension column)
+            ALTER TABLE sensordata
+              DROP CONSTRAINT IF EXISTS sensordata_instrument_seq_sensor_id_key;
+
+            -- Drop redundant single-column indexes
+            DROP INDEX IF EXISTS idx_sensordata_time_utc;
+            DROP INDEX IF EXISTS idx_sensordata_instrument_seq;
+            DROP INDEX IF EXISTS idx_sensordata_error_flat;
+            DROP INDEX IF EXISTS idx_sensordata_shake;
+            DROP INDEX IF EXISTS idx_sensordata_soil_moisture_count;
+            DROP INDEX IF EXISTS idx_sensordata_temperature_1;
+            DROP INDEX IF EXISTS idx_sensordata_temperature_2;
+            DROP INDEX IF EXISTS idx_sensordata_temperature_3;
+            DROP INDEX IF EXISTS idx_sensordata_temperature_average;
+
+            -- Convert to hypertable (7-day chunks)
+            SELECT create_hypertable('sensordata', 'time_utc',
+                chunk_time_interval => INTERVAL '7 days',
+                migrate_data => true);
+
+            -- Covering index for fast sensor+time range lookups
+            CREATE INDEX idx_sensordata_sensor_time_cover
+            ON sensordata (sensor_id, time_utc DESC)
+            INCLUDE (temperature_average, soil_moisture_count, temperature_1);
+
+            -- Hourly continuous aggregate
+            CREATE MATERIALIZED VIEW sensordata_hourly
+            WITH (timescaledb.continuous) AS
+            SELECT
+                time_bucket('1 hour', time_utc) AS bucket,
+                sensor_id,
+                AVG(temperature_1) AS avg_temp_1,
+                AVG(temperature_2) AS avg_temp_2,
+                AVG(temperature_3) AS avg_temp_3,
+                AVG(temperature_average) AS avg_temp,
+                AVG(soil_moisture_count::double precision) AS avg_moisture_count,
+                COUNT(*) AS sample_count
+            FROM sensordata
+            GROUP BY time_bucket('1 hour', time_utc), sensor_id
+            WITH NO DATA;
+
+            -- Daily continuous aggregate
+            CREATE MATERIALIZED VIEW sensordata_daily
+            WITH (timescaledb.continuous) AS
+            SELECT
+                time_bucket('1 day', time_utc) AS bucket,
+                sensor_id,
+                AVG(temperature_1) AS avg_temp_1,
+                AVG(temperature_2) AS avg_temp_2,
+                AVG(temperature_3) AS avg_temp_3,
+                AVG(temperature_average) AS avg_temp,
+                AVG(soil_moisture_count::double precision) AS avg_moisture_count,
+                COUNT(*) AS sample_count
+            FROM sensordata
+            GROUP BY time_bucket('1 day', time_utc), sensor_id
+            WITH NO DATA;
+
+            -- Auto-refresh policies
+            SELECT add_continuous_aggregate_policy('sensordata_hourly',
+                start_offset => INTERVAL '3 hours',
+                end_offset => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 hour');
+
+            SELECT add_continuous_aggregate_policy('sensordata_daily',
+                start_offset => INTERVAL '3 days',
+                end_offset => INTERVAL '1 day',
+                schedule_interval => INTERVAL '1 day');
+
+            -- Compression (data older than 30 days)
+            ALTER TABLE sensordata SET (
+                timescaledb.compress,
+                timescaledb.compress_segmentby = 'sensor_id'
+            );
+            SELECT add_compression_policy('sensordata', INTERVAL '30 days');
+            "#,
+        )
+        .await?;
+
+        // NOTE: To populate aggregates with existing data after a DB restore, run manually:
+        //   CALL refresh_continuous_aggregate('sensordata_hourly', NULL, NULL);
+        //   CALL refresh_continuous_aggregate('sensordata_daily', NULL, NULL);
+        // These cannot run inside a transaction (which SeaORM migrations use).
+        // The auto-refresh policies will populate new data on schedule.
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
+
+        // Drop TimescaleDB objects first (before dropping tables they depend on)
+        db.execute_unprepared(
+            r#"
+            DROP MATERIALIZED VIEW IF EXISTS sensordata_daily CASCADE;
+            DROP MATERIALIZED VIEW IF EXISTS sensordata_hourly CASCADE;
+            "#,
+        )
+        .await?;
 
         db.execute_unprepared(
             r#"

@@ -554,6 +554,138 @@ impl SensorProfile {
         Ok(map)
     }
 
+    /// Load temperature data from a continuous aggregate (sensordata_hourly or sensordata_daily).
+    pub async fn load_temperature_from_aggregate(
+        &self,
+        db: &DatabaseConnection,
+        aggregate_table: &str,
+        date_from: Option<DateTime<Utc>>,
+        date_to: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        let mut conditions = String::new();
+        let mut params: Vec<sea_orm::Value> = vec![self.id.into()];
+        let mut idx = 2usize;
+
+        if let Some(df) = date_from {
+            conditions.push_str(&format!(" AND h.bucket >= ${idx}"));
+            params.push(df.into());
+            idx += 1;
+        }
+        if let Some(dt) = date_to {
+            conditions.push_str(&format!(" AND h.bucket <= ${idx}"));
+            params.push(dt.into());
+        }
+
+        let sql = format!(
+            r"
+            WITH depths AS (
+                SELECT u.depth_cm, u.idx, spa.sensor_id, spa.date_from, spa.date_to
+                FROM sensorprofile_assignment AS spa
+                CROSS JOIN LATERAL
+                    unnest(array[spa.depth_cm_sensor1, spa.depth_cm_sensor2, spa.depth_cm_sensor3]) WITH ORDINALITY
+                    AS u(depth_cm, idx)
+                WHERE spa.sensorprofile_id = $1
+            )
+            SELECT
+                d.depth_cm,
+                h.bucket AS time_utc,
+                (array[h.avg_temp_1, h.avg_temp_2, h.avg_temp_3])[d.idx] AS y
+            FROM depths AS d
+            JOIN {aggregate_table} AS h
+              ON h.sensor_id = d.sensor_id
+             AND h.bucket BETWEEN d.date_from AND d.date_to
+             {conditions}
+            ORDER BY d.depth_cm, h.bucket
+            "
+        );
+
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, params);
+        let rows = db.query_all(stmt).await?;
+
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let y: f64 = row.try_get("", "y")?;
+            map.entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y });
+        }
+        Ok(map)
+    }
+
+    /// Load moisture data from a continuous aggregate (sensordata_hourly or sensordata_daily).
+    /// Returns VWC-converted values using mc_calc_vwc on the aggregated counts/temperature.
+    pub async fn load_moisture_from_aggregate(
+        &self,
+        db: &DatabaseConnection,
+        aggregate_table: &str,
+        date_from: Option<DateTime<Utc>>,
+        date_to: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<i32, Vec<DepthAverageData>>, DbErr> {
+        let soil_type: soil_sensor_toolbox::SoilType = self
+            .soil_type_vwc
+            .clone()
+            .unwrap_or(SoilTypeEnum::Universal)
+            .into();
+
+        let mut conditions = String::new();
+        let mut params: Vec<sea_orm::Value> = vec![self.id.into()];
+        let mut idx = 2usize;
+
+        if let Some(df) = date_from {
+            conditions.push_str(&format!(" AND h.bucket >= ${idx}"));
+            params.push(df.into());
+            idx += 1;
+        }
+        if let Some(dt) = date_to {
+            conditions.push_str(&format!(" AND h.bucket <= ${idx}"));
+            params.push(dt.into());
+        }
+
+        let sql = format!(
+            r"
+            WITH depths AS (
+                SELECT
+                    spa.depth_cm_moisture AS depth_cm,
+                    spa.sensor_id,
+                    spa.date_from,
+                    spa.date_to
+                FROM sensorprofile_assignment AS spa
+                WHERE spa.sensorprofile_id = $1 AND spa.depth_cm_moisture IS NOT NULL
+            )
+            SELECT
+                d.depth_cm,
+                h.bucket AS time_utc,
+                h.avg_moisture_count AS moisture_count,
+                h.avg_temp_1 AS temperature
+            FROM depths AS d
+            JOIN {aggregate_table} AS h
+              ON h.sensor_id = d.sensor_id
+             AND h.bucket BETWEEN d.date_from AND d.date_to
+             {conditions}
+            ORDER BY d.depth_cm, h.bucket
+            "
+        );
+
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, params);
+        let rows = db.query_all(stmt).await?;
+
+        let mut map: HashMap<i32, Vec<DepthAverageData>> = HashMap::new();
+        for row in rows {
+            let depth_cm: i32 = row.try_get("", "depth_cm")?;
+            let time_utc: DateTime<Utc> = row.try_get("", "time_utc")?;
+            let moisture_count: f64 = row.try_get("", "moisture_count")?;
+            let temperature: f64 = row.try_get("", "temperature")?;
+
+            let vwc = mc_calc_vwc(moisture_count, temperature, soil_type);
+            map.entry(depth_cm)
+                .or_default()
+                .push(DepthAverageData { time_utc, y: vwc });
+        }
+        Ok(map)
+    }
+
     /// Load average (or raw) soil-moisture by the `depth_cm_moisture` assignment.
     ///
     /// - `window_hours = Some(h)`: bucket into h-hour windows and average.

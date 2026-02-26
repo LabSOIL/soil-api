@@ -11,17 +11,17 @@ use axum::{
     response::IntoResponse,
 };
 use axum_response_cache::CacheLayer;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
+use chrono::{DateTime, Utc};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Statement};
 use serde::{Deserialize, Serialize};
 use soil_sensor_toolbox::{SoilType, SoilTypeModel};
-use std::collections::HashMap;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct SensorQueryParams {
-    pub website: String,
+    pub website: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, ToSchema)]
@@ -68,8 +68,15 @@ pub async fn get_one_temperature(
     Path(id): Path<Uuid>,
     Query(params): Query<SensorQueryParams>,
 ) -> impl IntoResponse {
+    let Some(website_slug) = params.website else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Missing required query parameter: 'website'".to_string()),
+        ));
+    };
+
     // Access check: sensor must be in an area assigned to this website and not excluded
-    let date_range = match check_sensor_access(&db, id, &params.website).await {
+    let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
         Ok(None) => {
             return Err((
@@ -87,20 +94,44 @@ pub async fn get_one_temperature(
 
     match ProfileDB::Entity::find_by_id(id).one(&db).await {
         Ok(Some(profile)) => {
-            // First convert to the private model to use the temp function
             let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
                 profile.into();
 
-            // Get the average temperature by depth cm
-            let hour_average = Some(1);
-            profile.data_by_depth_cm = profile
-                .load_average_temperature_series_by_depth_cm(&db, hour_average)
-                .await
-                .unwrap_or(HashMap::new());
-
-            // Apply date filtering from website access
             let (date_from, date_to) = date_range;
-            if date_from.is_some() || date_to.is_some() {
+            let span_days = effective_date_span_days(&db, id, date_from, date_to).await;
+
+            profile.data_by_depth_cm = if span_days < 7 {
+                // Full resolution from raw sensordata
+                profile
+                    .load_average_temperature_series_by_depth_cm(&db, None)
+                    .await
+                    .unwrap_or_default()
+            } else if span_days <= 90 {
+                // Hourly aggregate
+                profile
+                    .load_temperature_from_aggregate(
+                        &db,
+                        "sensordata_hourly",
+                        date_from,
+                        date_to,
+                    )
+                    .await
+                    .unwrap_or_default()
+            } else {
+                // Daily aggregate
+                profile
+                    .load_temperature_from_aggregate(
+                        &db,
+                        "sensordata_daily",
+                        date_from,
+                        date_to,
+                    )
+                    .await
+                    .unwrap_or_default()
+            };
+
+            // Apply date filtering for raw data path (aggregates already filtered)
+            if span_days < 7 && (date_from.is_some() || date_to.is_some()) {
                 for data in profile.data_by_depth_cm.values_mut() {
                     data.retain(|d| {
                         date_from.is_none_or(|df| d.time_utc >= df)
@@ -141,8 +172,15 @@ pub async fn get_one_moisture(
     Path(id): Path<Uuid>,
     Query(params): Query<SensorQueryParams>,
 ) -> impl IntoResponse {
+    let Some(website_slug) = params.website else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Missing required query parameter: 'website'".to_string()),
+        ));
+    };
+
     // Access check: sensor must be in an area assigned to this website and not excluded
-    let date_range = match check_sensor_access(&db, id, &params.website).await {
+    let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
         Ok(None) => {
             return Err((
@@ -160,20 +198,44 @@ pub async fn get_one_moisture(
 
     match ProfileDB::Entity::find_by_id(id).one(&db).await {
         Ok(Some(profile)) => {
-            // First convert to the private model to use the temp function
             let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
                 profile.into();
 
-            // Get the average moisture by depth cm
-            let hour_average = Some(1);
-            profile.data_by_depth_cm = profile
-                .load_average_moisture_series_by_depth_cm(&db, hour_average)
-                .await
-                .unwrap_or(HashMap::new());
-
-            // Apply date filtering from website access
             let (date_from, date_to) = date_range;
-            if date_from.is_some() || date_to.is_some() {
+            let span_days = effective_date_span_days(&db, id, date_from, date_to).await;
+
+            profile.data_by_depth_cm = if span_days < 7 {
+                // Full resolution from raw sensordata
+                profile
+                    .load_average_moisture_series_by_depth_cm(&db, None)
+                    .await
+                    .unwrap_or_default()
+            } else if span_days <= 90 {
+                // Hourly aggregate
+                profile
+                    .load_moisture_from_aggregate(
+                        &db,
+                        "sensordata_hourly",
+                        date_from,
+                        date_to,
+                    )
+                    .await
+                    .unwrap_or_default()
+            } else {
+                // Daily aggregate
+                profile
+                    .load_moisture_from_aggregate(
+                        &db,
+                        "sensordata_daily",
+                        date_from,
+                        date_to,
+                    )
+                    .await
+                    .unwrap_or_default()
+            };
+
+            // Apply date filtering for raw data path (aggregates already filtered)
+            if span_days < 7 && (date_from.is_some() || date_to.is_some()) {
                 for data in profile.data_by_depth_cm.values_mut() {
                     data.retain(|d| {
                         date_from.is_none_or(|df| d.time_utc >= df)
@@ -214,8 +276,15 @@ pub async fn get_one_flux(
     Path(id): Path<Uuid>,
     Query(params): Query<SensorQueryParams>,
 ) -> impl IntoResponse {
+    let Some(website_slug) = params.website else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Missing required query parameter: 'website'".to_string()),
+        ));
+    };
+
     // Access check
-    let date_range = match check_sensor_access(&db, id, &params.website).await {
+    let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
         Ok(None) => {
             return Err((
@@ -312,8 +381,15 @@ pub async fn get_one_redox(
     Path(id): Path<Uuid>,
     Query(params): Query<SensorQueryParams>,
 ) -> impl IntoResponse {
+    let Some(website_slug) = params.website else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Missing required query parameter: 'website'".to_string()),
+        ));
+    };
+
     // Access check
-    let date_range = match check_sensor_access(&db, id, &params.website).await {
+    let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
         Ok(None) => {
             return Err((
@@ -413,4 +489,39 @@ pub async fn get_soil_types() -> impl IntoResponse {
         .collect();
 
     (StatusCode::OK, Json(soil_types))
+}
+
+/// Compute the effective date span in days for a sensor profile.
+/// Uses the website access date range clipped by the sensor's assignment dates.
+async fn effective_date_span_days(
+    db: &DatabaseConnection,
+    profile_id: Uuid,
+    website_from: Option<DateTime<Utc>>,
+    website_to: Option<DateTime<Utc>>,
+) -> i64 {
+    let sql = r"
+        SELECT MIN(date_from) AS min_from, MAX(date_to) AS max_to
+        FROM sensorprofile_assignment
+        WHERE sensorprofile_id = $1
+    ";
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        sql,
+        vec![profile_id.into()],
+    );
+
+    if let Ok(Some(row)) = db.query_one(stmt).await {
+        let assign_from: Option<DateTime<Utc>> = row.try_get("", "min_from").ok();
+        let assign_to: Option<DateTime<Utc>> = row.try_get("", "max_to").ok();
+
+        let effective_from = website_from.or(assign_from);
+        let effective_to = website_to.or(assign_to);
+
+        match (effective_from, effective_to) {
+            (Some(from), Some(to)) => (to - from).num_days(),
+            _ => 365, // Unknown range → default to daily aggregate
+        }
+    } else {
+        365
+    }
 }
