@@ -263,40 +263,22 @@ impl SensorProfile {
 
         // Compute effective span from start/end or assignment dates
         let span_days = Self::compute_span_days(db, id, start, end).await;
-        let resolution = if span_days <= 7 {
-            "raw"
-        } else if span_days <= 365 {
-            "hourly"
+        let (resolution, window_hours) = if span_days <= 7 {
+            ("raw", None)
         } else {
-            "daily"
+            ("hourly", Some(1))
         };
 
-        match resolution {
-            "raw" => {
-                let temperature_data = sensor_profile
-                    .load_average_temperature_series_by_depth_cm(db, None, start, end)
-                    .await?;
-                let (moisture_vwc_data, moisture_raw_data) = sensor_profile
-                    .load_moisture_data_by_depth_cm(db, None, start, end)
-                    .await?;
+        let temperature_data = sensor_profile
+            .load_average_temperature_series_by_depth_cm(db, window_hours, start, end)
+            .await?;
+        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
+            .load_moisture_data_by_depth_cm(db, window_hours, start, end)
+            .await?;
 
-                sensor_profile.temperature_by_depth_cm = temperature_data;
-                sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
-                sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
-            }
-            aggregate_table_suffix => {
-                let table = format!("sensordata_{aggregate_table_suffix}");
-                let temperature_data = sensor_profile
-                    .load_temperature_from_aggregate(db, &table, start, end)
-                    .await?;
-                let moisture_vwc_data = sensor_profile
-                    .load_moisture_from_aggregate(db, &table, start, end)
-                    .await?;
-
-                sensor_profile.temperature_by_depth_cm = temperature_data;
-                sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
-            }
-        }
+        sensor_profile.temperature_by_depth_cm = temperature_data;
+        sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
+        sensor_profile.moisture_raw_by_depth_cm = moisture_raw_data;
 
         sensor_profile.data_by_depth_cm = sensor_profile.temperature_by_depth_cm.clone();
         sensor_profile.resolution = Some(resolution.to_string());

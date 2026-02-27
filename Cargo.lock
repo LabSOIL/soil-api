@@ -3434,6 +3434,8 @@ dependencies = [
 [[package]]
 name = "soil-sensor-toolbox"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "893ee3bfffa5613df2ba6a832da66e64b448aa924eb1f7feb2865886ae6caeb7"
 dependencies = [
  "anyhow",
  "chrono",
