@@ -214,6 +214,16 @@ impl CRUDResource for Sensor {
                         .await?;
                 }
             }
+
+            // Recompute averages for all profiles assigned to this sensor
+            db.execute_unprepared(&format!(
+                "SELECT recompute_sensor_averages(sa.sensorprofile_id) \
+                 FROM sensorprofile_assignment sa \
+                 WHERE sa.sensor_id = '{}' \
+                 GROUP BY sa.sensorprofile_id",
+                result.last_insert_id
+            ))
+            .await?;
         }
 
         match Self::get_one(db, result.last_insert_id).await {
@@ -300,6 +310,16 @@ impl CRUDResource for Sensor {
                         .await?;
                 }
             }
+
+            // Recompute averages for all profiles assigned to this sensor
+            db.execute_unprepared(&format!(
+                "SELECT recompute_sensor_averages(sa.sensorprofile_id) \
+                 FROM sensorprofile_assignment sa \
+                 WHERE sa.sensor_id = '{}' \
+                 GROUP BY sa.sensorprofile_id",
+                id
+            ))
+            .await?;
         }
 
         // Update the main Sensor record using the merge_into_activemodel logic

@@ -94,6 +94,11 @@ impl MigrationTrait for Migration {
                 sensorprofile_id UUID NOT NULL REFERENCES sensorprofile(id) ON DELETE CASCADE,
                 UNIQUE(website_id, sensorprofile_id)
             );
+
+            -- Access control and assignment indexes
+            CREATE INDEX IF NOT EXISTS idx_area_website_composite ON area_website (area_id, website_id);
+            CREATE INDEX IF NOT EXISTS idx_wse_composite ON website_sensor_exclusion (website_id, sensorprofile_id);
+            CREATE INDEX IF NOT EXISTS idx_spa_profile ON sensorprofile_assignment (sensorprofile_id);
             "#,
         )
         .await?;
@@ -220,6 +225,11 @@ impl MigrationTrait for Migration {
                 start_offset => INTERVAL '3 weeks',
                 end_offset => INTERVAL '1 week',
                 schedule_interval => INTERVAL '1 week');
+
+            -- Indexes on continuous aggregates for fast lookups
+            CREATE INDEX ON sensordata_hourly (sensor_id, bucket);
+            CREATE INDEX ON sensordata_daily  (sensor_id, bucket);
+            CREATE INDEX ON sensordata_weekly (sensor_id, bucket);
 
             -- Compression (data older than 30 days)
             ALTER TABLE sensordata SET (

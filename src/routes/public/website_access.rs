@@ -13,7 +13,7 @@ use crate::routes::private::website_plot_exclusions::db as PlotExclusionDB;
 use crate::routes::private::website_sensor_exclusions::db as SensorExclusionDB;
 use crate::routes::private::websites::db as WebsiteDB;
 use chrono::{DateTime, Utc};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Statement};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -84,54 +84,43 @@ pub async fn resolve_website_access(
 }
 
 /// Check if a sensor is accessible on a website.
-/// Returns Some((date_from, date_to)) if accessible, None if blocked.
+/// Returns Some((profile, date_from, date_to)) if accessible, None if blocked.
+/// Combines website lookup, area_website check, and exclusion check into a single query.
 pub async fn check_sensor_access(
     db: &DatabaseConnection,
     sensor_id: Uuid,
     slug: &str,
-) -> Result<Option<(Option<DateTime<Utc>>, Option<DateTime<Utc>>)>, sea_orm::DbErr> {
-    // 1. Lookup website by slug
-    let website = WebsiteDB::Entity::find()
-        .filter(WebsiteDB::Column::Slug.eq(slug))
-        .one(db)
-        .await?;
+) -> Result<Option<(ProfileDB::Model, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>, sea_orm::DbErr>
+{
+    // Single query: website + area_website join + exclusion check
+    let sql = r#"
+        SELECT aw.date_from, aw.date_to
+        FROM website w
+        JOIN sensorprofile sp ON sp.id = $1
+        JOIN area_website aw ON aw.area_id = sp.area_id AND aw.website_id = w.id
+        LEFT JOIN website_sensor_exclusion wse
+            ON wse.website_id = w.id AND wse.sensorprofile_id = sp.id
+        WHERE w.slug = $2 AND wse.id IS NULL
+    "#;
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        sql,
+        vec![sensor_id.into(), slug.into()],
+    );
 
-    let website = match website {
-        Some(w) => w,
+    let row = match db.query_one(stmt).await? {
+        Some(r) => r,
         None => return Ok(None),
     };
 
-    // 2. Lookup sensor profile to get area_id
-    let profile = ProfileDB::Entity::find_by_id(sensor_id).one(db).await?;
+    let date_from: Option<DateTime<Utc>> = row.try_get("", "date_from").ok().flatten();
+    let date_to: Option<DateTime<Utc>> = row.try_get("", "date_to").ok().flatten();
 
-    let profile = match profile {
+    // Profile must exist since the JOIN with sensorprofile succeeded
+    let profile = match ProfileDB::Entity::find_by_id(sensor_id).one(db).await? {
         Some(p) => p,
         None => return Ok(None),
     };
 
-    // 3. Check if area_id has an area_website entry for this website
-    let area_website = AreaWebsiteDB::Entity::find()
-        .filter(AreaWebsiteDB::Column::AreaId.eq(profile.area_id))
-        .filter(AreaWebsiteDB::Column::WebsiteId.eq(website.id))
-        .one(db)
-        .await?;
-
-    let area_website = match area_website {
-        Some(aw) => aw,
-        None => return Ok(None),
-    };
-
-    // 4. Check if sensor is in the exclusion list
-    let exclusion = SensorExclusionDB::Entity::find()
-        .filter(SensorExclusionDB::Column::WebsiteId.eq(website.id))
-        .filter(SensorExclusionDB::Column::SensorprofileId.eq(sensor_id))
-        .one(db)
-        .await?;
-
-    if exclusion.is_some() {
-        return Ok(None); // Sensor is excluded
-    }
-
-    // 5. Return the date restrictions
-    Ok(Some((area_website.date_from, area_website.date_to)))
+    Ok(Some((profile, date_from, date_to)))
 }

@@ -1,7 +1,5 @@
 use crate::common::geometry::Geometry;
-use crate::config::Config;
 use crate::routes::private::sensors::flux_data::db as FluxDB;
-use crate::routes::private::sensors::profile::db as ProfileDB;
 use crate::routes::private::sensors::redox_data::db as RedoxDB;
 use crate::routes::public::website_access::{check_sensor_access, validate_slug};
 use axum::{
@@ -10,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use axum_response_cache::CacheLayer;
 use chrono::{DateTime, Utc};
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Statement};
 use serde::{Deserialize, Serialize};
@@ -46,10 +43,6 @@ pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
         .routes(routes!(get_one_flux))
         .routes(routes!(get_one_redox))
         .routes(routes!(get_soil_types))
-        .layer(
-            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
-                .use_stale_on_failure(),
-        )
         .with_state(db.clone())
 }
 
@@ -84,92 +77,50 @@ pub async fn get_one_temperature(
         ));
     }
 
-    // Access check: sensor must be in an area assigned to this website and not excluded
-    let date_range = match check_sensor_access(&db, id, &website_slug).await {
-        Ok(Some(range)) => range,
-        Ok(None) => {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json("Sensor profile not found".to_string()),
-            ))
-        }
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json("Internal server error".to_string()),
-            ))
-        }
-    };
-
-    match ProfileDB::Entity::find_by_id(id).one(&db).await {
-        Ok(Some(profile)) => {
-            let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
-                profile.into();
-
-            let (website_from, website_to) = date_range;
-            let (date_from, date_to, span_days) = effective_date_range(
-                &db, id, website_from, website_to, params.start, params.end,
-            ).await;
-
-            let resolution = resolution_for_span(span_days);
-
-            profile.data_by_depth_cm = match resolution {
-                "raw" => {
-                    profile
-                        .load_average_temperature_series_by_depth_cm(&db, None)
-                        .await
-                        .unwrap_or_default()
-                }
-                "hourly" => {
-                    profile
-                        .load_temperature_from_aggregate(
-                            &db, "sensordata_hourly", date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-                "6-hourly" => {
-                    profile
-                        .load_temperature_from_aggregate_grouped(
-                            &db, "sensordata_hourly", 6, date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-                _ => {
-                    profile
-                        .load_temperature_from_aggregate(
-                            &db, "sensordata_weekly", date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-            };
-
-            // Apply date filtering for raw data path (aggregates already filtered)
-            if resolution == "raw" && (date_from.is_some() || date_to.is_some()) {
-                for data in profile.data_by_depth_cm.values_mut() {
-                    data.retain(|d| {
-                        date_from.is_none_or(|df| d.time_utc >= df)
-                            && date_to.is_none_or(|dt| d.time_utc <= dt)
-                    });
-                }
+    // Access check + profile lookup (single SQL + ORM fetch)
+    let t0 = std::time::Instant::now();
+    let (profile_model, website_from, website_to) =
+        match check_sensor_access(&db, id, &website_slug).await {
+            Ok(Some(result)) => result,
+            Ok(None) => {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json("Sensor profile not found".to_string()),
+                ))
             }
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Internal server error".to_string()),
+                ))
+            }
+        };
+    tracing::debug!("access_check: {:?}", t0.elapsed());
 
-            profile.resolution = Some(resolution.to_string());
-            let profile: super::models::SensorProfile = profile.into();
+    let profile: crate::routes::private::sensors::profile::models::SensorProfile =
+        profile_model.into();
 
-            Ok((StatusCode::OK, Json(profile)))
-        }
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            Json("Sensor profile not found".to_string()),
-        )),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal server error".to_string()),
-        )),
-    }
+    let t1 = std::time::Instant::now();
+    let (date_from, date_to, span_days) = effective_date_range(
+        &db, id, website_from, website_to, params.start, params.end,
+    )
+    .await;
+    tracing::debug!("effective_date_range: {:?}", t1.elapsed());
+
+    let (resolution, window_hours) = resolution_for_span(span_days);
+
+    let t2 = std::time::Instant::now();
+    let depth_data = profile
+        .load_average_temperature_series_by_depth_cm(&db, window_hours, date_from, date_to)
+        .await
+        .unwrap_or_default();
+    tracing::debug!("load_temperature({}): {:?}", resolution, t2.elapsed());
+
+    let response = super::models::SensorProfile::from_depth_map(
+        profile.id, &profile.name, resolution, "\u{00B0}C", depth_data,
+    );
+
+    Ok((StatusCode::OK, Json(response)))
 }
 
 #[utoipa::path(
@@ -203,92 +154,50 @@ pub async fn get_one_moisture(
         ));
     }
 
-    // Access check: sensor must be in an area assigned to this website and not excluded
-    let date_range = match check_sensor_access(&db, id, &website_slug).await {
-        Ok(Some(range)) => range,
-        Ok(None) => {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json("Sensor profile not found".to_string()),
-            ))
-        }
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json("Internal server error".to_string()),
-            ))
-        }
-    };
-
-    match ProfileDB::Entity::find_by_id(id).one(&db).await {
-        Ok(Some(profile)) => {
-            let mut profile: crate::routes::private::sensors::profile::models::SensorProfile =
-                profile.into();
-
-            let (website_from, website_to) = date_range;
-            let (date_from, date_to, span_days) = effective_date_range(
-                &db, id, website_from, website_to, params.start, params.end,
-            ).await;
-
-            let resolution = resolution_for_span(span_days);
-
-            profile.data_by_depth_cm = match resolution {
-                "raw" => {
-                    profile
-                        .load_average_moisture_series_by_depth_cm(&db, None)
-                        .await
-                        .unwrap_or_default()
-                }
-                "hourly" => {
-                    profile
-                        .load_moisture_from_aggregate(
-                            &db, "sensordata_hourly", date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-                "6-hourly" => {
-                    profile
-                        .load_moisture_from_aggregate_grouped(
-                            &db, "sensordata_hourly", 6, date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-                _ => {
-                    profile
-                        .load_moisture_from_aggregate(
-                            &db, "sensordata_weekly", date_from, date_to,
-                        )
-                        .await
-                        .unwrap_or_default()
-                }
-            };
-
-            // Apply date filtering for raw data path (aggregates already filtered)
-            if resolution == "raw" && (date_from.is_some() || date_to.is_some()) {
-                for data in profile.data_by_depth_cm.values_mut() {
-                    data.retain(|d| {
-                        date_from.is_none_or(|df| d.time_utc >= df)
-                            && date_to.is_none_or(|dt| d.time_utc <= dt)
-                    });
-                }
+    // Access check + profile lookup (single SQL + ORM fetch)
+    let t0 = std::time::Instant::now();
+    let (profile_model, website_from, website_to) =
+        match check_sensor_access(&db, id, &website_slug).await {
+            Ok(Some(result)) => result,
+            Ok(None) => {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json("Sensor profile not found".to_string()),
+                ))
             }
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json("Internal server error".to_string()),
+                ))
+            }
+        };
+    tracing::debug!("access_check: {:?}", t0.elapsed());
 
-            profile.resolution = Some(resolution.to_string());
-            let profile: super::models::SensorProfile = profile.into();
+    let profile: crate::routes::private::sensors::profile::models::SensorProfile =
+        profile_model.into();
 
-            Ok((StatusCode::OK, Json(profile)))
-        }
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            Json("Sensor profile not found".to_string()),
-        )),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal server error".to_string()),
-        )),
-    }
+    let t1 = std::time::Instant::now();
+    let (date_from, date_to, span_days) = effective_date_range(
+        &db, id, website_from, website_to, params.start, params.end,
+    )
+    .await;
+    tracing::debug!("effective_date_range: {:?}", t1.elapsed());
+
+    let (resolution, window_hours) = resolution_for_span(span_days);
+
+    let t2 = std::time::Instant::now();
+    let depth_data = profile
+        .load_average_moisture_series_by_depth_cm(&db, window_hours, date_from, date_to)
+        .await
+        .unwrap_or_default();
+    tracing::debug!("load_moisture({}): {:?}", resolution, t2.elapsed());
+
+    let response = super::models::SensorProfile::from_depth_map(
+        profile.id, &profile.name, resolution, "VWC", depth_data,
+    );
+
+    Ok((StatusCode::OK, Json(response)))
 }
 
 #[utoipa::path(
@@ -322,9 +231,9 @@ pub async fn get_one_flux(
         ));
     }
 
-    // Access check
-    let date_range = match check_sensor_access(&db, id, &website_slug).await {
-        Ok(Some(range)) => range,
+    // Access check + profile lookup
+    let (profile, date_from, date_to) = match check_sensor_access(&db, id, &website_slug).await {
+        Ok(Some(result)) => result,
         Ok(None) => {
             return Err((
                 StatusCode::NOT_FOUND,
@@ -339,68 +248,54 @@ pub async fn get_one_flux(
         }
     };
 
-    match ProfileDB::Entity::find_by_id(id).one(&db).await {
-        Ok(Some(profile)) => {
-            let geom = Geometry {
-                srid: profile.coord_srid.unwrap_or_default(),
-                x: profile.coord_x.unwrap_or_default(),
-                y: profile.coord_y.unwrap_or_default(),
-                z: profile.coord_z.unwrap_or_default(),
-            }
-            .to_hashmap(vec![4326]);
-
-            let mut flux_query = FluxDB::Entity::find()
-                .filter(FluxDB::Column::SensorprofileId.eq(id));
-
-            // Apply date filtering
-            let (date_from, date_to) = date_range;
-            if let Some(df) = date_from {
-                flux_query = flux_query.filter(FluxDB::Column::MeasuredOn.gte(df));
-            }
-            if let Some(dt) = date_to {
-                flux_query = flux_query.filter(FluxDB::Column::MeasuredOn.lte(dt));
-            }
-
-            let flux_records = flux_query
-                .order_by_asc(FluxDB::Column::MeasuredOn)
-                .all(&db)
-                .await
-                .unwrap_or_default();
-
-            let flux_data: Vec<super::models::FluxDataPoint> = flux_records
-                .into_iter()
-                .map(|r| super::models::FluxDataPoint {
-                    measured_on: r.measured_on,
-                    replicate: r.replicate,
-                    setting: r.setting,
-                    flux_co2_umol_m2_s: r.flux_co2_umol_m2_s,
-                    flux_ch4_nmol_m2_s: r.flux_ch4_nmol_m2_s,
-                    flux_h2o_umol_m2_s: r.flux_h2o_umol_m2_s,
-                    r2_co2: r.r2_co2,
-                    r2_ch4: r.r2_ch4,
-                    r2_h2o: r.r2_h2o,
-                    swc: r.swc,
-                })
-                .collect();
-
-            let response = super::models::SensorProfileFlux {
-                id: profile.id,
-                name: profile.name,
-                geom,
-                flux_data,
-            };
-
-            Ok((StatusCode::OK, Json(response)))
-        }
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            Json("Sensor profile not found".to_string()),
-        )),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal server error".to_string()),
-        )),
+    let geom = Geometry {
+        srid: profile.coord_srid.unwrap_or_default(),
+        x: profile.coord_x.unwrap_or_default(),
+        y: profile.coord_y.unwrap_or_default(),
+        z: profile.coord_z.unwrap_or_default(),
     }
+    .to_hashmap(vec![4326]);
+
+    let mut flux_query = FluxDB::Entity::find()
+        .filter(FluxDB::Column::SensorprofileId.eq(id));
+
+    if let Some(df) = date_from {
+        flux_query = flux_query.filter(FluxDB::Column::MeasuredOn.gte(df));
+    }
+    if let Some(dt) = date_to {
+        flux_query = flux_query.filter(FluxDB::Column::MeasuredOn.lte(dt));
+    }
+
+    let flux_records = flux_query
+        .order_by_asc(FluxDB::Column::MeasuredOn)
+        .all(&db)
+        .await
+        .unwrap_or_default();
+
+    let flux_data: Vec<super::models::FluxDataPoint> = flux_records
+        .into_iter()
+        .map(|r| super::models::FluxDataPoint {
+            measured_on: r.measured_on,
+            replicate: r.replicate,
+            setting: r.setting,
+            flux_co2_umol_m2_s: r.flux_co2_umol_m2_s,
+            flux_ch4_nmol_m2_s: r.flux_ch4_nmol_m2_s,
+            flux_h2o_umol_m2_s: r.flux_h2o_umol_m2_s,
+            r2_co2: r.r2_co2,
+            r2_ch4: r.r2_ch4,
+            r2_h2o: r.r2_h2o,
+            swc: r.swc,
+        })
+        .collect();
+
+    let response = super::models::SensorProfileFlux {
+        id: profile.id,
+        name: profile.name,
+        geom,
+        flux_data,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }
 
 #[utoipa::path(
@@ -434,9 +329,9 @@ pub async fn get_one_redox(
         ));
     }
 
-    // Access check
-    let date_range = match check_sensor_access(&db, id, &website_slug).await {
-        Ok(Some(range)) => range,
+    // Access check + profile lookup
+    let (profile, date_from, date_to) = match check_sensor_access(&db, id, &website_slug).await {
+        Ok(Some(result)) => result,
         Ok(None) => {
             return Err((
                 StatusCode::NOT_FOUND,
@@ -451,64 +346,50 @@ pub async fn get_one_redox(
         }
     };
 
-    match ProfileDB::Entity::find_by_id(id).one(&db).await {
-        Ok(Some(profile)) => {
-            let geom = Geometry {
-                srid: profile.coord_srid.unwrap_or_default(),
-                x: profile.coord_x.unwrap_or_default(),
-                y: profile.coord_y.unwrap_or_default(),
-                z: profile.coord_z.unwrap_or_default(),
-            }
-            .to_hashmap(vec![4326]);
-
-            let mut redox_query = RedoxDB::Entity::find()
-                .filter(RedoxDB::Column::SensorprofileId.eq(id));
-
-            // Apply date filtering
-            let (date_from, date_to) = date_range;
-            if let Some(df) = date_from {
-                redox_query = redox_query.filter(RedoxDB::Column::MeasuredOn.gte(df));
-            }
-            if let Some(dt) = date_to {
-                redox_query = redox_query.filter(RedoxDB::Column::MeasuredOn.lte(dt));
-            }
-
-            let redox_records = redox_query
-                .order_by_asc(RedoxDB::Column::MeasuredOn)
-                .all(&db)
-                .await
-                .unwrap_or_default();
-
-            let redox_data: Vec<super::models::RedoxDataPoint> = redox_records
-                .into_iter()
-                .map(|r| super::models::RedoxDataPoint {
-                    measured_on: r.measured_on,
-                    ch1_5cm_mv: r.ch1_5cm_mv,
-                    ch2_15cm_mv: r.ch2_15cm_mv,
-                    ch3_25cm_mv: r.ch3_25cm_mv,
-                    ch4_35cm_mv: r.ch4_35cm_mv,
-                    temp_c: r.temp_c,
-                })
-                .collect();
-
-            let response = super::models::SensorProfileRedox {
-                id: profile.id,
-                name: profile.name,
-                geom,
-                redox_data,
-            };
-
-            Ok((StatusCode::OK, Json(response)))
-        }
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            Json("Sensor profile not found".to_string()),
-        )),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal server error".to_string()),
-        )),
+    let geom = Geometry {
+        srid: profile.coord_srid.unwrap_or_default(),
+        x: profile.coord_x.unwrap_or_default(),
+        y: profile.coord_y.unwrap_or_default(),
+        z: profile.coord_z.unwrap_or_default(),
     }
+    .to_hashmap(vec![4326]);
+
+    let mut redox_query = RedoxDB::Entity::find()
+        .filter(RedoxDB::Column::SensorprofileId.eq(id));
+
+    if let Some(df) = date_from {
+        redox_query = redox_query.filter(RedoxDB::Column::MeasuredOn.gte(df));
+    }
+    if let Some(dt) = date_to {
+        redox_query = redox_query.filter(RedoxDB::Column::MeasuredOn.lte(dt));
+    }
+
+    let redox_records = redox_query
+        .order_by_asc(RedoxDB::Column::MeasuredOn)
+        .all(&db)
+        .await
+        .unwrap_or_default();
+
+    let redox_data: Vec<super::models::RedoxDataPoint> = redox_records
+        .into_iter()
+        .map(|r| super::models::RedoxDataPoint {
+            measured_on: r.measured_on,
+            ch1_5cm_mv: r.ch1_5cm_mv,
+            ch2_15cm_mv: r.ch2_15cm_mv,
+            ch3_25cm_mv: r.ch3_25cm_mv,
+            ch4_35cm_mv: r.ch4_35cm_mv,
+            temp_c: r.temp_c,
+        })
+        .collect();
+
+    let response = super::models::SensorProfileRedox {
+        id: profile.id,
+        name: profile.name,
+        geom,
+        redox_data,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }
 
 #[utoipa::path(
@@ -591,15 +472,11 @@ async fn effective_date_range(
     (effective_from, effective_to, span_days)
 }
 
-/// Select the resolution label for a given span in days.
-fn resolution_for_span(span_days: i64) -> &'static str {
-    if span_days <= 14 {
-        "raw"
-    } else if span_days <= 120 {
-        "hourly"
-    } else if span_days <= 1095 {
-        "6-hourly"
+/// Select the resolution label and optional window size for a given span in days.
+fn resolution_for_span(span_days: i64) -> (&'static str, Option<i64>) {
+    if span_days <= 7 {
+        ("raw", None)         // every data point
     } else {
-        "weekly"
+        ("hourly", Some(1))   // 1-hour window from raw data (matches production v2.2.0)
     }
 }

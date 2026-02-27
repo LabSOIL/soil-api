@@ -14,8 +14,6 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use axum_response_cache::CacheLayer;
-use crate::config::Config;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
 use sea_orm::Statement;
@@ -29,10 +27,6 @@ use uuid::Uuid;
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_all_areas))
-        .layer(
-            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
-                .use_stale_on_failure(),
-        )
         .with_state(db.clone())
 }
 

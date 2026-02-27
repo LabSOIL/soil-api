@@ -8,16 +8,22 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
 
-        // 1. Soil VWC coefficients lookup table
+        // 1a. Soil VWC coefficients lookup table
         db.execute_unprepared(
             r#"
-            CREATE TABLE soil_vwc_coefficients (
+            CREATE TABLE IF NOT EXISTS soil_vwc_coefficients (
                 soil_type soil_type_enum PRIMARY KEY,
                 a DOUBLE PRECISION NOT NULL,
                 b DOUBLE PRECISION NOT NULL,
                 c DOUBLE PRECISION NOT NULL
             );
+            "#,
+        )
+        .await?;
 
+        // 1b. Insert coefficients (idempotent)
+        db.execute_unprepared(
+            r#"
             INSERT INTO soil_vwc_coefficients (soil_type, a, b, c) VALUES
                 ('sand',           -3.00e-09,   0.000161192, -0.1099565),
                 ('loamysanda',     -1.90e-08,   0.000265610, -0.1540893),
@@ -31,7 +37,8 @@ impl MigrationTrait for Migration {
                 ('universal',      -1.34e-08,   0.000249622, -0.1578888),
                 ('sandtms1',        0.00e+00,   0.000260000, -0.1330400),
                 ('loamysandtms1',   0.00e+00,   0.000330000, -0.1938900),
-                ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700);
+                ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700)
+            ON CONFLICT (soil_type) DO UPDATE SET a=EXCLUDED.a, b=EXCLUDED.b, c=EXCLUDED.c;
             "#,
         )
         .await?;
@@ -50,7 +57,7 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
-        // 3. Recompute function
+        // 3. Recompute function (reads from raw sensordata, not caggs)
         db.execute_unprepared(
             r#"
             CREATE OR REPLACE FUNCTION recompute_sensor_averages(target_profile_id UUID)
@@ -60,6 +67,23 @@ impl MigrationTrait for Migration {
               coeff_b DOUBLE PRECISION;
               coeff_c DOUBLE PRECISION;
             BEGIN
+              -- Ensure coefficients table is always populated (self-healing after data restore)
+              INSERT INTO soil_vwc_coefficients (soil_type, a, b, c) VALUES
+                  ('sand',           -3.00e-09,   0.000161192, -0.1099565),
+                  ('loamysanda',     -1.90e-08,   0.000265610, -0.1540893),
+                  ('loamysandb',     -2.30e-08,   0.000282473, -0.1672112),
+                  ('sandyloama',     -3.80e-08,   0.000339449, -0.2149218),
+                  ('sandyloamb',     -9.00e-10,   0.000261847, -0.1586183),
+                  ('loam',           -5.10e-08,   0.000397984, -0.2910464),
+                  ('siltloam',        1.70e-08,   0.000118119, -0.1011685),
+                  ('peat',            1.23e-07,  -0.000144644,  0.2029279),
+                  ('water',           0.00e+00,   0.000306700, -0.1349279),
+                  ('universal',      -1.34e-08,   0.000249622, -0.1578888),
+                  ('sandtms1',        0.00e+00,   0.000260000, -0.1330400),
+                  ('loamysandtms1',   0.00e+00,   0.000330000, -0.1938900),
+                  ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700)
+              ON CONFLICT (soil_type) DO UPDATE SET a=EXCLUDED.a, b=EXCLUDED.b, c=EXCLUDED.c;
+
               -- Get soil coefficients for this profile
               SELECT sc.a, sc.b, sc.c INTO coeff_a, coeff_b, coeff_c
               FROM soil_vwc_coefficients sc
@@ -75,52 +99,53 @@ impl MigrationTrait for Migration {
               -- Clear existing averages for this profile
               DELETE FROM sensorprofile_averages WHERE sensorprofile_id = target_profile_id;
 
-              -- Insert temperature averages (3 depths per assignment)
+              -- Insert temperature averages using per-depth temperatures from raw sensordata
               INSERT INTO sensorprofile_averages (sensorprofile_id, depth_cm, avg_temp)
               SELECT
                 target_profile_id,
                 d.depth_cm,
-                SUM(sd.avg_temp * sd.sample_count) / NULLIF(SUM(sd.sample_count), 0)
-              FROM (
-                SELECT
-                  sa.sensor_id, sa.date_from, sa.date_to,
-                  unnest(ARRAY[sa.depth_cm_sensor1, sa.depth_cm_sensor2, sa.depth_cm_sensor3]) AS depth_cm
-                FROM sensorprofile_assignment sa
-                WHERE sa.sensorprofile_id = target_profile_id
-              ) d
-              JOIN sensordata_daily sd
-                ON sd.sensor_id = d.sensor_id
-               AND sd.bucket >= d.date_from AND sd.bucket <= d.date_to
+                AVG(CASE d.ord
+                  WHEN 1 THEN sd.temperature_1
+                  WHEN 2 THEN sd.temperature_2
+                  WHEN 3 THEN sd.temperature_3
+                END)
+              FROM sensorprofile_assignment sa
+              CROSS JOIN LATERAL unnest(
+                ARRAY[sa.depth_cm_sensor1, sa.depth_cm_sensor2, sa.depth_cm_sensor3]
+              ) WITH ORDINALITY AS d(depth_cm, ord)
+              JOIN sensordata sd
+                ON sd.sensor_id = sa.sensor_id
+               AND sd.time_utc >= sa.date_from
+               AND sd.time_utc <= sa.date_to
+              WHERE sa.sensorprofile_id = target_profile_id
               GROUP BY d.depth_cm;
 
-              -- Insert/update moisture averages (VWC formula)
+              -- Insert/update moisture averages (VWC formula from raw data)
               INSERT INTO sensorprofile_averages (sensorprofile_id, depth_cm, avg_vwc)
               SELECT
                 target_profile_id,
-                a.depth_cm,
-                SUM(
+                sa.depth_cm_moisture,
+                AVG(
                   GREATEST(0.0::double precision, LEAST(1.0::double precision,
                     coeff_a * vwc.tcor * vwc.tcor + coeff_b * vwc.tcor + coeff_c
-                  )) * sd.sample_count
-                ) / NULLIF(SUM(sd.sample_count), 0)
-              FROM (
-                SELECT sa.sensor_id, sa.date_from, sa.date_to,
-                       sa.depth_cm_moisture AS depth_cm
-                FROM sensorprofile_assignment sa
-                WHERE sa.sensorprofile_id = target_profile_id
-                  AND sa.depth_cm_moisture IS NOT NULL
-              ) a
-              JOIN sensordata_daily sd
-                ON sd.sensor_id = a.sensor_id
-               AND sd.bucket >= a.date_from AND sd.bucket <= a.date_to
+                  ))
+                )
+              FROM sensorprofile_assignment sa
+              JOIN sensordata sd
+                ON sd.sensor_id = sa.sensor_id
+               AND sd.time_utc >= sa.date_from
+               AND sd.time_utc <= sa.date_to
               CROSS JOIN LATERAL (
-                SELECT sd.avg_moisture_count + (24.0 - sd.avg_temp_1)
+                SELECT sd.soil_moisture_count::double precision + (24.0 - sd.temperature_1)
                   * (1.911327 - 1.270247
-                     * (coeff_a * sd.avg_moisture_count * sd.avg_moisture_count
-                        + coeff_b * sd.avg_moisture_count + coeff_c))
+                     * (coeff_a * sd.soil_moisture_count::double precision
+                              * sd.soil_moisture_count::double precision
+                        + coeff_b * sd.soil_moisture_count::double precision + coeff_c))
                   AS tcor
               ) vwc
-              GROUP BY a.depth_cm
+              WHERE sa.sensorprofile_id = target_profile_id
+                AND sa.depth_cm_moisture IS NOT NULL
+              GROUP BY sa.depth_cm_moisture
               ON CONFLICT (sensorprofile_id, depth_cm) DO UPDATE
                 SET avg_vwc = EXCLUDED.avg_vwc;
             END;
@@ -129,34 +154,7 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
-        // 4. Trigger functions and triggers
-
-        // Trigger on sensordata INSERT
-        db.execute_unprepared(
-            r#"
-            CREATE OR REPLACE FUNCTION trigger_sensordata_averages()
-            RETURNS TRIGGER AS $$
-            DECLARE pid UUID;
-            BEGIN
-              FOR pid IN
-                SELECT DISTINCT sa.sensorprofile_id
-                FROM sensorprofile_assignment sa
-                WHERE sa.sensor_id = NEW.sensor_id
-                  AND sa.date_from <= NEW.time_utc
-                  AND (sa.date_to IS NULL OR sa.date_to >= NEW.time_utc)
-              LOOP
-                PERFORM recompute_sensor_averages(pid);
-              END LOOP;
-              RETURN NULL;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            CREATE TRIGGER trg_sensordata_averages
-              AFTER INSERT ON sensordata
-              FOR EACH ROW EXECUTE FUNCTION trigger_sensordata_averages();
-            "#,
-        )
-        .await?;
+        // 4. Triggers (assignment + soil-type only; no per-row sensordata trigger)
 
         // Trigger on sensorprofile_assignment changes
         db.execute_unprepared(

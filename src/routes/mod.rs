@@ -149,5 +149,7 @@ pub fn build_router(db: &DatabaseConnection) -> Router {
         .layer(DefaultBodyLimit::max(30 * 1024 * 1024))
         .split_for_parts();
 
-    router.merge(Scalar::with_url("/api/docs", api))
+    router
+        .merge(Scalar::with_url("/api/docs", api))
+        .layer(tower_http::compression::CompressionLayer::new())
 }
