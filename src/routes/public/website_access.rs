@@ -1,3 +1,12 @@
+/// Validate that a website slug contains only safe characters.
+pub fn validate_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 100
+        && slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
 use crate::routes::private::area_websites::db as AreaWebsiteDB;
 use crate::routes::private::sensors::profile::db as ProfileDB;
 use crate::routes::private::website_plot_exclusions::db as PlotExclusionDB;

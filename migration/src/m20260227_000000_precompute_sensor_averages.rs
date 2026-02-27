@@ -1,0 +1,244 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let db = manager.get_connection();
+
+        // 1. Soil VWC coefficients lookup table
+        db.execute_unprepared(
+            r#"
+            CREATE TABLE soil_vwc_coefficients (
+                soil_type soil_type_enum PRIMARY KEY,
+                a DOUBLE PRECISION NOT NULL,
+                b DOUBLE PRECISION NOT NULL,
+                c DOUBLE PRECISION NOT NULL
+            );
+
+            INSERT INTO soil_vwc_coefficients (soil_type, a, b, c) VALUES
+                ('sand',           -3.00e-09,   0.000161192, -0.1099565),
+                ('loamysanda',     -1.90e-08,   0.000265610, -0.1540893),
+                ('loamysandb',     -2.30e-08,   0.000282473, -0.1672112),
+                ('sandyloama',     -3.80e-08,   0.000339449, -0.2149218),
+                ('sandyloamb',     -9.00e-10,   0.000261847, -0.1586183),
+                ('loam',           -5.10e-08,   0.000397984, -0.2910464),
+                ('siltloam',        1.70e-08,   0.000118119, -0.1011685),
+                ('peat',            1.23e-07,  -0.000144644,  0.2029279),
+                ('water',           0.00e+00,   0.000306700, -0.1349279),
+                ('universal',      -1.34e-08,   0.000249622, -0.1578888),
+                ('sandtms1',        0.00e+00,   0.000260000, -0.1330400),
+                ('loamysandtms1',   0.00e+00,   0.000330000, -0.1938900),
+                ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700);
+            "#,
+        )
+        .await?;
+
+        // 2. Precomputed averages table
+        db.execute_unprepared(
+            r#"
+            CREATE TABLE sensorprofile_averages (
+                sensorprofile_id UUID NOT NULL REFERENCES sensorprofile(id) ON DELETE CASCADE,
+                depth_cm INTEGER NOT NULL,
+                avg_temp DOUBLE PRECISION,
+                avg_vwc DOUBLE PRECISION,
+                PRIMARY KEY (sensorprofile_id, depth_cm)
+            );
+            "#,
+        )
+        .await?;
+
+        // 3. Recompute function
+        db.execute_unprepared(
+            r#"
+            CREATE OR REPLACE FUNCTION recompute_sensor_averages(target_profile_id UUID)
+            RETURNS VOID AS $$
+            DECLARE
+              coeff_a DOUBLE PRECISION;
+              coeff_b DOUBLE PRECISION;
+              coeff_c DOUBLE PRECISION;
+            BEGIN
+              -- Get soil coefficients for this profile
+              SELECT sc.a, sc.b, sc.c INTO coeff_a, coeff_b, coeff_c
+              FROM soil_vwc_coefficients sc
+              JOIN sensorprofile sp ON sp.soil_type_vwc = sc.soil_type
+              WHERE sp.id = target_profile_id;
+
+              -- Default to 'universal' if no match (e.g. NULL soil_type_vwc)
+              IF coeff_a IS NULL THEN
+                SELECT a, b, c INTO coeff_a, coeff_b, coeff_c
+                FROM soil_vwc_coefficients WHERE soil_type = 'universal';
+              END IF;
+
+              -- Clear existing averages for this profile
+              DELETE FROM sensorprofile_averages WHERE sensorprofile_id = target_profile_id;
+
+              -- Insert temperature averages (3 depths per assignment)
+              INSERT INTO sensorprofile_averages (sensorprofile_id, depth_cm, avg_temp)
+              SELECT
+                target_profile_id,
+                d.depth_cm,
+                SUM(sd.avg_temp * sd.sample_count) / NULLIF(SUM(sd.sample_count), 0)
+              FROM (
+                SELECT
+                  sa.sensor_id, sa.date_from, sa.date_to,
+                  unnest(ARRAY[sa.depth_cm_sensor1, sa.depth_cm_sensor2, sa.depth_cm_sensor3]) AS depth_cm
+                FROM sensorprofile_assignment sa
+                WHERE sa.sensorprofile_id = target_profile_id
+              ) d
+              JOIN sensordata_daily sd
+                ON sd.sensor_id = d.sensor_id
+               AND sd.bucket >= d.date_from AND sd.bucket <= d.date_to
+              GROUP BY d.depth_cm;
+
+              -- Insert/update moisture averages (VWC formula)
+              INSERT INTO sensorprofile_averages (sensorprofile_id, depth_cm, avg_vwc)
+              SELECT
+                target_profile_id,
+                a.depth_cm,
+                SUM(
+                  GREATEST(0.0::double precision, LEAST(1.0::double precision,
+                    coeff_a * vwc.tcor * vwc.tcor + coeff_b * vwc.tcor + coeff_c
+                  )) * sd.sample_count
+                ) / NULLIF(SUM(sd.sample_count), 0)
+              FROM (
+                SELECT sa.sensor_id, sa.date_from, sa.date_to,
+                       sa.depth_cm_moisture AS depth_cm
+                FROM sensorprofile_assignment sa
+                WHERE sa.sensorprofile_id = target_profile_id
+                  AND sa.depth_cm_moisture IS NOT NULL
+              ) a
+              JOIN sensordata_daily sd
+                ON sd.sensor_id = a.sensor_id
+               AND sd.bucket >= a.date_from AND sd.bucket <= a.date_to
+              CROSS JOIN LATERAL (
+                SELECT sd.avg_moisture_count + (24.0 - sd.avg_temp_1)
+                  * (1.911327 - 1.270247
+                     * (coeff_a * sd.avg_moisture_count * sd.avg_moisture_count
+                        + coeff_b * sd.avg_moisture_count + coeff_c))
+                  AS tcor
+              ) vwc
+              GROUP BY a.depth_cm
+              ON CONFLICT (sensorprofile_id, depth_cm) DO UPDATE
+                SET avg_vwc = EXCLUDED.avg_vwc;
+            END;
+            $$ LANGUAGE plpgsql;
+            "#,
+        )
+        .await?;
+
+        // 4. Trigger functions and triggers
+
+        // Trigger on sensordata INSERT
+        db.execute_unprepared(
+            r#"
+            CREATE OR REPLACE FUNCTION trigger_sensordata_averages()
+            RETURNS TRIGGER AS $$
+            DECLARE pid UUID;
+            BEGIN
+              FOR pid IN
+                SELECT DISTINCT sa.sensorprofile_id
+                FROM sensorprofile_assignment sa
+                WHERE sa.sensor_id = NEW.sensor_id
+                  AND sa.date_from <= NEW.time_utc
+                  AND (sa.date_to IS NULL OR sa.date_to >= NEW.time_utc)
+              LOOP
+                PERFORM recompute_sensor_averages(pid);
+              END LOOP;
+              RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_sensordata_averages
+              AFTER INSERT ON sensordata
+              FOR EACH ROW EXECUTE FUNCTION trigger_sensordata_averages();
+            "#,
+        )
+        .await?;
+
+        // Trigger on sensorprofile_assignment changes
+        db.execute_unprepared(
+            r#"
+            CREATE OR REPLACE FUNCTION trigger_assignment_averages()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              IF TG_OP = 'DELETE' THEN
+                PERFORM recompute_sensor_averages(OLD.sensorprofile_id);
+              ELSIF TG_OP = 'UPDATE' AND OLD.sensorprofile_id IS DISTINCT FROM NEW.sensorprofile_id THEN
+                PERFORM recompute_sensor_averages(OLD.sensorprofile_id);
+                PERFORM recompute_sensor_averages(NEW.sensorprofile_id);
+              ELSE
+                PERFORM recompute_sensor_averages(NEW.sensorprofile_id);
+              END IF;
+              RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_assignment_averages
+              AFTER INSERT OR UPDATE OR DELETE ON sensorprofile_assignment
+              FOR EACH ROW EXECUTE FUNCTION trigger_assignment_averages();
+            "#,
+        )
+        .await?;
+
+        // Trigger on sensorprofile soil type changes
+        db.execute_unprepared(
+            r#"
+            CREATE OR REPLACE FUNCTION trigger_soiltype_averages()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              PERFORM recompute_sensor_averages(NEW.id);
+              RETURN NULL;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_soiltype_averages
+              AFTER UPDATE OF soil_type_vwc ON sensorprofile
+              FOR EACH ROW EXECUTE FUNCTION trigger_soiltype_averages();
+            "#,
+        )
+        .await?;
+
+        // 5. Backfill existing data
+        db.execute_unprepared(
+            r#"
+            DO $$ DECLARE r RECORD;
+            BEGIN
+              FOR r IN SELECT id FROM sensorprofile LOOP
+                PERFORM recompute_sensor_averages(r.id);
+              END LOOP;
+            END $$;
+            "#,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let db = manager.get_connection();
+
+        db.execute_unprepared(
+            r#"
+            DROP TRIGGER IF EXISTS trg_soiltype_averages ON sensorprofile;
+            DROP FUNCTION IF EXISTS trigger_soiltype_averages();
+
+            DROP TRIGGER IF EXISTS trg_assignment_averages ON sensorprofile_assignment;
+            DROP FUNCTION IF EXISTS trigger_assignment_averages();
+
+            DROP TRIGGER IF EXISTS trg_sensordata_averages ON sensordata;
+            DROP FUNCTION IF EXISTS trigger_sensordata_averages();
+
+            DROP FUNCTION IF EXISTS recompute_sensor_averages(UUID);
+
+            DROP TABLE IF EXISTS sensorprofile_averages;
+            DROP TABLE IF EXISTS soil_vwc_coefficients;
+            "#,
+        )
+        .await?;
+
+        Ok(())
+    }
+}

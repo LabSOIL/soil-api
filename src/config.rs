@@ -13,6 +13,9 @@ pub struct Config {
     pub deployment: String,
     pub srid: i32,
     pub public_cache_timeout_seconds: u64,
+    pub disable_rate_limiting: bool,
+    pub rate_limit_public_per_second: u64,
+    pub rate_limit_public_burst: u32,
 }
 
 impl Config {
@@ -45,6 +48,18 @@ impl Config {
             db_url,
             srid,
             public_cache_timeout_seconds,
+            disable_rate_limiting: env::var("DISABLE_RATE_LIMITING")
+                .unwrap_or_else(|_| "false".to_string())
+                .parse()
+                .unwrap_or(false),
+            rate_limit_public_per_second: env::var("RATE_LIMIT_PUBLIC_PER_SECOND")
+                .unwrap_or_else(|_| "30".to_string())
+                .parse()
+                .unwrap_or(30),
+            rate_limit_public_burst: env::var("RATE_LIMIT_PUBLIC_BURST")
+                .unwrap_or_else(|_| "100".to_string())
+                .parse()
+                .unwrap_or(100),
         }
     }
 }

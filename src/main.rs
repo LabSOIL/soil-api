@@ -1,6 +1,7 @@
 mod common;
 mod config;
 mod routes;
+mod services;
 
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
@@ -57,7 +58,7 @@ async fn main() {
     let router = routes::build_router(&db);
     axum::serve(
         tokio::net::TcpListener::bind(addr).await.unwrap(),
-        router.into_make_service(),
+        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .await
     .unwrap();

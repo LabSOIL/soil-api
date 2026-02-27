@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::routes::private::sensors::flux_data::db as FluxDB;
 use crate::routes::private::sensors::profile::db as ProfileDB;
 use crate::routes::private::sensors::redox_data::db as RedoxDB;
-use crate::routes::public::website_access::check_sensor_access;
+use crate::routes::public::website_access::{check_sensor_access, validate_slug};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -76,6 +76,13 @@ pub async fn get_one_temperature(
             Json("Missing required query parameter: 'website'".to_string()),
         ));
     };
+
+    if !validate_slug(&website_slug) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Invalid website slug".to_string()),
+        ));
+    }
 
     // Access check: sensor must be in an area assigned to this website and not excluded
     let date_range = match check_sensor_access(&db, id, &website_slug).await {
@@ -189,6 +196,13 @@ pub async fn get_one_moisture(
         ));
     };
 
+    if !validate_slug(&website_slug) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Invalid website slug".to_string()),
+        ));
+    }
+
     // Access check: sensor must be in an area assigned to this website and not excluded
     let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
@@ -301,6 +315,13 @@ pub async fn get_one_flux(
         ));
     };
 
+    if !validate_slug(&website_slug) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Invalid website slug".to_string()),
+        ));
+    }
+
     // Access check
     let date_range = match check_sensor_access(&db, id, &website_slug).await {
         Ok(Some(range)) => range,
@@ -405,6 +426,13 @@ pub async fn get_one_redox(
             Json("Missing required query parameter: 'website'".to_string()),
         ));
     };
+
+    if !validate_slug(&website_slug) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Invalid website slug".to_string()),
+        ));
+    }
 
     // Access check
     let date_range = match check_sensor_access(&db, id, &website_slug).await {

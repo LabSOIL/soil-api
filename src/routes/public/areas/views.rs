@@ -7,17 +7,20 @@ use crate::routes::private::{
     soil::classification::db as SoilClassDB,
 };
 use crate::routes::public::sensors::models::SensorProfileSimple;
-use crate::routes::public::website_access::resolve_website_access;
+use crate::routes::public::website_access::{resolve_website_access, validate_slug};
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use axum_response_cache::CacheLayer;
+use crate::config::Config;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
 use sea_orm::Statement;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::sea_query::{ArrayType, Value};
 use serde::Deserialize;
 use std::collections::HashMap;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -26,6 +29,10 @@ use uuid::Uuid;
 pub fn router(db: &DatabaseConnection) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_all_areas))
+        .layer(
+            CacheLayer::with_lifespan(Config::from_env().public_cache_timeout_seconds)
+                .use_stale_on_failure(),
+        )
         .with_state(db.clone())
 }
 
@@ -56,6 +63,13 @@ pub async fn get_all_areas(
             Json("Missing required query parameter: 'website'".to_string()),
         ));
     };
+
+    if !validate_slug(&website_slug) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json("Invalid website slug".to_string()),
+        ));
+    }
 
     let website_access = match resolve_website_access(&db, &website_slug).await {
         Ok(Some(a)) => a,
@@ -99,7 +113,8 @@ pub async fn get_all_areas(
                 .all(&db)
                 .await
                 .unwrap_or_default();
-            let avgs = fetch_all_sensor_averages(&db, &models)
+            let profile_ids: Vec<Uuid> = models.iter().map(|m| m.id).collect();
+            let avgs = fetch_all_sensor_averages(&db, &profile_ids)
                 .await
                 .unwrap_or_default();
             (models, avgs)
@@ -223,12 +238,11 @@ pub async fn get_all_areas(
     Ok((StatusCode::OK, Json(area_models)))
 }
 
-/// Fetch all sensor temperature and moisture averages using the
-/// `sensordata_daily` TimescaleDB continuous aggregate (~100x fewer rows
-/// than raw sensordata, with <0.1% error for VWC due to daily pre-averaging).
+/// Fetch precomputed sensor temperature and moisture averages from
+/// the `sensorprofile_averages` table (maintained by DB triggers).
 async fn fetch_all_sensor_averages(
     db: &DatabaseConnection,
-    profiles: &[crate::routes::private::sensors::profile::db::Model],
+    profile_ids: &[Uuid],
 ) -> Result<
     (
         HashMap<Uuid, HashMap<i32, f64>>,
@@ -236,150 +250,37 @@ async fn fetch_all_sensor_averages(
     ),
     sea_orm::DbErr,
 > {
-    if profiles.is_empty() {
+    if profile_ids.is_empty() {
         return Ok((HashMap::new(), HashMap::new()));
     }
 
-    let ids_csv = profiles
+    let uuid_values: Vec<Value> = profile_ids
         .iter()
-        .map(|p| format!("'{}'", p.id))
-        .collect::<Vec<_>>()
-        .join(",");
+        .map(|&id| Value::Uuid(Some(Box::new(id))))
+        .collect();
+    let array_param = Value::Array(ArrayType::Uuid, Some(Box::new(uuid_values)));
 
-    // Temperature: weighted average from daily continuous aggregate
-    let temp_sql = format!(
-        r"
-        WITH depths AS (
-          SELECT
-            sensorprofile_id,
-            unnest(array[depth_cm_sensor1, depth_cm_sensor2, depth_cm_sensor3]) AS depth_cm,
-            sensor_id, date_from, date_to
-          FROM sensorprofile_assignment
-          WHERE sensorprofile_id IN ({ids_csv})
-        )
-        SELECT
-          d.sensorprofile_id,
-          d.depth_cm,
-          SUM(sd.avg_temp * sd.sample_count) / SUM(sd.sample_count) AS avg_temp
-        FROM depths d
-        JOIN sensordata_daily sd
-          ON sd.sensor_id = d.sensor_id
-         AND sd.bucket >= d.date_from AND sd.bucket <= d.date_to
-        GROUP BY d.sensorprofile_id, d.depth_cm
-        "
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT sensorprofile_id, depth_cm, avg_temp, avg_vwc
+         FROM sensorprofile_averages
+         WHERE sensorprofile_id = ANY($1)",
+        vec![array_param],
     );
 
-    // Moisture: VWC formula applied to daily-averaged mc and temp_1,
-    // then weighted-averaged by sample_count.
-    //
-    // VWC formula (matching vwc.rs):
-    //   vwc0 = a*mc² + b*mc + c
-    //   tcor = mc + (24.0 - temp) * (1.911327 - 1.270247 * vwc0)
-    //   vwc  = clamp(a*tcor² + b*tcor + c, 0, 1)
-    let coeffs_values = profiles
-        .iter()
-        .map(|p| {
-            let soil: soil_sensor_toolbox::SoilType = p
-                .soil_type_vwc
-                .clone()
-                .unwrap_or(crate::routes::private::sensors::profile::db::SoilTypeEnum::Universal)
-                .into();
-            let (a, b, c) = match soil {
-                soil_sensor_toolbox::SoilType::Sand => (-3.00e-09, 0.000_161_192, -0.109_956_5),
-                soil_sensor_toolbox::SoilType::LoamySandA => {
-                    (-1.90e-08, 0.000_265_610, -0.154_089_3)
-                }
-                soil_sensor_toolbox::SoilType::LoamySandB => {
-                    (-2.30e-08, 0.000_282_473, -0.167_211_2)
-                }
-                soil_sensor_toolbox::SoilType::SandyLoamA => {
-                    (-3.80e-08, 0.000_339_449, -0.214_921_8)
-                }
-                soil_sensor_toolbox::SoilType::SandyLoamB => {
-                    (-9.00e-10, 0.000_261_847, -0.158_618_3)
-                }
-                soil_sensor_toolbox::SoilType::Loam => (-5.10e-08, 0.000_397_984, -0.291_046_4),
-                soil_sensor_toolbox::SoilType::SiltLoam => (1.70e-08, 0.000_118_119, -0.101_168_5),
-                soil_sensor_toolbox::SoilType::Peat => (1.23e-07, -0.000_144_644, 0.202_927_9),
-                soil_sensor_toolbox::SoilType::Water => (0.00e+00, 0.000_306_700, -0.134_927_9),
-                soil_sensor_toolbox::SoilType::Universal => {
-                    (-1.34e-08, 0.000_249_622, -0.157_888_8)
-                }
-                soil_sensor_toolbox::SoilType::SandTMS1 => (0.00e+00, 0.000_260_000, -0.133_040_0),
-                soil_sensor_toolbox::SoilType::LoamySandTMS1 => {
-                    (0.00e+00, 0.000_330_000, -0.193_890_0)
-                }
-                soil_sensor_toolbox::SoilType::SiltLoamTMS1 => {
-                    (0.00e+00, 0.000_380_000, -0.294_270_0)
-                }
-            };
-            format!("('{}'::uuid, {}::double precision, {}::double precision, {}::double precision)", p.id, a, b, c)
-        })
-        .collect::<Vec<_>>()
-        .join(",\n             ");
-
-    let moisture_sql = format!(
-        r"
-        WITH soil_coeffs(sensorprofile_id, a, b, c) AS (
-          VALUES {coeffs_values}
-        ),
-        assignments AS (
-          SELECT sa.sensorprofile_id, sa.depth_cm_moisture AS depth_cm,
-                 sa.sensor_id, sa.date_from, sa.date_to,
-                 sc.a, sc.b, sc.c
-          FROM sensorprofile_assignment sa
-          JOIN soil_coeffs sc ON sc.sensorprofile_id = sa.sensorprofile_id
-          WHERE sa.sensorprofile_id IN ({ids_csv})
-            AND sa.depth_cm_moisture IS NOT NULL
-        )
-        SELECT a.sensorprofile_id, a.depth_cm,
-          SUM(
-            GREATEST(0.0::double precision, LEAST(1.0::double precision,
-              a.a * vwc.tcor * vwc.tcor + a.b * vwc.tcor + a.c
-            )) * sd.sample_count
-          ) / SUM(sd.sample_count) AS avg_vwc
-        FROM assignments a
-        JOIN sensordata_daily sd
-          ON sd.sensor_id = a.sensor_id
-         AND sd.bucket >= a.date_from AND sd.bucket <= a.date_to
-        CROSS JOIN LATERAL (
-          SELECT sd.avg_moisture_count + (24.0 - sd.avg_temp_1)
-                       * (1.911327 - 1.270247 * (a.a * sd.avg_moisture_count * sd.avg_moisture_count + a.b * sd.avg_moisture_count + a.c))
-                 AS tcor
-        ) vwc
-        GROUP BY a.sensorprofile_id, a.depth_cm
-        "
-    );
-
-    let (temp_rows, moisture_rows) = tokio::join!(
-        async {
-            let stmt =
-                Statement::from_sql_and_values(db.get_database_backend(), &temp_sql, vec![]);
-            db.query_all(stmt).await
-        },
-        async {
-            let stmt =
-                Statement::from_sql_and_values(db.get_database_backend(), &moisture_sql, vec![]);
-            db.query_all(stmt).await
-        },
-    );
-    let temp_rows = temp_rows?;
-    let moisture_rows = moisture_rows?;
+    let rows = db.query_all(stmt).await?;
 
     let mut temp_map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
-    for row in temp_rows {
-        let pid: Uuid = row.try_get("", "sensorprofile_id")?;
-        let depth: i32 = row.try_get("", "depth_cm")?;
-        let avg: f64 = row.try_get("", "avg_temp")?;
-        temp_map.entry(pid).or_default().insert(depth, avg);
-    }
-
     let mut moisture_map: HashMap<Uuid, HashMap<i32, f64>> = HashMap::new();
-    for row in moisture_rows {
+    for row in rows {
         let pid: Uuid = row.try_get("", "sensorprofile_id")?;
         let depth: i32 = row.try_get("", "depth_cm")?;
-        let avg: f64 = row.try_get("", "avg_vwc")?;
-        moisture_map.entry(pid).or_default().insert(depth, avg);
+        if let Ok(avg_temp) = row.try_get::<f64>("", "avg_temp") {
+            temp_map.entry(pid).or_default().insert(depth, avg_temp);
+        }
+        if let Ok(avg_vwc) = row.try_get::<f64>("", "avg_vwc") {
+            moisture_map.entry(pid).or_default().insert(depth, avg_vwc);
+        }
     }
 
     Ok((temp_map, moisture_map))
@@ -390,19 +291,19 @@ async fn fetch_all_hulls(
     db: &DatabaseConnection,
     area_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, serde_json::Value>, sea_orm::DbErr> {
-    let ids = area_ids
+    let uuid_values: Vec<Value> = area_ids
         .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join("','");
+        .map(|&id| Value::Uuid(Some(Box::new(id))))
+        .collect();
+    let array_param = Value::Array(ArrayType::Uuid, Some(Box::new(uuid_values)));
 
-    let sql = format!(
-        r"SELECT id AS area_id, ST_AsGeoJSON(hull_geom)::json AS hull
-          FROM area
-          WHERE id IN ('{ids}') AND hull_geom IS NOT NULL"
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id AS area_id, ST_AsGeoJSON(hull_geom)::json AS hull
+         FROM area WHERE id = ANY($1) AND hull_geom IS NOT NULL",
+        vec![array_param],
     );
 
-    let stmt = Statement::from_sql_and_values(db.get_database_backend(), &sql, vec![]);
     let rows = db.query_all(stmt).await?;
     let mut map = HashMap::new();
     for row in rows {
