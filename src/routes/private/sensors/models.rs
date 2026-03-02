@@ -315,9 +315,8 @@ impl CRUDResource for Sensor {
             db.execute_unprepared(&format!(
                 "SELECT recompute_sensor_averages(sa.sensorprofile_id) \
                  FROM sensorprofile_assignment sa \
-                 WHERE sa.sensor_id = '{}' \
-                 GROUP BY sa.sensorprofile_id",
-                id
+                 WHERE sa.sensor_id = '{id}' \
+                 GROUP BY sa.sensorprofile_id"
             ))
             .await?;
         }

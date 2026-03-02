@@ -91,7 +91,7 @@ pub fn integrate_trapz(x: &[f64], y: &[f64]) -> f64 {
     let mut area = 0.0;
     for i in 0..(n - 1) {
         let dx = x[i + 1] - x[i];
-        let avg_y = (y[i] + y[i + 1]) / 2.0;
+        let avg_y = f64::midpoint(y[i], y[i + 1]);
         area += dx * avg_y;
     }
     area

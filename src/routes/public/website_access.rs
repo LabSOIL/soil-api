@@ -18,11 +18,11 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 pub struct WebsiteAccess {
-    /// Set of area_ids assigned to this website
+    /// Set of `area_ids` assigned to this website
     pub area_ids: HashSet<Uuid>,
-    /// Set of plot_ids excluded from this website
+    /// Set of `plot_ids` excluded from this website
     pub excluded_plot_ids: HashSet<Uuid>,
-    /// Set of sensorprofile_ids excluded from this website
+    /// Set of `sensorprofile_ids` excluded from this website
     pub excluded_sensor_ids: HashSet<Uuid>,
 }
 
@@ -77,8 +77,8 @@ pub async fn resolve_website_access(
 }
 
 /// Check if a sensor is accessible on a website.
-/// Returns Some((profile, date_from, date_to)) if accessible, None if blocked.
-/// Combines website lookup, area_website check, and exclusion check into a single query.
+/// Returns Some((profile, `date_from`, `date_to`)) if accessible, None if blocked.
+/// Combines website lookup, `area_website` check, and exclusion check into a single query.
 pub async fn check_sensor_access(
     db: &DatabaseConnection,
     sensor_id: Uuid,
@@ -86,7 +86,7 @@ pub async fn check_sensor_access(
 ) -> Result<Option<(ProfileDB::Model, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>, sea_orm::DbErr>
 {
     // Single query: website + area_website join + exclusion check
-    let sql = r#"
+    let sql = r"
         SELECT aw.date_from, aw.date_to
         FROM website w
         JOIN sensorprofile sp ON sp.id = $1
@@ -94,7 +94,7 @@ pub async fn check_sensor_access(
         LEFT JOIN website_sensor_exclusion wse
             ON wse.website_id = w.id AND wse.sensorprofile_id = sp.id
         WHERE w.slug = $2 AND wse.id IS NULL
-    "#;
+    ";
     let stmt = Statement::from_sql_and_values(
         db.get_database_backend(),
         sql,

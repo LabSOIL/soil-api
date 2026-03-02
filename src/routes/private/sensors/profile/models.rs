@@ -644,7 +644,7 @@ impl SensorProfile {
         Ok(map)
     }
 
-    /// Load temperature data from a continuous aggregate (sensordata_hourly or sensordata_daily).
+    /// Load temperature data from a continuous aggregate (`sensordata_hourly` or `sensordata_daily`).
     pub async fn load_temperature_from_aggregate(
         &self,
         db: &DatabaseConnection,
@@ -704,8 +704,8 @@ impl SensorProfile {
         Ok(map)
     }
 
-    /// Load moisture data from a continuous aggregate (sensordata_hourly or sensordata_daily).
-    /// Returns VWC-converted values using mc_calc_vwc on the aggregated counts/temperature.
+    /// Load moisture data from a continuous aggregate (`sensordata_hourly` or `sensordata_daily`).
+    /// Returns VWC-converted values using `mc_calc_vwc` on the aggregated counts/temperature.
     pub async fn load_moisture_from_aggregate(
         &self,
         db: &DatabaseConnection,

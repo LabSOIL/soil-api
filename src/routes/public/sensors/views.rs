@@ -434,7 +434,7 @@ pub async fn get_soil_types() -> impl IntoResponse {
 
 /// Compute the effective date range and span in days for a sensor profile.
 /// If the user provides start/end, those are clipped to the website access range.
-/// Returns (effective_from, effective_to, span_days).
+/// Returns (`effective_from`, `effective_to`, `span_days`).
 async fn effective_date_range(
     db: &DatabaseConnection,
     profile_id: Uuid,

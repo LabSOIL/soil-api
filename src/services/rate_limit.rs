@@ -12,24 +12,19 @@ impl KeyExtractor for FallbackIpKeyExtractor {
 
     fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
         // Try X-Forwarded-For header first (for reverse proxies)
-        if let Some(xff) = req.headers().get("x-forwarded-for") {
-            if let Ok(xff_str) = xff.to_str() {
-                if let Some(first_ip) = xff_str.split(',').next() {
-                    if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
+        if let Some(xff) = req.headers().get("x-forwarded-for")
+            && let Ok(xff_str) = xff.to_str()
+                && let Some(first_ip) = xff_str.split(',').next()
+                    && let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
                         return Ok(ip);
                     }
-                }
-            }
-        }
 
         // Try X-Real-IP header
-        if let Some(real_ip) = req.headers().get("x-real-ip") {
-            if let Ok(ip_str) = real_ip.to_str() {
-                if let Ok(ip) = ip_str.parse::<IpAddr>() {
+        if let Some(real_ip) = req.headers().get("x-real-ip")
+            && let Ok(ip_str) = real_ip.to_str()
+                && let Ok(ip) = ip_str.parse::<IpAddr>() {
                     return Ok(ip);
                 }
-            }
-        }
 
         // Try to get peer address from extensions
         if let Some(connect_info) = req
