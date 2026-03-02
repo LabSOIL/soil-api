@@ -53,6 +53,20 @@ async fn main() {
         }
     }
 
+    // Recompute sensor profile averages (safety net for any data ingested outside the API)
+    {
+        let sql = r"DO $$ DECLARE r RECORD;
+        BEGIN
+          FOR r IN SELECT id FROM sensorprofile LOOP
+            PERFORM recompute_sensor_averages(r.id);
+          END LOOP;
+        END $$;";
+        match db.execute(Statement::from_string(db.get_database_backend(), sql.to_string())).await {
+            Ok(_) => println!("Recomputed sensor profile averages"),
+            Err(e) => println!("Could not recompute sensor profile averages: {e}"),
+        }
+    }
+
     println!(
         "Starting server {} ({} deployment) ...",
         config.app_name,
