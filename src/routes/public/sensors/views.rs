@@ -107,13 +107,20 @@ pub async fn get_one_temperature(
     .await;
     tracing::debug!("effective_date_range: {:?}", t1.elapsed());
 
-    let (resolution, window_hours) = resolution_for_span(span_days);
+    let (resolution, aggregate_table) = resolution_for_span(span_days);
 
     let t2 = std::time::Instant::now();
-    let depth_data = profile
-        .load_average_temperature_series_by_depth_cm(&db, window_hours, date_from, date_to)
-        .await
-        .unwrap_or_default();
+    let depth_data = if let Some(table) = aggregate_table {
+        profile
+            .load_temperature_from_aggregate(&db, table, date_from, date_to)
+            .await
+            .unwrap_or_default()
+    } else {
+        profile
+            .load_average_temperature_series_by_depth_cm(&db, None, date_from, date_to)
+            .await
+            .unwrap_or_default()
+    };
     tracing::debug!("load_temperature({}): {:?}", resolution, t2.elapsed());
 
     let response = super::models::SensorProfile::from_depth_map(
@@ -184,13 +191,20 @@ pub async fn get_one_moisture(
     .await;
     tracing::debug!("effective_date_range: {:?}", t1.elapsed());
 
-    let (resolution, window_hours) = resolution_for_span(span_days);
+    let (resolution, aggregate_table) = resolution_for_span(span_days);
 
     let t2 = std::time::Instant::now();
-    let depth_data = profile
-        .load_average_moisture_series_by_depth_cm(&db, window_hours, date_from, date_to)
-        .await
-        .unwrap_or_default();
+    let depth_data = if let Some(table) = aggregate_table {
+        profile
+            .load_moisture_from_aggregate(&db, table, date_from, date_to)
+            .await
+            .unwrap_or_default()
+    } else {
+        profile
+            .load_average_moisture_series_by_depth_cm(&db, None, date_from, date_to)
+            .await
+            .unwrap_or_default()
+    };
     tracing::debug!("load_moisture({}): {:?}", resolution, t2.elapsed());
 
     let response = super::models::SensorProfile::from_depth_map(
@@ -472,11 +486,13 @@ async fn effective_date_range(
     (effective_from, effective_to, span_days)
 }
 
-/// Select the resolution label and optional window size for a given span in days.
-fn resolution_for_span(span_days: i64) -> (&'static str, Option<i64>) {
+/// Select the resolution label and optional aggregate table for a given span in days.
+fn resolution_for_span(span_days: i64) -> (&'static str, Option<&'static str>) {
     if span_days <= 7 {
-        ("raw", None)         // every data point
+        ("raw", None)                            // raw sensordata
+    } else if span_days <= 90 {
+        ("hourly", Some("sensordata_hourly"))    // pre-computed hourly averages
     } else {
-        ("hourly", Some(1))   // 1-hour window from raw data (matches production v2.2.0)
+        ("6h", Some("sensordata_6h"))            // pre-computed 6-hour averages
     }
 }

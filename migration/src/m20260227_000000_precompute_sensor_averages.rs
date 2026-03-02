@@ -1,7 +1,19 @@
 use sea_orm_migration::prelude::*;
+use soil_sensor_toolbox::{SoilType, ACOR_T, REF_T, WCOR_T};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
+
+fn coefficients_values_sql() -> String {
+    SoilType::ALL
+        .iter()
+        .map(|st| {
+            let (a, b, c) = st.coeffs();
+            format!("('{}'::soil_type_enum, {a:e}, {b}, {c})", st.as_str())
+        })
+        .collect::<Vec<_>>()
+        .join(",\n                ")
+}
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
@@ -22,25 +34,14 @@ impl MigrationTrait for Migration {
         .await?;
 
         // 1b. Insert coefficients (idempotent)
-        db.execute_unprepared(
-            r#"
+        db.execute_unprepared(&format!(
+            "
             INSERT INTO soil_vwc_coefficients (soil_type, a, b, c) VALUES
-                ('sand',           -3.00e-09,   0.000161192, -0.1099565),
-                ('loamysanda',     -1.90e-08,   0.000265610, -0.1540893),
-                ('loamysandb',     -2.30e-08,   0.000282473, -0.1672112),
-                ('sandyloama',     -3.80e-08,   0.000339449, -0.2149218),
-                ('sandyloamb',     -9.00e-10,   0.000261847, -0.1586183),
-                ('loam',           -5.10e-08,   0.000397984, -0.2910464),
-                ('siltloam',        1.70e-08,   0.000118119, -0.1011685),
-                ('peat',            1.23e-07,  -0.000144644,  0.2029279),
-                ('water',           0.00e+00,   0.000306700, -0.1349279),
-                ('universal',      -1.34e-08,   0.000249622, -0.1578888),
-                ('sandtms1',        0.00e+00,   0.000260000, -0.1330400),
-                ('loamysandtms1',   0.00e+00,   0.000330000, -0.1938900),
-                ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700)
+                {}
             ON CONFLICT (soil_type) DO UPDATE SET a=EXCLUDED.a, b=EXCLUDED.b, c=EXCLUDED.c;
-            "#,
-        )
+            ",
+            coefficients_values_sql()
+        ))
         .await?;
 
         // 2. Precomputed averages table
@@ -58,7 +59,8 @@ impl MigrationTrait for Migration {
         .await?;
 
         // 3. Recompute function (reads from raw sensordata, not caggs)
-        db.execute_unprepared(
+        let dcor_t = ACOR_T - WCOR_T;
+        db.execute_unprepared(&format!(
             r#"
             CREATE OR REPLACE FUNCTION recompute_sensor_averages(target_profile_id UUID)
             RETURNS VOID AS $$
@@ -69,19 +71,7 @@ impl MigrationTrait for Migration {
             BEGIN
               -- Ensure coefficients table is always populated (self-healing after data restore)
               INSERT INTO soil_vwc_coefficients (soil_type, a, b, c) VALUES
-                  ('sand',           -3.00e-09,   0.000161192, -0.1099565),
-                  ('loamysanda',     -1.90e-08,   0.000265610, -0.1540893),
-                  ('loamysandb',     -2.30e-08,   0.000282473, -0.1672112),
-                  ('sandyloama',     -3.80e-08,   0.000339449, -0.2149218),
-                  ('sandyloamb',     -9.00e-10,   0.000261847, -0.1586183),
-                  ('loam',           -5.10e-08,   0.000397984, -0.2910464),
-                  ('siltloam',        1.70e-08,   0.000118119, -0.1011685),
-                  ('peat',            1.23e-07,  -0.000144644,  0.2029279),
-                  ('water',           0.00e+00,   0.000306700, -0.1349279),
-                  ('universal',      -1.34e-08,   0.000249622, -0.1578888),
-                  ('sandtms1',        0.00e+00,   0.000260000, -0.1330400),
-                  ('loamysandtms1',   0.00e+00,   0.000330000, -0.1938900),
-                  ('siltloamtms1',    0.00e+00,   0.000380000, -0.2942700)
+                  {coefficients}
               ON CONFLICT (soil_type) DO UPDATE SET a=EXCLUDED.a, b=EXCLUDED.b, c=EXCLUDED.c;
 
               -- Get soil coefficients for this profile
@@ -136,8 +126,8 @@ impl MigrationTrait for Migration {
                AND sd.time_utc >= sa.date_from
                AND sd.time_utc <= sa.date_to
               CROSS JOIN LATERAL (
-                SELECT sd.soil_moisture_count::double precision + (24.0 - sd.temperature_1)
-                  * (1.911327 - 1.270247
+                SELECT sd.soil_moisture_count::double precision + ({ref_t} - sd.temperature_1)
+                  * ({acor_t} - {dcor_t}
                      * (coeff_a * sd.soil_moisture_count::double precision
                               * sd.soil_moisture_count::double precision
                         + coeff_b * sd.soil_moisture_count::double precision + coeff_c))
@@ -151,7 +141,11 @@ impl MigrationTrait for Migration {
             END;
             $$ LANGUAGE plpgsql;
             "#,
-        )
+            coefficients = coefficients_values_sql(),
+            ref_t = REF_T,
+            acor_t = ACOR_T,
+            dcor_t = dcor_t,
+        ))
         .await?;
 
         // 4. Triggers (assignment + soil-type only; no per-row sensordata trigger)

@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 async-std = { version = "1", features = ["attributes", "tokio1"] }
+soil-sensor-toolbox = "0.2.1"
 uuid = "1.10.0"
 
 [dependencies.sea-orm-migration]

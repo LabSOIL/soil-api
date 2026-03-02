@@ -2053,6 +2053,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "sea-orm-migration",
+ "soil-sensor-toolbox",
  "uuid",
 ]
 
@@ -3433,9 +3434,9 @@ dependencies = [
 
 [[package]]
 name = "soil-sensor-toolbox"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "893ee3bfffa5613df2ba6a832da66e64b448aa924eb1f7feb2865886ae6caeb7"
+checksum = "703f1b8801fbfa6229105e85af4a45400e9f0cc6d761c32119ab75720289a908"
 dependencies = [
  "anyhow",
  "chrono",

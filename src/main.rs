@@ -37,11 +37,18 @@ async fn main() {
 
     println!("DB migrations complete");
 
-    // Refresh continuous aggregates (can't run inside migration transactions)
-    for view in ["sensordata_hourly", "sensordata_daily", "sensordata_weekly"] {
-        let sql = format!("CALL refresh_continuous_aggregate('{view}', NULL, NULL)");
+    // Refresh continuous aggregates with bounded windows (can't run inside migration transactions).
+    // Historical backfill is handled by dbctl.sh restore and the initial full refresh after migration.
+    // Hourly must refresh before 6h since 6h is a hierarchical aggregate on top of hourly.
+    for (view, interval) in [
+        ("sensordata_hourly", "3 hours"),
+        ("sensordata_6h", "18 hours"),
+    ] {
+        let sql = format!(
+            "CALL refresh_continuous_aggregate('{view}', now() - interval '{interval}', now())"
+        );
         match db.execute(Statement::from_string(db.get_database_backend(), sql)).await {
-            Ok(_) => println!("Refreshed {view}"),
+            Ok(_) => println!("Refreshed {view} (last {interval})"),
             Err(e) => println!("Could not refresh {view}: {e}"),
         }
     }

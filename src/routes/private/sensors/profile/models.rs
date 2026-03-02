@@ -263,18 +263,32 @@ impl SensorProfile {
 
         // Compute effective span from start/end or assignment dates
         let span_days = Self::compute_span_days(db, id, start, end).await;
-        let (resolution, window_hours) = if span_days <= 7 {
+        let (resolution, aggregate_table) = if span_days <= 7 {
             ("raw", None)
+        } else if span_days <= 90 {
+            ("hourly", Some("sensordata_hourly"))
         } else {
-            ("hourly", Some(1))
+            ("6h", Some("sensordata_6h"))
         };
 
-        let temperature_data = sensor_profile
-            .load_average_temperature_series_by_depth_cm(db, window_hours, start, end)
-            .await?;
-        let (moisture_vwc_data, moisture_raw_data) = sensor_profile
-            .load_moisture_data_by_depth_cm(db, window_hours, start, end)
-            .await?;
+        let (temperature_data, moisture_vwc_data, moisture_raw_data) =
+            if let Some(table) = aggregate_table {
+                let temp = sensor_profile
+                    .load_temperature_from_aggregate(db, table, start, end)
+                    .await?;
+                let vwc = sensor_profile
+                    .load_moisture_from_aggregate(db, table, start, end)
+                    .await?;
+                (temp, vwc, HashMap::new())
+            } else {
+                let temp = sensor_profile
+                    .load_average_temperature_series_by_depth_cm(db, None, start, end)
+                    .await?;
+                let (vwc, raw) = sensor_profile
+                    .load_moisture_data_by_depth_cm(db, None, start, end)
+                    .await?;
+                (temp, vwc, raw)
+            };
 
         sensor_profile.temperature_by_depth_cm = temperature_data;
         sensor_profile.moisture_vwc_by_depth_cm = moisture_vwc_data;
