@@ -12,7 +12,6 @@ pub struct Config {
     pub keycloak_realm: String,
     pub deployment: String,
     pub srid: i32,
-    pub public_cache_timeout_seconds: u64,
     pub disable_rate_limiting: bool,
     pub rate_limit_public_per_second: u64,
     pub rate_limit_public_burst: u32,
@@ -22,7 +21,6 @@ impl Config {
     pub fn from_env() -> Self {
         dotenv().ok(); // Load from .env file if available
         let srid: i32 = 2056;
-        let public_cache_timeout_seconds: u64 = 900; // 15 minutes
 
         let db_url = env::var("DB_URL").ok().or_else(|| {
             Some(format!(
@@ -47,7 +45,6 @@ impl Config {
                 .expect("DEPLOYMENT must be set, this can be local, dev, stage, or prod"),
             db_url,
             srid,
-            public_cache_timeout_seconds,
             disable_rate_limiting: env::var("DISABLE_RATE_LIMITING")
                 .unwrap_or_else(|_| "false".to_string())
                 .parse()

@@ -3,15 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(ToSchema, Deserialize, Serialize, Default)]
-pub struct Keycloak {
-    pub client_id: String,
-    pub realm: String,
-    pub url: String,
-}
-
-#[derive(ToSchema, Deserialize, Serialize, Default)]
 pub struct UIConfiguration {
-    // pub keycloak: Keycloak, // DIsable for now (this is the structure of the BFF)
     #[serde(rename = "clientId")]
     pub client_id: String,
     pub realm: String,
@@ -34,12 +26,6 @@ impl UIConfiguration {
 #[derive(ToSchema, Deserialize, Serialize)]
 pub struct HealthCheck {
     pub status: String,
-}
-
-#[derive(ToSchema, Deserialize, Serialize)]
-pub struct ServiceStatus {
-    pub s3_status: bool,
-    pub kubernetes_status: bool,
 }
 
 #[derive(Deserialize)]

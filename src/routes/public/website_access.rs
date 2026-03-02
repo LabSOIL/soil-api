@@ -14,13 +14,10 @@ use crate::routes::private::website_sensor_exclusions::db as SensorExclusionDB;
 use crate::routes::private::websites::db as WebsiteDB;
 use chrono::{DateTime, Utc};
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Statement};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub struct WebsiteAccess {
-    pub website_id: Uuid,
-    /// area_id → (date_from, date_to) — None means no restriction
-    pub area_dates: HashMap<Uuid, (Option<DateTime<Utc>>, Option<DateTime<Utc>>)>,
     /// Set of area_ids assigned to this website
     pub area_ids: HashSet<Uuid>,
     /// Set of plot_ids excluded from this website
@@ -53,10 +50,8 @@ pub async fn resolve_website_access(
         .await?;
 
     let mut area_ids = HashSet::new();
-    let mut area_dates = HashMap::new();
     for aw in &area_websites {
         area_ids.insert(aw.area_id);
-        area_dates.insert(aw.area_id, (aw.date_from, aw.date_to));
     }
 
     // 3. Fetch all plot exclusions for this website
@@ -75,9 +70,7 @@ pub async fn resolve_website_access(
         sensor_exclusions.iter().map(|e| e.sensorprofile_id).collect();
 
     Ok(Some(WebsiteAccess {
-        website_id: website.id,
         area_ids,
-        area_dates,
         excluded_plot_ids,
         excluded_sensor_ids,
     }))
